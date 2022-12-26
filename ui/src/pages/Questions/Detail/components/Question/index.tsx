@@ -1,5 +1,5 @@
 import { memo, FC, useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Row, Col, Button } from 'react-bootstrap';
 
@@ -11,20 +11,23 @@ import {
   Comment,
   FormatTime,
   htmlRender,
-} from '@answer/components';
-import { formatCount } from '@answer/utils';
-import { following } from '@answer/api';
+} from '@/components';
+import { formatCount } from '@/utils';
+import { following } from '@/services';
+import { pathFactory } from '@/router/pathFactory';
 
 interface Props {
   data: any;
   hasAnswer: boolean;
+  isLogged: boolean;
   initPage: (type: string) => void;
 }
 
-const Index: FC<Props> = ({ data, initPage, hasAnswer }) => {
+const Index: FC<Props> = ({ data, initPage, hasAnswer, isLogged }) => {
   const { t } = useTranslation('translation', {
     keyPrefix: 'question_detail',
   });
+  const [searchParams] = useSearchParams();
   const [followed, setFollowed] = useState(data?.is_followed);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -55,10 +58,14 @@ const Index: FC<Props> = ({ data, initPage, hasAnswer }) => {
   if (!data?.id) {
     return null;
   }
+
   return (
     <div>
       <h1 className="h3 mb-3 text-wrap text-break">
-        <Link className="link-dark" reloadDocument to={`/questions/${data.id}`}>
+        <Link
+          className="link-dark"
+          reloadDocument
+          to={pathFactory.questionLanding(data.id, data.url_title)}>
           {data.title}
           {data.status === 2
             ? ` [${t('closed', { keyPrefix: 'question' })}]`
@@ -88,19 +95,12 @@ const Index: FC<Props> = ({ data, initPage, hasAnswer }) => {
           size="sm"
           className="p-0 btn-no-border"
           onClick={(e) => handleFollow(e)}>
-          {followed ? 'Following' : 'Follow'}
+          {t(followed ? 'Following' : 'Follow')}
         </Button>
       </div>
       <div className="m-n1">
         {data?.tags?.map((item: any) => {
-          return (
-            <Tag
-              className="m-1"
-              href={`/tags/${item.main_tag_slug_name || item.slug_name}`}
-              key={item.slug_name}>
-              {item.slug_name}
-            </Tag>
-          );
+          return <Tag className="m-1" key={item.slug_name} data={item} />;
         })}
       </div>
       <article
@@ -129,18 +129,30 @@ const Index: FC<Props> = ({ data, initPage, hasAnswer }) => {
             type="question"
             memberActions={data?.member_actions}
             title={data.title}
+            slugTitle={data.url_title}
             hasAnswer={hasAnswer}
             isAccepted={Boolean(data?.accepted_answer_id)}
             callback={initPage}
           />
         </Col>
         <Col lg={3} className="mb-3 mb-md-0">
-          {data.update_user_info?.username !== data.user_info?.username ? (
+          {data.update_user_info &&
+          data.update_user_info?.username !== data.user_info?.username ? (
             <UserCard
-              data={data?.user_info}
+              data={data?.update_user_info}
               time={data.edit_time}
               preFix={t('edit')}
+              isLogged={isLogged}
+              timelinePath={`/posts/${data.id}/timeline`}
             />
+          ) : isLogged ? (
+            <Link to={`/posts/${data.id}/timeline`}>
+              <FormatTime
+                time={data.edit_time}
+                preFix={t('edit')}
+                className="link-secondary fs-14"
+              />
+            </Link>
           ) : (
             <FormatTime
               time={data.edit_time}
@@ -154,11 +166,17 @@ const Index: FC<Props> = ({ data, initPage, hasAnswer }) => {
             data={data?.user_info}
             time={data.create_time}
             preFix={t('asked')}
+            isLogged={isLogged}
+            timelinePath={`/posts/${data.id}/timeline`}
           />
         </Col>
       </Row>
 
-      <Comment objectId={data?.id} mode="question" />
+      <Comment
+        objectId={data?.id}
+        mode="question"
+        commentId={searchParams.get('commentId')}
+      />
     </div>
   );
 };

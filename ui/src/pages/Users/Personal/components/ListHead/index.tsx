@@ -1,7 +1,7 @@
 import { FC, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { QueryGroup } from '@answer/components';
+import { QueryGroup } from '@/components';
 
 const sortBtns = ['newest', 'score'];
 
@@ -24,7 +24,7 @@ const Index: FC<Props> = ({
   }
 
   return (
-    <div className="d-flex  align-items-center justify-content-between pb-3 border-bottom">
+    <div className="d-flex  align-items-center justify-content-between pb-3">
       <h5 className="mb-0">
         {count} {t(tabName)}
       </h5>

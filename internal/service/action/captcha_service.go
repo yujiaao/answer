@@ -5,9 +5,9 @@ import (
 	"image/color"
 	"strings"
 
+	"github.com/answerdev/answer/internal/base/reason"
+	"github.com/answerdev/answer/internal/schema"
 	"github.com/mojocn/base64Captcha"
-	"github.com/segmentfault/answer/internal/base/reason"
-	"github.com/segmentfault/answer/internal/schema"
 	"github.com/segmentfault/pacman/errors"
 	"github.com/segmentfault/pacman/log"
 )
@@ -36,7 +36,7 @@ func NewCaptchaService(captchaRepo CaptchaRepo) *CaptchaService {
 // ActionRecord action record
 func (cs *CaptchaService) ActionRecord(ctx context.Context, req *schema.ActionRecordReq) (resp *schema.ActionRecordResp, err error) {
 	resp = &schema.ActionRecordResp{}
-	num, err := cs.captchaRepo.GetActionType(ctx, req.Ip, req.Action)
+	num, err := cs.captchaRepo.GetActionType(ctx, req.IP, req.Action)
 	if err != nil {
 		num = 0
 	}
@@ -48,15 +48,39 @@ func (cs *CaptchaService) ActionRecord(ctx context.Context, req *schema.ActionRe
 	return
 }
 
+func (cs *CaptchaService) UserRegisterCaptcha(ctx context.Context) (resp *schema.ActionRecordResp, err error) {
+	resp = &schema.ActionRecordResp{}
+	resp.CaptchaID, resp.CaptchaImg, err = cs.GenerateCaptcha(ctx)
+	resp.Verify = true
+	return
+}
+
+func (cs *CaptchaService) UserRegisterVerifyCaptcha(
+	ctx context.Context, id string, VerifyValue string,
+) bool {
+	if id == "" || VerifyValue == "" {
+		return false
+	}
+	pass, err := cs.VerifyCaptcha(ctx, id, VerifyValue)
+	if err != nil {
+		return false
+	}
+	return pass
+}
+
 // ActionRecordVerifyCaptcha
 // Verify that you need to enter a CAPTCHA, and that the CAPTCHA is correct
 func (cs *CaptchaService) ActionRecordVerifyCaptcha(
-	ctx context.Context, actionType string, ip string, id string, VerifyValue string) bool {
+	ctx context.Context, actionType string, ip string, id string, VerifyValue string,
+) bool {
 	num, cahceErr := cs.captchaRepo.GetActionType(ctx, ip, actionType)
 	if cahceErr != nil {
 		return true
 	}
 	if num >= 3 {
+		if id == "" || VerifyValue == "" {
+			return false
+		}
 		pass, err := cs.VerifyCaptcha(ctx, id, VerifyValue)
 		if err != nil {
 			return false

@@ -1,21 +1,30 @@
 package controller
 
 import (
+	"github.com/answerdev/answer/internal/base/handler"
+	"github.com/answerdev/answer/internal/base/middleware"
+	"github.com/answerdev/answer/internal/schema"
+	"github.com/answerdev/answer/internal/service/notification"
+	"github.com/answerdev/answer/internal/service/permission"
+	"github.com/answerdev/answer/internal/service/rank"
 	"github.com/gin-gonic/gin"
-	"github.com/segmentfault/answer/internal/base/handler"
-	"github.com/segmentfault/answer/internal/base/middleware"
-	"github.com/segmentfault/answer/internal/schema"
-	"github.com/segmentfault/answer/internal/service/notification"
 )
 
 // NotificationController notification controller
 type NotificationController struct {
 	notificationService *notification.NotificationService
+	rankService         *rank.RankService
 }
 
 // NewNotificationController new controller
-func NewNotificationController(notificationService *notification.NotificationService) *NotificationController {
-	return &NotificationController{notificationService: notificationService}
+func NewNotificationController(
+	notificationService *notification.NotificationService,
+	rankService *rank.RankService,
+) *NotificationController {
+	return &NotificationController{
+		notificationService: notificationService,
+		rankService:         rankService,
+	}
 }
 
 // GetRedDot
@@ -28,8 +37,26 @@ func NewNotificationController(notificationService *notification.NotificationSer
 // @Success 200 {object} handler.RespBody
 // @Router /answer/api/v1/notification/status [get]
 func (nc *NotificationController) GetRedDot(ctx *gin.Context) {
+
+	req := &schema.GetRedDot{}
+
 	userID := middleware.GetLoginUserIDFromContext(ctx)
-	RedDot, err := nc.notificationService.GetRedDot(ctx, userID)
+	req.UserID = userID
+	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
+	canList, err := nc.rankService.CheckOperationPermissions(ctx, req.UserID, []string{
+		permission.QuestionAudit,
+		permission.AnswerAudit,
+		permission.TagAudit,
+	})
+	if err != nil {
+		handler.HandleResponse(ctx, err, nil)
+		return
+	}
+	req.CanReviewQuestion = canList[0]
+	req.CanReviewAnswer = canList[1]
+	req.CanReviewTag = canList[2]
+
+	RedDot, err := nc.notificationService.GetRedDot(ctx, req)
 	handler.HandleResponse(ctx, err, RedDot)
 }
 
@@ -48,8 +75,21 @@ func (nc *NotificationController) ClearRedDot(ctx *gin.Context) {
 	if handler.BindAndCheck(ctx, req) {
 		return
 	}
-	userID := middleware.GetLoginUserIDFromContext(ctx)
-	RedDot, err := nc.notificationService.ClearRedDot(ctx, userID, req.TypeStr)
+	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
+	canList, err := nc.rankService.CheckOperationPermissions(ctx, req.UserID, []string{
+		permission.QuestionAudit,
+		permission.AnswerAudit,
+		permission.TagAudit,
+	})
+	if err != nil {
+		handler.HandleResponse(ctx, err, nil)
+		return
+	}
+	req.CanReviewQuestion = canList[0]
+	req.CanReviewAnswer = canList[1]
+	req.CanReviewTag = canList[2]
+
+	RedDot, err := nc.notificationService.ClearRedDot(ctx, req)
 	handler.HandleResponse(ctx, err, RedDot)
 }
 
@@ -111,6 +151,6 @@ func (nc *NotificationController) GetList(ctx *gin.Context) {
 		return
 	}
 	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
-	resp, err := nc.notificationService.GetList(ctx, req)
+	resp, err := nc.notificationService.GetNotificationPage(ctx, req)
 	handler.HandleResponse(ctx, err, resp)
 }

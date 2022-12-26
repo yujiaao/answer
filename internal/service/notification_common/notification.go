@@ -5,24 +5,24 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/answerdev/answer/internal/base/constant"
+	"github.com/answerdev/answer/internal/base/data"
+	"github.com/answerdev/answer/internal/base/reason"
+	"github.com/answerdev/answer/internal/entity"
+	"github.com/answerdev/answer/internal/schema"
+	"github.com/answerdev/answer/internal/service/activity_common"
+	"github.com/answerdev/answer/internal/service/notice_queue"
+	"github.com/answerdev/answer/internal/service/object_info"
+	usercommon "github.com/answerdev/answer/internal/service/user_common"
 	"github.com/goccy/go-json"
 	"github.com/jinzhu/copier"
-	"github.com/segmentfault/answer/internal/base/constant"
-	"github.com/segmentfault/answer/internal/base/data"
-	"github.com/segmentfault/answer/internal/base/reason"
-	"github.com/segmentfault/answer/internal/entity"
-	"github.com/segmentfault/answer/internal/schema"
-	"github.com/segmentfault/answer/internal/service/activity_common"
-	"github.com/segmentfault/answer/internal/service/notice_queue"
-	"github.com/segmentfault/answer/internal/service/object_info"
-	usercommon "github.com/segmentfault/answer/internal/service/user_common"
 	"github.com/segmentfault/pacman/errors"
 	"github.com/segmentfault/pacman/log"
 )
 
 type NotificationRepo interface {
 	AddNotification(ctx context.Context, notification *entity.Notification) (err error)
-	SearchList(ctx context.Context, search *schema.NotificationSearch) ([]*entity.Notification, int64, error)
+	GetNotificationPage(ctx context.Context, search *schema.NotificationSearch) ([]*entity.Notification, int64, error)
 	ClearUnRead(ctx context.Context, userID string, notificationType int) (err error)
 	ClearIDUnRead(ctx context.Context, userID string, id string) (err error)
 	GetByUserIdObjectIdTypeId(ctx context.Context, userID, objectID string, notificationType int) (*entity.Notification, bool, error)
@@ -191,7 +191,7 @@ func (ns *NotificationCommon) SendNotificationToAllFollower(ctx context.Context,
 	if msg.NotificationAction != constant.UpdateQuestion &&
 		msg.NotificationAction != constant.AnswerTheQuestion &&
 		msg.NotificationAction != constant.UpdateAnswer &&
-		msg.NotificationAction != constant.AdoptAnswer {
+		msg.NotificationAction != constant.AcceptAnswer {
 		return
 	}
 	condObjectID := msg.ObjectID

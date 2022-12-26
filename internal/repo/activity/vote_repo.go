@@ -2,25 +2,27 @@ package activity
 
 import (
 	"context"
-	"github.com/segmentfault/answer/pkg/converter"
 	"strings"
+	"time"
 
-	"github.com/segmentfault/answer/internal/base/pager"
-	"github.com/segmentfault/answer/internal/service/config"
-	"github.com/segmentfault/answer/internal/service/notice_queue"
-	"github.com/segmentfault/answer/internal/service/rank"
-	"github.com/segmentfault/answer/pkg/obj"
+	"github.com/answerdev/answer/pkg/converter"
+
+	"github.com/answerdev/answer/internal/base/pager"
+	"github.com/answerdev/answer/internal/service/config"
+	"github.com/answerdev/answer/internal/service/notice_queue"
+	"github.com/answerdev/answer/internal/service/rank"
+	"github.com/answerdev/answer/pkg/obj"
 
 	"xorm.io/builder"
 
-	"github.com/segmentfault/answer/internal/service/activity_common"
-	"github.com/segmentfault/answer/internal/service/unique"
+	"github.com/answerdev/answer/internal/service/activity_common"
+	"github.com/answerdev/answer/internal/service/unique"
 
-	"github.com/segmentfault/answer/internal/base/data"
-	"github.com/segmentfault/answer/internal/base/reason"
-	"github.com/segmentfault/answer/internal/entity"
-	"github.com/segmentfault/answer/internal/schema"
-	"github.com/segmentfault/answer/internal/service"
+	"github.com/answerdev/answer/internal/base/data"
+	"github.com/answerdev/answer/internal/base/reason"
+	"github.com/answerdev/answer/internal/entity"
+	"github.com/answerdev/answer/internal/schema"
+	"github.com/answerdev/answer/internal/service"
 	"github.com/segmentfault/pacman/errors"
 	"xorm.io/xorm"
 )
@@ -42,7 +44,8 @@ func NewVoteRepo(
 	configRepo config.ConfigRepo,
 	activityRepo activity_common.ActivityRepo,
 	userRankRepo rank.UserRankRepo,
-	voteCommon activity_common.VoteRepo) service.VoteRepo {
+	voteCommon activity_common.VoteRepo,
+) service.VoteRepo {
 	return &VoteRepo{
 		data:         data,
 		uniqueIDRepo: uniqueIDRepo,
@@ -65,8 +68,9 @@ var LimitDownActions = map[string][]string{
 	"comment":  {"vote_down"},
 }
 
-func (vr *VoteRepo) vote(ctx context.Context, objectID string, userID, objectUserId string, actions []string) (resp *schema.VoteResp, err error) {
+func (vr *VoteRepo) vote(ctx context.Context, objectID string, userID, objectUserID string, actions []string) (resp *schema.VoteResp, err error) {
 	resp = &schema.VoteResp{}
+	notificationUserIDs := make([]string, 0)
 	_, err = vr.data.DB.Transaction(func(session *xorm.Session) (result any, err error) {
 		result = nil
 		for _, action := range actions {
@@ -75,60 +79,61 @@ func (vr *VoteRepo) vote(ctx context.Context, objectID string, userID, objectUse
 				insertActivity entity.Activity
 				has            bool
 				triggerUserID,
-				activityUserId string
+				activityUserID string
 				activityType, deltaRank, hasRank int
 			)
 
-			activityUserId, activityType, deltaRank, hasRank, err = vr.CheckRank(ctx, objectID, objectUserId, userID, action)
+			activityUserID, activityType, deltaRank, hasRank, err = vr.CheckRank(ctx, objectID, objectUserID, userID, action)
 			if err != nil {
 				return
 			}
 
 			triggerUserID = userID
-			if userID == activityUserId {
+			if userID == activityUserID {
 				triggerUserID = "0"
 			}
 
 			// check is voted up
 			has, _ = session.
 				Where(builder.Eq{"object_id": objectID}).
-				And(builder.Eq{"user_id": activityUserId}).
+				And(builder.Eq{"user_id": activityUserID}).
 				And(builder.Eq{"trigger_user_id": triggerUserID}).
 				And(builder.Eq{"activity_type": activityType}).
 				Get(&existsActivity)
 
 			// is is voted,return
-			if has && existsActivity.Cancelled == 0 {
+			if has && existsActivity.Cancelled == entity.ActivityAvailable {
 				return
 			}
 
 			insertActivity = entity.Activity{
-				ObjectID:      objectID,
-				UserID:        activityUserId,
-				TriggerUserID: converter.StringToInt64(triggerUserID),
-				ActivityType:  activityType,
-				Rank:          deltaRank,
-				HasRank:       hasRank,
-				Cancelled:     0,
+				ObjectID:         objectID,
+				OriginalObjectID: objectID,
+				UserID:           activityUserID,
+				TriggerUserID:    converter.StringToInt64(triggerUserID),
+				ActivityType:     activityType,
+				Rank:             deltaRank,
+				HasRank:          hasRank,
+				Cancelled:        entity.ActivityAvailable,
 			}
 
 			// trigger user rank and send notification
 			if hasRank != 0 {
-				isReachStandard, err := vr.userRankRepo.TriggerUserRank(ctx, session, activityUserId, deltaRank, activityType)
+				var isReachStandard bool
+				isReachStandard, err = vr.userRankRepo.TriggerUserRank(ctx, session, activityUserID, deltaRank, activityType)
 				if err != nil {
 					return nil, err
 				}
 				if isReachStandard {
 					insertActivity.Rank = 0
 				}
-
-				vr.sendNotification(ctx, activityUserId, objectUserId, objectID)
+				notificationUserIDs = append(notificationUserIDs, activityUserID)
 			}
 
 			if has {
 				if _, err = session.Where("id = ?", existsActivity.ID).Cols("`cancelled`").
 					Update(&entity.Activity{
-						Cancelled: 0,
+						Cancelled: entity.ActivityAvailable,
 					}); err != nil {
 					return
 				}
@@ -160,35 +165,39 @@ func (vr *VoteRepo) vote(ctx context.Context, objectID string, userID, objectUse
 	resp, err = vr.GetVoteResultByObjectId(ctx, objectID)
 	resp.VoteStatus = vr.voteCommon.GetVoteStatus(ctx, objectID, userID)
 
+	for _, activityUserID := range notificationUserIDs {
+		vr.sendNotification(ctx, activityUserID, objectUserID, objectID)
+	}
 	return
 }
 
-func (vr *VoteRepo) voteCancel(ctx context.Context, objectID string, userID, objectUserId string, actions []string) (resp *schema.VoteResp, err error) {
+func (vr *VoteRepo) voteCancel(ctx context.Context, objectID string, userID, objectUserID string, actions []string) (resp *schema.VoteResp, err error) {
 	resp = &schema.VoteResp{}
+	notificationUserIDs := make([]string, 0)
 	_, err = vr.data.DB.Transaction(func(session *xorm.Session) (result any, err error) {
 		for _, action := range actions {
 			var (
 				existsActivity entity.Activity
 				has            bool
 				triggerUserID,
-				activityUserId string
+				activityUserID string
 				activityType,
 				deltaRank, hasRank int
 			)
 			result = nil
 
-			activityUserId, activityType, deltaRank, hasRank, err = vr.CheckRank(ctx, objectID, objectUserId, userID, action)
+			activityUserID, activityType, deltaRank, hasRank, err = vr.CheckRank(ctx, objectID, objectUserID, userID, action)
 			if err != nil {
 				return
 			}
 
 			triggerUserID = userID
-			if userID == activityUserId {
+			if userID == activityUserID {
 				triggerUserID = "0"
 			}
 
 			has, err = session.
-				Where(builder.Eq{"user_id": activityUserId}).
+				Where(builder.Eq{"user_id": activityUserID}).
 				And(builder.Eq{"trigger_user_id": triggerUserID}).
 				And(builder.Eq{"activity_type": activityType}).
 				And(builder.Eq{"object_id": objectID}).
@@ -198,25 +207,25 @@ func (vr *VoteRepo) voteCancel(ctx context.Context, objectID string, userID, obj
 				return
 			}
 
-			if existsActivity.Cancelled == 1 {
+			if existsActivity.Cancelled == entity.ActivityCancelled {
 				return
 			}
 
-			if _, err = session.Where("id = ?", existsActivity.ID).Cols("`cancelled`").
+			if _, err = session.Where("id = ?", existsActivity.ID).Cols("cancelled", "cancelled_at").
 				Update(&entity.Activity{
-					Cancelled: 1,
+					Cancelled:   entity.ActivityCancelled,
+					CancelledAt: time.Now(),
 				}); err != nil {
 				return
 			}
 
 			// trigger user rank and send notification
-			if hasRank != 0 {
-				_, err = vr.userRankRepo.TriggerUserRank(ctx, session, activityUserId, -deltaRank, activityType)
+			if hasRank != 0 && existsActivity.Rank != 0 {
+				_, err = vr.userRankRepo.TriggerUserRank(ctx, session, activityUserID, -deltaRank, activityType)
 				if err != nil {
 					return
 				}
-
-				vr.sendNotification(ctx, activityUserId, objectUserId, objectID)
+				notificationUserIDs = append(notificationUserIDs, activityUserID)
 			}
 
 			// update votes
@@ -239,10 +248,14 @@ func (vr *VoteRepo) voteCancel(ctx context.Context, objectID string, userID, obj
 	}
 	resp, err = vr.GetVoteResultByObjectId(ctx, objectID)
 	resp.VoteStatus = vr.voteCommon.GetVoteStatus(ctx, objectID, userID)
+
+	for _, activityUserID := range notificationUserIDs {
+		vr.sendNotification(ctx, activityUserID, objectUserID, objectID)
+	}
 	return
 }
 
-func (vr *VoteRepo) VoteUp(ctx context.Context, objectID string, userID, objectUserId string) (resp *schema.VoteResp, err error) {
+func (vr *VoteRepo) VoteUp(ctx context.Context, objectID string, userID, objectUserID string) (resp *schema.VoteResp, err error) {
 	resp = &schema.VoteResp{}
 	objectType, err := obj.GetObjectTypeStrByObjectID(objectID)
 	if err != nil {
@@ -256,11 +269,11 @@ func (vr *VoteRepo) VoteUp(ctx context.Context, objectID string, userID, objectU
 		return
 	}
 
-	_, _ = vr.VoteDownCancel(ctx, objectID, userID, objectUserId)
-	return vr.vote(ctx, objectID, userID, objectUserId, actions)
+	_, _ = vr.VoteDownCancel(ctx, objectID, userID, objectUserID)
+	return vr.vote(ctx, objectID, userID, objectUserID, actions)
 }
 
-func (vr *VoteRepo) VoteDown(ctx context.Context, objectID string, userID, objectUserId string) (resp *schema.VoteResp, err error) {
+func (vr *VoteRepo) VoteDown(ctx context.Context, objectID string, userID, objectUserID string) (resp *schema.VoteResp, err error) {
 	resp = &schema.VoteResp{}
 	objectType, err := obj.GetObjectTypeStrByObjectID(objectID)
 	if err != nil {
@@ -273,14 +286,12 @@ func (vr *VoteRepo) VoteDown(ctx context.Context, objectID string, userID, objec
 		return
 	}
 
-	_, _ = vr.VoteUpCancel(ctx, objectID, userID, objectUserId)
-	return vr.vote(ctx, objectID, userID, objectUserId, actions)
+	_, _ = vr.VoteUpCancel(ctx, objectID, userID, objectUserID)
+	return vr.vote(ctx, objectID, userID, objectUserID, actions)
 }
 
-func (vr *VoteRepo) VoteUpCancel(ctx context.Context, objectID string, userID, objectUserId string) (resp *schema.VoteResp, err error) {
-	var (
-		objectType string
-	)
+func (vr *VoteRepo) VoteUpCancel(ctx context.Context, objectID string, userID, objectUserID string) (resp *schema.VoteResp, err error) {
+	var objectType string
 	resp = &schema.VoteResp{}
 
 	objectType, err = obj.GetObjectTypeStrByObjectID(objectID)
@@ -294,13 +305,11 @@ func (vr *VoteRepo) VoteUpCancel(ctx context.Context, objectID string, userID, o
 		return
 	}
 
-	return vr.voteCancel(ctx, objectID, userID, objectUserId, actions)
+	return vr.voteCancel(ctx, objectID, userID, objectUserID, actions)
 }
 
-func (vr *VoteRepo) VoteDownCancel(ctx context.Context, objectID string, userID, objectUserId string) (resp *schema.VoteResp, err error) {
-	var (
-		objectType string
-	)
+func (vr *VoteRepo) VoteDownCancel(ctx context.Context, objectID string, userID, objectUserID string) (resp *schema.VoteResp, err error) {
+	var objectType string
 	resp = &schema.VoteResp{}
 
 	objectType, err = obj.GetObjectTypeStrByObjectID(objectID)
@@ -314,22 +323,22 @@ func (vr *VoteRepo) VoteDownCancel(ctx context.Context, objectID string, userID,
 		return
 	}
 
-	return vr.voteCancel(ctx, objectID, userID, objectUserId, actions)
+	return vr.voteCancel(ctx, objectID, userID, objectUserID, actions)
 }
 
-func (vr *VoteRepo) CheckRank(ctx context.Context, objectID, objectUserId, userID string, action string) (activityUserId string, activityType, rank, hasRank int, err error) {
+func (vr *VoteRepo) CheckRank(ctx context.Context, objectID, objectUserID, userID string, action string) (activityUserID string, activityType, rank, hasRank int, err error) {
 	activityType, rank, hasRank, err = vr.activityRepo.GetActivityTypeByObjID(ctx, objectID, action)
 
 	if err != nil {
 		return
 	}
 
-	activityUserId = userID
+	activityUserID = userID
 	if strings.Contains(action, "voted") {
-		activityUserId = objectUserId
+		activityUserID = objectUserID
 	}
 
-	return activityUserId, activityType, rank, hasRank, nil
+	return activityUserID, activityType, rank, hasRank, nil
 }
 
 func (vr *VoteRepo) GetVoteResultByObjectId(ctx context.Context, objectID string) (resp *schema.VoteResp, err error) {
@@ -341,7 +350,7 @@ func (vr *VoteRepo) GetVoteResultByObjectId(ctx context.Context, objectID string
 			activityType int
 		)
 
-		activityType, _, _, err = vr.activityRepo.GetActivityTypeByObjID(ctx, objectID, action)
+		activityType, _, _, _ = vr.activityRepo.GetActivityTypeByObjID(ctx, objectID, action)
 
 		votes, err = vr.data.DB.Where(builder.Eq{"object_id": objectID}).
 			And(builder.Eq{"activity_type": activityType}).
@@ -417,15 +426,15 @@ func (vr *VoteRepo) updateVotes(ctx context.Context, session *xorm.Session, obje
 }
 
 // sendNotification send rank triggered notification
-func (vr *VoteRepo) sendNotification(ctx context.Context, activityUserId, objectUserId, objectID string) {
+func (vr *VoteRepo) sendNotification(ctx context.Context, activityUserID, objectUserID, objectID string) {
 	objectType, err := obj.GetObjectTypeStrByObjectID(objectID)
 	if err != nil {
 		return
 	}
 
 	msg := &schema.NotificationMsg{
-		ReceiverUserID: activityUserId,
-		TriggerUserID:  objectUserId,
+		ReceiverUserID: activityUserID,
+		TriggerUserID:  objectUserID,
 		Type:           schema.NotificationTypeAchievement,
 		ObjectID:       objectID,
 		ObjectType:     objectType,

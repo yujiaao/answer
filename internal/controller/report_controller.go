@@ -1,13 +1,14 @@
 package controller
 
 import (
+	"github.com/answerdev/answer/internal/base/handler"
+	"github.com/answerdev/answer/internal/base/middleware"
+	"github.com/answerdev/answer/internal/base/reason"
+	"github.com/answerdev/answer/internal/schema"
+	"github.com/answerdev/answer/internal/service/permission"
+	"github.com/answerdev/answer/internal/service/rank"
+	"github.com/answerdev/answer/internal/service/report"
 	"github.com/gin-gonic/gin"
-	"github.com/segmentfault/answer/internal/base/handler"
-	"github.com/segmentfault/answer/internal/base/middleware"
-	"github.com/segmentfault/answer/internal/base/reason"
-	"github.com/segmentfault/answer/internal/schema"
-	"github.com/segmentfault/answer/internal/service/rank"
-	"github.com/segmentfault/answer/internal/service/report"
 	"github.com/segmentfault/pacman/errors"
 )
 
@@ -40,12 +41,17 @@ func (rc *ReportController) AddReport(ctx *gin.Context) {
 	}
 
 	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
-	if can, err := rc.rankService.CheckRankPermission(ctx, req.UserID, rank.ReportAddRank); err != nil || !can {
-		handler.HandleResponse(ctx, err, errors.Forbidden(reason.RankFailToMeetTheCondition))
+	can, err := rc.rankService.CheckOperationPermission(ctx, req.UserID, permission.ReportAdd, "")
+	if err != nil {
+		handler.HandleResponse(ctx, err, nil)
+		return
+	}
+	if !can {
+		handler.HandleResponse(ctx, errors.Forbidden(reason.RankFailToMeetTheCondition), nil)
 		return
 	}
 
-	err := rc.reportService.AddReport(ctx, req)
+	err = rc.reportService.AddReport(ctx, req)
 	handler.HandleResponse(ctx, err, nil)
 }
 

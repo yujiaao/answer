@@ -1,13 +1,14 @@
 package controller
 
 import (
+	"github.com/answerdev/answer/internal/base/handler"
+	"github.com/answerdev/answer/internal/base/middleware"
+	"github.com/answerdev/answer/internal/base/reason"
+	"github.com/answerdev/answer/internal/schema"
+	"github.com/answerdev/answer/internal/service/comment"
+	"github.com/answerdev/answer/internal/service/permission"
+	"github.com/answerdev/answer/internal/service/rank"
 	"github.com/gin-gonic/gin"
-	"github.com/segmentfault/answer/internal/base/handler"
-	"github.com/segmentfault/answer/internal/base/middleware"
-	"github.com/segmentfault/answer/internal/base/reason"
-	"github.com/segmentfault/answer/internal/schema"
-	"github.com/segmentfault/answer/internal/service/comment"
-	"github.com/segmentfault/answer/internal/service/rank"
 	"github.com/segmentfault/pacman/errors"
 )
 
@@ -41,8 +42,20 @@ func (cc *CommentController) AddComment(ctx *gin.Context) {
 	}
 
 	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
-	if can, err := cc.rankService.CheckRankPermission(ctx, req.UserID, rank.CommentAddRank); err != nil || !can {
-		handler.HandleResponse(ctx, err, errors.Forbidden(reason.RankFailToMeetTheCondition))
+	canList, err := cc.rankService.CheckOperationPermissions(ctx, req.UserID, []string{
+		permission.CommentAdd,
+		permission.CommentEdit,
+		permission.CommentDelete,
+	})
+	if err != nil {
+		handler.HandleResponse(ctx, err, nil)
+		return
+	}
+	req.CanAdd = canList[0]
+	req.CanEdit = canList[1]
+	req.CanDelete = canList[2]
+	if !req.CanAdd {
+		handler.HandleResponse(ctx, errors.Forbidden(reason.RankFailToMeetTheCondition), nil)
 		return
 	}
 
@@ -67,12 +80,17 @@ func (cc *CommentController) RemoveComment(ctx *gin.Context) {
 	}
 
 	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
-	if can, err := cc.rankService.CheckRankPermission(ctx, req.UserID, rank.CommentDeleteRank); err != nil || !can {
-		handler.HandleResponse(ctx, err, errors.Forbidden(reason.RankFailToMeetTheCondition))
+	can, err := cc.rankService.CheckOperationPermission(ctx, req.UserID, permission.CommentDelete, req.CommentID)
+	if err != nil {
+		handler.HandleResponse(ctx, err, nil)
+		return
+	}
+	if !can {
+		handler.HandleResponse(ctx, errors.Forbidden(reason.RankFailToMeetTheCondition), nil)
 		return
 	}
 
-	err := cc.commentService.RemoveComment(ctx, req)
+	err = cc.commentService.RemoveComment(ctx, req)
 	handler.HandleResponse(ctx, err, nil)
 }
 
@@ -93,12 +111,17 @@ func (cc *CommentController) UpdateComment(ctx *gin.Context) {
 	}
 
 	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
-	if can, err := cc.rankService.CheckRankPermission(ctx, req.UserID, rank.CommentEditRank); err != nil || !can {
-		handler.HandleResponse(ctx, err, errors.Forbidden(reason.RankFailToMeetTheCondition))
+	can, err := cc.rankService.CheckOperationPermission(ctx, req.UserID, permission.CommentEdit, req.CommentID)
+	if err != nil {
+		handler.HandleResponse(ctx, err, nil)
+		return
+	}
+	if !can {
+		handler.HandleResponse(ctx, errors.Forbidden(reason.RankFailToMeetTheCondition), nil)
 		return
 	}
 
-	err := cc.commentService.UpdateComment(ctx, req)
+	err = cc.commentService.UpdateComment(ctx, req)
 	handler.HandleResponse(ctx, err, nil)
 }
 
@@ -120,6 +143,16 @@ func (cc *CommentController) GetCommentWithPage(ctx *gin.Context) {
 	}
 
 	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
+	canList, err := cc.rankService.CheckOperationPermissions(ctx, req.UserID, []string{
+		permission.CommentEdit,
+		permission.CommentDelete,
+	})
+	if err != nil {
+		handler.HandleResponse(ctx, err, nil)
+		return
+	}
+	req.CanEdit = canList[0]
+	req.CanDelete = canList[1]
 
 	resp, err := cc.commentService.GetCommentWithPage(ctx, req)
 	handler.HandleResponse(ctx, err, resp)
@@ -162,6 +195,16 @@ func (cc *CommentController) GetComment(ctx *gin.Context) {
 	}
 
 	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
+	canList, err := cc.rankService.CheckOperationPermissions(ctx, req.UserID, []string{
+		permission.CommentEdit,
+		permission.CommentDelete,
+	})
+	if err != nil {
+		handler.HandleResponse(ctx, err, nil)
+		return
+	}
+	req.CanEdit = canList[0]
+	req.CanDelete = canList[1]
 
 	resp, err := cc.commentService.GetComment(ctx, req)
 	handler.HandleResponse(ctx, err, resp)

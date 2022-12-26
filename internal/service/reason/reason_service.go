@@ -2,8 +2,9 @@ package reason
 
 import (
 	"context"
-	"github.com/segmentfault/answer/internal/schema"
-	"github.com/segmentfault/answer/internal/service/reason_common"
+
+	"github.com/answerdev/answer/internal/schema"
+	"github.com/answerdev/answer/internal/service/reason_common"
 )
 
 type ReasonService struct {
@@ -17,5 +18,5 @@ func NewReasonService(reasonRepo reason_common.ReasonRepo) *ReasonService {
 }
 
 func (rs ReasonService) GetReasons(ctx context.Context, req schema.ReasonReq) (resp []schema.ReasonItem, err error) {
-	return rs.reasonRepo.ListReasons(ctx, req)
+	return rs.reasonRepo.ListReasons(ctx, req.ObjectType, req.Action)
 }

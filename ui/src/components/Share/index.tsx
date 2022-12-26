@@ -5,26 +5,34 @@ import { useTranslation } from 'react-i18next';
 import { FacebookShareButton, TwitterShareButton } from 'next-share';
 import copy from 'copy-to-clipboard';
 
-import { userInfoStore } from '@answer/stores';
+import { loggedUserInfoStore } from '@/stores';
+import { pathFactory } from '@/router/pathFactory';
 
 interface IProps {
   type: 'answer' | 'question';
   qid: any;
   aid?: any;
   title: string;
+  slugTitle: string;
 }
 
-const Index: FC<IProps> = ({ type, qid, aid, title }) => {
-  const user = userInfoStore((state) => state.user);
+const Index: FC<IProps> = ({ type, qid, aid, title, slugTitle = '' }) => {
+  const user = loggedUserInfoStore((state) => state.user);
   const [show, setShow] = useState(false);
   const [showTip, setShowTip] = useState(false);
   const [canSystemShare, setSystemShareState] = useState(false);
   const { t } = useTranslation();
-
   let baseUrl =
     type === 'question'
-      ? `${window.location.origin}/questions/${qid}`
-      : `${window.location.origin}/questions/${qid}/${aid}`;
+      ? `${window.location.origin}${pathFactory.questionLanding(
+          qid,
+          slugTitle,
+        )}`
+      : `${window.location.origin}${pathFactory.answerLanding({
+          questionId: qid,
+          slugTitle,
+          answerId: aid,
+        })}`;
   if (user.id) {
     baseUrl = `${baseUrl}?shareUserId=${user.username}`;
   }
@@ -37,7 +45,11 @@ const Index: FC<IProps> = ({ type, qid, aid, title }) => {
   const handleCopy = (evt) => {
     evt.preventDefault();
     evt.stopPropagation();
-    copy(baseUrl);
+    let copyText = baseUrl;
+    if (title) {
+      copyText = `${title} ${baseUrl}`;
+    }
+    copy(copyText);
     setShowTip(true);
     setTimeout(closeShare, 1000);
   };

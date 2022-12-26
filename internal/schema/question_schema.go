@@ -1,23 +1,40 @@
 package schema
 
+import (
+	"github.com/answerdev/answer/internal/base/validator"
+	"github.com/answerdev/answer/pkg/converter"
+)
+
+const (
+	SitemapMaxSize      = 50000
+	SitemapCachekey     = "answer@sitemap"
+	SitemapPageCachekey = "answer@sitemap@page%d"
+)
+
 // RemoveQuestionReq delete question request
 type RemoveQuestionReq struct {
 	// question id
-	ID     string `validate:"required" comment:"question id" json:"id"`
-	UserID string `json:"-" ` // user_id
-
+	ID      string `validate:"required" json:"id"`
+	UserID  string `json:"-" ` // user_id
+	IsAdmin bool   `json:"-"`
 }
 
 type CloseQuestionReq struct {
-	ID        string `validate:"required" comment:"question id" json:"id"`
-	UserId    string `json:"-" `          // user_id
-	CloseType int    `json:"close_type" ` // close_type
-	CloseMsg  string `json:"close_msg" `  // close_type
+	ID        string `validate:"required" json:"id"`
+	CloseType int    `json:"close_type"` // close_type
+	CloseMsg  string `json:"close_msg"`  // close_type
+	UserID    string `json:"-"`          // user_id
 }
 
 type CloseQuestionMeta struct {
 	CloseType int    `json:"close_type"`
 	CloseMsg  string `json:"close_msg"`
+}
+
+// ReopenQuestionReq reopen question request
+type ReopenQuestionReq struct {
+	QuestionID string `json:"question_id"`
+	UserID     string `json:"-"`
 }
 
 type QuestionAdd struct {
@@ -26,11 +43,45 @@ type QuestionAdd struct {
 	// content
 	Content string `validate:"required,gte=6,lte=65535" json:"content"`
 	// html
-	Html string `validate:"required,gte=6,lte=65535" json:"html"`
+	HTML string `validate:"required,gte=6,lte=65535" json:"html"`
 	// tags
 	Tags []*TagItem `validate:"required,dive" json:"tags"`
 	// user id
 	UserID string `json:"-"`
+	QuestionPermission
+}
+
+func (req *QuestionAdd) Check() (errFields []*validator.FormErrorField, err error) {
+	req.HTML = converter.Markdown2HTML(req.Content)
+	for _, tag := range req.Tags {
+		if len(tag.OriginalText) > 0 {
+			tag.ParsedText = converter.Markdown2HTML(tag.OriginalText)
+		}
+	}
+	return nil, nil
+}
+
+type QuestionPermission struct {
+	// whether user can add it
+	CanAdd bool `json:"-"`
+	// whether user can edit it
+	CanEdit bool `json:"-"`
+	// whether user can delete it
+	CanDelete bool `json:"-"`
+	// whether user can close it
+	CanClose bool `json:"-"`
+	// whether user can reopen it
+	CanReopen bool `json:"-"`
+	// whether user can use reserved it
+	CanUseReservedTag bool `json:"-"`
+}
+
+type CheckCanQuestionUpdate struct {
+	// question id
+	ID string `validate:"required" form:"id"`
+	// user id
+	UserID  string `json:"-"`
+	IsAdmin bool   `json:"-"`
 }
 
 type QuestionUpdate struct {
@@ -41,47 +92,58 @@ type QuestionUpdate struct {
 	// content
 	Content string `validate:"required,gte=6,lte=65535" json:"content"`
 	// html
-	Html string `validate:"required,gte=6,lte=65535" json:"html"`
+	HTML string `validate:"required,gte=6,lte=65535" json:"html"`
 	// tags
 	Tags []*TagItem `validate:"required,dive" json:"tags"`
 	// edit summary
 	EditSummary string `validate:"omitempty" json:"edit_summary"`
 	// user id
-	UserID string `json:"-"`
+	UserID       string `json:"-"`
+	NoNeedReview bool   `json:"-"`
+	QuestionPermission
+}
+
+func (req *QuestionUpdate) Check() (errFields []*validator.FormErrorField, err error) {
+	req.HTML = converter.Markdown2HTML(req.Content)
+	return nil, nil
 }
 
 type QuestionBaseInfo struct {
 	ID              string `json:"id" `
-	Title           string `json:"title" xorm:"title"`                       // 标题
-	ViewCount       int    `json:"view_count" xorm:"view_count"`             // view_count
-	AnswerCount     int    `json:"answer_count" xorm:"answer_count"`         // 回复总数
-	CollectionCount int    `json:"collection_count" xorm:"collection_count"` // 收藏总数
-	FollowCount     int    `json:"follow_count" xorm:"follow_count"`         // 关注数
+	Title           string `json:"title" xorm:"title"`                       // title
+	ViewCount       int    `json:"view_count" xorm:"view_count"`             // view count
+	AnswerCount     int    `json:"answer_count" xorm:"answer_count"`         // answer count
+	CollectionCount int    `json:"collection_count" xorm:"collection_count"` // collection count
+	FollowCount     int    `json:"follow_count" xorm:"follow_count"`         // follow count
 	Status          string `json:"status"`
 	AcceptedAnswer  bool   `json:"accepted_answer"`
 }
 
 type QuestionInfo struct {
 	ID                   string         `json:"id" `
-	Title                string         `json:"title" xorm:"title"`                         // 标题
-	Content              string         `json:"content" xorm:"content"`                     // 内容
-	Html                 string         `json:"html" xorm:"html"`                           // 解析后的html
+	Title                string         `json:"title" xorm:"title"`                         // title
+	UrlTitle             string         `json:"url_title" xorm:"url_title"`                 // title
+	Content              string         `json:"content" xorm:"content"`                     // content
+	HTML                 string         `json:"html" xorm:"html"`                           // html
+	Description          string         `json:"description"`                                //description
 	Tags                 []*TagResp     `json:"tags" `                                      // tags
 	ViewCount            int            `json:"view_count" xorm:"view_count"`               // view_count
 	UniqueViewCount      int            `json:"unique_view_count" xorm:"unique_view_count"` // unique_view_count
 	VoteCount            int            `json:"vote_count" xorm:"vote_count"`               // vote_count
-	AnswerCount          int            `json:"answer_count" xorm:"answer_count"`           // 回复总数
-	CollectionCount      int            `json:"collection_count" xorm:"collection_count"`   // 收藏总数
-	FollowCount          int            `json:"follow_count" xorm:"follow_count"`           // 关注数
-	AcceptedAnswerId     string         `json:"accepted_answer_id" `                        // accepted_answer_id
-	LastAnswerId         string         `json:"last_answer_id" `                            // last_answer_id
+	AnswerCount          int            `json:"answer_count" xorm:"answer_count"`           // answer count
+	CollectionCount      int            `json:"collection_count" xorm:"collection_count"`   // collection count
+	FollowCount          int            `json:"follow_count" xorm:"follow_count"`           // follow count
+	AcceptedAnswerID     string         `json:"accepted_answer_id" `                        // accepted_answer_id
+	LastAnswerID         string         `json:"last_answer_id" `                            // last_answer_id
 	CreateTime           int64          `json:"create_time" `                               // create_time
 	UpdateTime           int64          `json:"-"`                                          // update_time
 	PostUpdateTime       int64          `json:"update_time"`
 	QuestionUpdateTime   int64          `json:"edit_time"`
 	Status               int            `json:"status"`
 	Operation            *Operation     `json:"operation,omitempty"`
-	UserId               string         `json:"-" `
+	UserID               string         `json:"-" `
+	LastEditUserID       string         `json:"-" `
+	LastAnsweredUserID   string         `json:"-" `
 	UserInfo             *UserBasicInfo `json:"user_info"`
 	UpdateUserInfo       *UserBasicInfo `json:"update_user_info,omitempty"`
 	LastAnsweredUserInfo *UserBasicInfo `json:"last_answered_user_info,omitempty"`
@@ -92,6 +154,11 @@ type QuestionInfo struct {
 
 	// MemberActions
 	MemberActions []*PermissionMemberAction `json:"member_actions"`
+}
+
+// UpdateQuestionResp update question resp
+type UpdateQuestionResp struct {
+	WaitForReview bool `json:"wait_for_review"`
 }
 
 type AdminQuestionInfo struct {
@@ -108,10 +175,10 @@ type AdminQuestionInfo struct {
 }
 
 type Operation struct {
-	Operation_Type        string `json:"operation_type"`
-	Operation_Description string `json:"operation_description"`
-	Operation_Msg         string `json:"operation_msg"`
-	Operation_Time        int64  `json:"operation_time"`
+	OperationType        string `json:"operation_type"`
+	OperationDescription string `json:"operation_description"`
+	OperationMsg         string `json:"operation_msg"`
+	OperationTime        int64  `json:"operation_time"`
 }
 
 type GetCloseTypeResp struct {
@@ -132,7 +199,7 @@ type GetCloseTypeResp struct {
 type UserAnswerInfo struct {
 	AnswerID     string `json:"answer_id"`
 	QuestionID   string `json:"question_id"`
-	Adopted      int    `json:"adopted"`
+	Accepted     int    `json:"accepted"`
 	VoteCount    int    `json:"vote_count"`
 	CreateTime   int    `json:"create_time"`
 	UpdateTime   int    `json:"update_time"`
@@ -151,28 +218,45 @@ type UserQuestionInfo struct {
 	AnswerCount      int           `json:"answer_count"`
 	CollectionCount  int           `json:"collection_count"`
 	CreateTime       int           `json:"create_time"`
-	AcceptedAnswerId string        `json:"accepted_answer_id"`
+	AcceptedAnswerID string        `json:"accepted_answer_id"`
 	Status           string        `json:"status"`
 }
 
 type QuestionSearch struct {
-	Page     int      `json:"page" form:"page"`           //Query number of pages
-	PageSize int      `json:"page_size" form:"page_size"` //Search page size
-	Order    string   `json:"order" form:"order"`         //Search order by
-	Tags     []string `json:"tags" form:"tags"`           //Search tag
-	TagIDs   []string `json:"-" form:"-"`                 //Search tag
-	UserName string   `json:"username" form:"username"`   //Search username
+	Page     int    `json:"page" form:"page"`           // Query number of pages
+	PageSize int    `json:"page_size" form:"page_size"` // Search page size
+	Order    string `json:"order" form:"order"`         // Search order by
+	// Tags     []string `json:"tags" form:"tags"`           // Search tag
+	Tag      string   `json:"tag" form:"tag"`           //Search tag
+	TagIDs   []string `json:"-" form:"-"`               // Search tag
+	UserName string   `json:"username" form:"username"` // Search username
 	UserID   string   `json:"-" form:"-"`
 }
 
-type CmsQuestionSearch struct {
-	Page      int    `json:"page" form:"page"`           //Query number of pages
-	PageSize  int    `json:"page_size" form:"page_size"` //Search page size
+type AdminQuestionSearch struct {
+	Page      int    `json:"page" form:"page"`           // Query number of pages
+	PageSize  int    `json:"page_size" form:"page_size"` // Search page size
 	Status    int    `json:"-" form:"-"`
-	StatusStr string `json:"status" form:"status"` //Status 1 Available 2 closed 10 UserDeleted
+	StatusStr string `json:"status" form:"status"`                                  // Status 1 Available 2 closed 10 UserDeleted
+	Query     string `validate:"omitempty,gt=0,lte=100" json:"query" form:"query" ` //Query string
 }
 
 type AdminSetQuestionStatusRequest struct {
 	StatusStr  string `json:"status" form:"status"`
 	QuestionID string `json:"question_id" form:"question_id"`
+}
+
+type SiteMapList struct {
+	QuestionIDs []*SiteMapQuestionInfo `json:"question_ids"`
+	MaxPageNum  []int                  `json:"max_page_num"`
+}
+
+type SiteMapPageList struct {
+	PageData []*SiteMapQuestionInfo `json:"page_data"`
+}
+
+type SiteMapQuestionInfo struct {
+	ID         string `json:"id"`
+	Title      string `json:"title"`
+	UpdateTime string `json:"time"`
 }

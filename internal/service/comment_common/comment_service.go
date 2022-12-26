@@ -3,15 +3,16 @@ package comment_common
 import (
 	"context"
 
-	"github.com/segmentfault/answer/internal/base/reason"
-	"github.com/segmentfault/answer/internal/entity"
-	"github.com/segmentfault/answer/internal/schema"
+	"github.com/answerdev/answer/internal/base/reason"
+	"github.com/answerdev/answer/internal/entity"
+	"github.com/answerdev/answer/internal/schema"
 	"github.com/segmentfault/pacman/errors"
 )
 
 // CommentCommonRepo comment repository
 type CommentCommonRepo interface {
 	GetComment(ctx context.Context, commentID string) (comment *entity.Comment, exist bool, err error)
+	GetCommentCount(ctx context.Context) (count int64, err error)
 }
 
 // CommentCommonService user service

@@ -3,14 +3,14 @@ package report
 import (
 	"encoding/json"
 
-	"github.com/segmentfault/answer/internal/base/constant"
-	"github.com/segmentfault/answer/internal/base/reason"
-	"github.com/segmentfault/answer/internal/base/translator"
-	"github.com/segmentfault/answer/internal/entity"
-	"github.com/segmentfault/answer/internal/schema"
-	"github.com/segmentfault/answer/internal/service/object_info"
-	"github.com/segmentfault/answer/internal/service/report_common"
-	"github.com/segmentfault/answer/pkg/obj"
+	"github.com/answerdev/answer/internal/base/constant"
+	"github.com/answerdev/answer/internal/base/reason"
+	"github.com/answerdev/answer/internal/base/translator"
+	"github.com/answerdev/answer/internal/entity"
+	"github.com/answerdev/answer/internal/schema"
+	"github.com/answerdev/answer/internal/service/object_info"
+	"github.com/answerdev/answer/internal/service/report_common"
+	"github.com/answerdev/answer/pkg/obj"
 	"github.com/segmentfault/pacman/errors"
 	"github.com/segmentfault/pacman/i18n"
 	"golang.org/x/net/context"
@@ -24,7 +24,8 @@ type ReportService struct {
 
 // NewReportService new report service
 func NewReportService(reportRepo report_common.ReportRepo,
-	objectInfoService *object_info.ObjService) *ReportService {
+	objectInfoService *object_info.ObjService,
+) *ReportService {
 	return &ReportService{
 		reportRepo:        reportRepo,
 		objectInfoService: objectInfoService,
@@ -46,7 +47,7 @@ func (rs *ReportService) AddReport(ctx context.Context, req *schema.AddReportReq
 
 	report := &entity.Report{
 		UserID:         req.UserID,
-		ReportedUserID: objInfo.ObjectCreator,
+		ReportedUserID: objInfo.ObjectCreatorUserID,
 		ObjectID:       req.ObjectID,
 		ObjectType:     objectTypeNumber,
 		ReportType:     req.ReportType,
@@ -58,15 +59,16 @@ func (rs *ReportService) AddReport(ctx context.Context, req *schema.AddReportReq
 
 // GetReportTypeList get report list all
 func (rs *ReportService) GetReportTypeList(ctx context.Context, lang i18n.Language, req *schema.GetReportListReq) (
-	resp []*schema.GetReportTypeResp, err error) {
+	resp []*schema.GetReportTypeResp, err error,
+) {
 	resp = make([]*schema.GetReportTypeResp, 0)
 	switch req.Source {
 	case constant.QuestionObjectType:
-		err = json.Unmarshal([]byte(constant.QuestionReportJson), &resp)
+		err = json.Unmarshal([]byte(constant.QuestionReportJSON), &resp)
 	case constant.AnswerObjectType:
-		err = json.Unmarshal([]byte(constant.AnswerReportJson), &resp)
+		err = json.Unmarshal([]byte(constant.AnswerReportJSON), &resp)
 	case constant.CommentObjectType:
-		err = json.Unmarshal([]byte(constant.CommentReportJson), &resp)
+		err = json.Unmarshal([]byte(constant.CommentReportJSON), &resp)
 	}
 	if err != nil {
 		err = errors.BadRequest(reason.UnknownError)

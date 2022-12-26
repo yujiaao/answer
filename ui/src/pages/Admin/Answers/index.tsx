@@ -1,7 +1,9 @@
 import { FC } from 'react';
-import { Button, Form, Table, Stack, Badge } from 'react-bootstrap';
+import { Button, Form, Table, Stack } from 'react-bootstrap';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+
+import classNames from 'classnames';
 
 import {
   FormatTime,
@@ -11,21 +13,23 @@ import {
   BaseUserCard,
   Empty,
   QueryGroup,
-} from '@answer/components';
-import { ADMIN_LIST_STATUS } from '@answer/common/constants';
-import { useEditStatusModal } from '@answer/hooks';
-import { useAnswerSearch, changeAnswerStatus } from '@answer/api';
-import * as Type from '@answer/common/interface';
-
-import '../index.scss';
+} from '@/components';
+import { ADMIN_LIST_STATUS } from '@/common/constants';
+import { useEditStatusModal } from '@/hooks';
+import * as Type from '@/common/interface';
+import { useAnswerSearch, changeAnswerStatus } from '@/services';
+import { escapeRemove } from '@/utils';
+import { pathFactory } from '@/router/pathFactory';
 
 const answerFilterItems: Type.AdminContentsFilterBy[] = ['normal', 'deleted'];
 
 const Answers: FC = () => {
-  const [urlSearchParams] = useSearchParams();
+  const [urlSearchParams, setUrlSearchParams] = useSearchParams();
   const curFilter = urlSearchParams.get('status') || answerFilterItems[0];
   const PAGE_SIZE = 20;
   const curPage = Number(urlSearchParams.get('page')) || 1;
+  const curQuery = urlSearchParams.get('query') || '';
+  const questionId = urlSearchParams.get('questionId') || '';
   const { t } = useTranslation('translation', { keyPrefix: 'admin.answers' });
 
   const {
@@ -36,6 +40,8 @@ const Answers: FC = () => {
     page_size: PAGE_SIZE,
     page: curPage,
     status: curFilter as Type.AdminContentsFilterBy,
+    query: curQuery,
+    question_id: questionId,
   });
   const count = listData?.count || 0;
 
@@ -50,7 +56,7 @@ const Answers: FC = () => {
       Modal.confirm({
         title: t('title', { keyPrefix: 'delete' }),
         content:
-          item.adopted === 2
+          item.accepted === 2
             ? t('answer_accepted', { keyPrefix: 'delete' })
             : `<p>${t('other', { keyPrefix: 'delete' })}</p>`,
         cancelBtnVariant: 'link',
@@ -77,6 +83,11 @@ const Answers: FC = () => {
     });
   };
 
+  const handleFilter = (e) => {
+    urlSearchParams.set('query', e.target.value);
+    urlSearchParams.delete('page');
+    setUrlSearchParams(urlSearchParams);
+  };
   return (
     <>
       <h3 className="mb-4">{t('page_title')}</h3>
@@ -89,21 +100,24 @@ const Answers: FC = () => {
         />
 
         <Form.Control
+          value={curQuery}
+          onChange={handleFilter}
           size="sm"
           type="input"
-          placeholder="Filter by title"
-          className="d-none"
+          placeholder={t('filter.placeholder')}
           style={{ width: '12.25rem' }}
         />
       </div>
-      <Table>
+      <Table responsive>
         <thead>
           <tr>
-            <th style={{ width: '45%' }}>{t('post')}</th>
-            <th>{t('votes')}</th>
-            <th style={{ width: '20%' }}>{t('created')}</th>
-            <th>{t('status')}</th>
-            {curFilter !== 'deleted' && <th>{t('action')}</th>}
+            <th>{t('post')}</th>
+            <th style={{ width: '11%' }}>{t('votes')}</th>
+            <th style={{ width: '14%' }}>{t('created')}</th>
+            <th style={{ width: '11%' }}>{t('status')}</th>
+            {curFilter !== 'deleted' && (
+              <th style={{ width: '11%' }}>{t('action')}</th>
+            )}
           </tr>
         </thead>
         <tbody className="align-middle">
@@ -114,13 +128,17 @@ const Answers: FC = () => {
                   <Stack>
                     <Stack direction="horizontal" gap={2}>
                       <a
-                        href={`/questions/${li.question_id}/${li.id}`}
+                        href={pathFactory.answerLanding({
+                          questionId: li.question_id,
+                          slugTitle: li.question_info.url_title,
+                          answerId: li.id,
+                        })}
                         target="_blank"
                         className="text-break text-wrap"
                         rel="noreferrer">
                         {li.question_info.title}
                       </a>
-                      {li.adopted === 2 && (
+                      {li.accepted === 2 && (
                         <Icon
                           name="check-circle-fill"
                           className="ms-2 text-success"
@@ -128,11 +146,10 @@ const Answers: FC = () => {
                       )}
                     </Stack>
                     <div
-                      dangerouslySetInnerHTML={{
-                        __html: li.description,
-                      }}
-                      className="last-p text-truncate-2 fs-14"
-                    />
+                      className="text-truncate-2 fs-14"
+                      style={{ maxWidth: '30rem' }}>
+                      {escapeRemove(li.description)}
+                    </div>
                   </Stack>
                 </td>
                 <td>{li.vote_count}</td>
@@ -147,13 +164,20 @@ const Answers: FC = () => {
                   </Stack>
                 </td>
                 <td>
-                  <Badge bg={ADMIN_LIST_STATUS[curFilter]?.variant}>
+                  <span
+                    className={classNames(
+                      'badge',
+                      ADMIN_LIST_STATUS[curFilter]?.variant,
+                    )}>
                     {t(ADMIN_LIST_STATUS[curFilter]?.name)}
-                  </Badge>
+                  </span>
                 </td>
                 {curFilter !== 'deleted' && (
                   <td>
-                    <Button variant="link" onClick={() => handleChange(li.id)}>
+                    <Button
+                      variant="link"
+                      className="p-0 btn-no-border"
+                      onClick={() => handleChange(li.id)}>
                       {t('change')}
                     </Button>
                   </td>

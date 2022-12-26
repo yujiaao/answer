@@ -2,14 +2,13 @@ package user
 
 import (
 	"context"
-	"fmt"
 	"time"
 
-	"github.com/segmentfault/answer/internal/base/data"
-	"github.com/segmentfault/answer/internal/base/reason"
-	"github.com/segmentfault/answer/internal/entity"
-	"github.com/segmentfault/answer/internal/service/config"
-	usercommon "github.com/segmentfault/answer/internal/service/user_common"
+	"github.com/answerdev/answer/internal/base/data"
+	"github.com/answerdev/answer/internal/base/reason"
+	"github.com/answerdev/answer/internal/entity"
+	"github.com/answerdev/answer/internal/service/config"
+	usercommon "github.com/answerdev/answer/internal/service/user_common"
 	"github.com/segmentfault/pacman/errors"
 )
 
@@ -86,19 +85,24 @@ func (ur *userRepo) UpdateNoticeStatus(ctx context.Context, userID string, notic
 	return nil
 }
 
-func (ur *userRepo) UpdatePass(ctx context.Context, Data *entity.User) error {
-	if Data.ID == "" {
-		return fmt.Errorf("input error")
-	}
-	_, err := ur.data.DB.Where("id = ?", Data.ID).Cols("pass").Update(Data)
+func (ur *userRepo) UpdatePass(ctx context.Context, userID, pass string) error {
+	_, err := ur.data.DB.Where("id = ?", userID).Cols("pass").Update(&entity.User{Pass: pass})
 	if err != nil {
-		return err
+		return errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 	}
 	return nil
 }
 
 func (ur *userRepo) UpdateEmail(ctx context.Context, userID, email string) (err error) {
 	_, err = ur.data.DB.Where("id = ?", userID).Update(&entity.User{EMail: email})
+	if err != nil {
+		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+	return
+}
+
+func (ur *userRepo) UpdateLanguage(ctx context.Context, userID, language string) (err error) {
+	_, err = ur.data.DB.Where("id = ?", userID).Update(&entity.User{Language: language})
 	if err != nil {
 		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 	}
@@ -147,9 +151,19 @@ func (ur *userRepo) GetByUsername(ctx context.Context, username string) (userInf
 // GetByEmail get user by email
 func (ur *userRepo) GetByEmail(ctx context.Context, email string) (userInfo *entity.User, exist bool, err error) {
 	userInfo = &entity.User{}
-	exist, err = ur.data.DB.Where("e_mail = ?", email).Get(userInfo)
+	exist, err = ur.data.DB.Where("e_mail = ?", email).
+		Where("status != ?", entity.UserStatusDeleted).Get(userInfo)
 	if err != nil {
 		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+	return
+}
+
+func (vr *userRepo) GetUserCount(ctx context.Context) (count int64, err error) {
+	list := make([]*entity.User, 0)
+	count, err = vr.data.DB.Where("mail_status =?", entity.EmailStatusAvailable).And("status =?", entity.UserStatusAvailable).FindAndCount(&list)
+	if err != nil {
+		return count, errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 	}
 	return
 }

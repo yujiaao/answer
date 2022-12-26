@@ -1,9 +1,11 @@
 import { memo, FC } from 'react';
-import { ListGroupItem, Badge } from 'react-bootstrap';
+import { ListGroupItem } from 'react-bootstrap';
 import { useTranslation } from 'react-i18next';
 
-import { Icon, Tag, FormatTime, BaseUserCard } from '@answer/components';
-import type { SearchResItem } from '@answer/common/interface';
+import { pathFactory } from '@/router/pathFactory';
+import { Icon, Tag, FormatTime, BaseUserCard } from '@/components';
+import type { SearchResItem } from '@/common/interface';
+import { escapeRemove } from '@/utils';
 
 interface Props {
   data: SearchResItem;
@@ -13,18 +15,26 @@ const Index: FC<Props> = ({ data }) => {
   if (!data?.object_type) {
     return null;
   }
+  let itemUrl = pathFactory.questionLanding(
+    data.object.id,
+    data.object.url_title,
+  );
+  if (data.object_type === 'answer' && data.object.question_id) {
+    itemUrl = pathFactory.answerLanding({
+      questionId: data.object.question_id,
+      slugTitle: data.object.url_title,
+      answerId: data.object.id,
+    });
+  }
   return (
-    <ListGroupItem className="py-3 px-0">
+    <ListGroupItem className="py-3 px-0 border-start-0 border-end-0 bg-transparent">
       <div className="mb-2 clearfix">
-        <Badge
-          bg="dark"
-          className="me-2 float-start"
+        <span
+          className="float-start me-2 badge text-bg-dark"
           style={{ marginTop: '2px' }}>
           {data.object_type === 'question' ? 'Q' : 'A'}
-        </Badge>
-        <a
-          className="h5 mb-0 link-dark text-break"
-          href={`/questions/${data.object.id}`}>
+        </span>
+        <a className="h5 mb-0 link-dark text-break" href={itemUrl}>
           {data.object.title}
           {data.object.status === 'closed'
             ? ` [${t('closed', { keyPrefix: 'question' })}]`
@@ -61,16 +71,12 @@ const Index: FC<Props> = ({ data }) => {
 
       {data.object?.excerpt && (
         <p className="fs-14 text-truncate-2 mb-2 last-p text-break">
-          {data.object.excerpt}
+          {escapeRemove(data.object.excerpt)}
         </p>
       )}
 
       {data.object?.tags?.map((item) => {
-        return (
-          <Tag href={`/tags/${item.slug_name}`} className="me-1">
-            {item.slug_name}
-          </Tag>
-        );
+        return <Tag key={item.slug_name} className="me-1" data={item} />;
       })}
     </ListGroupItem>
   );

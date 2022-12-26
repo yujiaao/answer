@@ -3,15 +3,17 @@ package controller
 import (
 	"context"
 
+	"github.com/answerdev/answer/internal/base/handler"
+	"github.com/answerdev/answer/internal/base/middleware"
+	"github.com/answerdev/answer/internal/base/reason"
+	"github.com/answerdev/answer/internal/base/validator"
+	"github.com/answerdev/answer/internal/entity"
+	"github.com/answerdev/answer/internal/schema"
+	"github.com/answerdev/answer/internal/service"
+	"github.com/answerdev/answer/internal/service/permission"
+	"github.com/answerdev/answer/internal/service/rank"
+	"github.com/answerdev/answer/pkg/converter"
 	"github.com/gin-gonic/gin"
-	"github.com/segmentfault/answer/internal/base/handler"
-	"github.com/segmentfault/answer/internal/base/middleware"
-	"github.com/segmentfault/answer/internal/base/reason"
-	"github.com/segmentfault/answer/internal/entity"
-	"github.com/segmentfault/answer/internal/schema"
-	"github.com/segmentfault/answer/internal/service"
-	"github.com/segmentfault/answer/internal/service/rank"
-	"github.com/segmentfault/answer/pkg/converter"
 	"github.com/segmentfault/pacman/errors"
 )
 
@@ -42,12 +44,18 @@ func (qc *QuestionController) RemoveQuestion(ctx *gin.Context) {
 		return
 	}
 	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
-	if can, err := qc.rankService.CheckRankPermission(ctx, req.UserID, rank.QuestionDeleteRank); err != nil || !can {
-		handler.HandleResponse(ctx, err, errors.Forbidden(reason.RankFailToMeetTheCondition))
+	req.IsAdmin = middleware.GetIsAdminFromContext(ctx)
+	can, err := qc.rankService.CheckOperationPermission(ctx, req.UserID, permission.QuestionDelete, req.ID)
+	if err != nil {
+		handler.HandleResponse(ctx, err, nil)
+		return
+	}
+	if !can {
+		handler.HandleResponse(ctx, errors.Forbidden(reason.RankFailToMeetTheCondition), nil)
 		return
 	}
 
-	err := qc.questionService.RemoveQuestion(ctx, req)
+	err = qc.questionService.RemoveQuestion(ctx, req)
 	handler.HandleResponse(ctx, err, nil)
 }
 
@@ -66,8 +74,48 @@ func (qc *QuestionController) CloseQuestion(ctx *gin.Context) {
 	if handler.BindAndCheck(ctx, req) {
 		return
 	}
-	req.UserId = middleware.GetLoginUserIDFromContext(ctx)
-	err := qc.questionService.CloseQuestion(ctx, req)
+	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
+	can, err := qc.rankService.CheckOperationPermission(ctx, req.UserID, permission.QuestionClose, "")
+	if err != nil {
+		handler.HandleResponse(ctx, err, nil)
+		return
+	}
+	if !can {
+		handler.HandleResponse(ctx, errors.Forbidden(reason.RankFailToMeetTheCondition), nil)
+		return
+	}
+
+	err = qc.questionService.CloseQuestion(ctx, req)
+	handler.HandleResponse(ctx, err, nil)
+}
+
+// ReopenQuestion reopen question
+// @Summary reopen question
+// @Description reopen question
+// @Tags api-question
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param data body schema.ReopenQuestionReq true "question"
+// @Success 200 {object} handler.RespBody
+// @Router /answer/api/v1/question/reopen [put]
+func (qc *QuestionController) ReopenQuestion(ctx *gin.Context) {
+	req := &schema.ReopenQuestionReq{}
+	if handler.BindAndCheck(ctx, req) {
+		return
+	}
+	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
+	can, err := qc.rankService.CheckOperationPermission(ctx, req.UserID, permission.QuestionReopen, "")
+	if err != nil {
+		handler.HandleResponse(ctx, err, nil)
+		return
+	}
+	if !can {
+		handler.HandleResponse(ctx, errors.Forbidden(reason.RankFailToMeetTheCondition), nil)
+		return
+	}
+
+	err = qc.questionService.ReopenQuestion(ctx, req)
 	handler.HandleResponse(ctx, err, nil)
 }
 
@@ -81,16 +129,33 @@ func (qc *QuestionController) CloseQuestion(ctx *gin.Context) {
 // @Param id query string true "Question TagID"  default(1)
 // @Success 200 {string} string ""
 // @Router /answer/api/v1/question/info [get]
-func (qc *QuestionController) GetQuestion(c *gin.Context) {
-	id := c.Query("id")
-	ctx := context.Background()
-	userID := middleware.GetLoginUserIDFromContext(c)
-	info, err := qc.questionService.GetQuestion(ctx, id, userID, true)
+func (qc *QuestionController) GetQuestion(ctx *gin.Context) {
+	id := ctx.Query("id")
+	userID := middleware.GetLoginUserIDFromContext(ctx)
+	req := schema.QuestionPermission{}
+	canList, err := qc.rankService.CheckOperationPermissions(ctx, userID, []string{
+		permission.QuestionEdit,
+		permission.QuestionDelete,
+		permission.QuestionClose,
+		permission.QuestionReopen,
+	})
 	if err != nil {
-		handler.HandleResponse(c, err, nil)
+		handler.HandleResponse(ctx, err, nil)
 		return
 	}
-	handler.HandleResponse(c, nil, info)
+	objectOwner := qc.rankService.CheckOperationObjectOwner(ctx, userID, id)
+
+	req.CanEdit = canList[0] || objectOwner
+	req.CanDelete = canList[1]
+	req.CanClose = canList[2]
+	req.CanReopen = canList[3]
+
+	info, err := qc.questionService.GetQuestionAndAddPV(ctx, id, userID, req)
+	if err != nil {
+		handler.HandleResponse(ctx, err, nil)
+		return
+	}
+	handler.HandleResponse(ctx, nil, info)
 }
 
 // SimilarQuestion godoc
@@ -114,7 +179,6 @@ func (qc *QuestionController) SimilarQuestion(ctx *gin.Context) {
 		"list":  list,
 		"count": count,
 	})
-
 }
 
 // Index godoc
@@ -184,17 +248,61 @@ func (qc *QuestionController) SearchList(c *gin.Context) {
 // @Router /answer/api/v1/question [post]
 func (qc *QuestionController) AddQuestion(ctx *gin.Context) {
 	req := &schema.QuestionAdd{}
-	if handler.BindAndCheck(ctx, req) {
+	errFields := handler.BindAndCheckReturnErr(ctx, req)
+	if ctx.IsAborted() {
 		return
 	}
 	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
 
-	if can, err := qc.rankService.CheckRankPermission(ctx, req.UserID, rank.QuestionAddRank); err != nil || !can {
-		handler.HandleResponse(ctx, err, errors.Forbidden(reason.RankFailToMeetTheCondition))
+	canList, err := qc.rankService.CheckOperationPermissions(ctx, req.UserID, []string{
+		permission.QuestionAdd,
+		permission.QuestionEdit,
+		permission.QuestionDelete,
+		permission.QuestionClose,
+		permission.QuestionReopen,
+		permission.TagUseReservedTag,
+	})
+	if err != nil {
+		handler.HandleResponse(ctx, err, nil)
+		return
+	}
+	req.CanAdd = canList[0]
+	req.CanEdit = canList[1]
+	req.CanDelete = canList[2]
+	req.CanClose = canList[3]
+	req.CanReopen = canList[4]
+	req.CanUseReservedTag = canList[5]
+	if !req.CanAdd {
+		handler.HandleResponse(ctx, errors.Forbidden(reason.RankFailToMeetTheCondition), nil)
+		return
+	}
+
+	errList, err := qc.questionService.CheckAddQuestion(ctx, req)
+	if err != nil {
+		errlist, ok := errList.([]*validator.FormErrorField)
+		if ok {
+			errFields = append(errFields, errlist...)
+		}
+	}
+
+	if len(errFields) > 0 {
+		handler.HandleResponse(ctx, errors.BadRequest(reason.RequestFormatError), errFields)
 		return
 	}
 
 	resp, err := qc.questionService.AddQuestion(ctx, req)
+	if err != nil {
+		errlist, ok := resp.([]*validator.FormErrorField)
+		if ok {
+			errFields = append(errFields, errlist...)
+		}
+	}
+
+	if len(errFields) > 0 {
+		handler.HandleResponse(ctx, errors.BadRequest(reason.RequestFormatError), errFields)
+		return
+	}
+
 	handler.HandleResponse(ctx, err, resp)
 }
 
@@ -210,18 +318,49 @@ func (qc *QuestionController) AddQuestion(ctx *gin.Context) {
 // @Router /answer/api/v1/question [put]
 func (qc *QuestionController) UpdateQuestion(ctx *gin.Context) {
 	req := &schema.QuestionUpdate{}
-	if handler.BindAndCheck(ctx, req) {
+	errFields := handler.BindAndCheckReturnErr(ctx, req)
+	if ctx.IsAborted() {
 		return
 	}
 	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
 
-	if can, err := qc.rankService.CheckRankPermission(ctx, req.UserID, rank.QuestionEditRank); err != nil || !can {
-		handler.HandleResponse(ctx, err, errors.Forbidden(reason.RankFailToMeetTheCondition))
+	canList, err := qc.rankService.CheckOperationPermissions(ctx, req.UserID, []string{
+		permission.QuestionEdit,
+		permission.QuestionDelete,
+		permission.QuestionEditWithoutReview,
+		permission.TagUseReservedTag,
+	})
+	if err != nil {
+		handler.HandleResponse(ctx, err, nil)
+		return
+	}
+
+	objectOwner := qc.rankService.CheckOperationObjectOwner(ctx, req.UserID, req.ID)
+	req.CanEdit = canList[0] || objectOwner
+	req.CanDelete = canList[1]
+	req.NoNeedReview = canList[2] || objectOwner
+	req.CanUseReservedTag = canList[3]
+	if !req.CanEdit {
+		handler.HandleResponse(ctx, errors.Forbidden(reason.RankFailToMeetTheCondition), nil)
+		return
+	}
+
+	errlist, err := qc.questionService.UpdateQuestionCheckTags(ctx, req)
+	if err != nil {
+		errFields = append(errFields, errlist...)
+	}
+
+	if len(errFields) > 0 {
+		handler.HandleResponse(ctx, errors.BadRequest(reason.RequestFormatError), errFields)
 		return
 	}
 
 	resp, err := qc.questionService.UpdateQuestion(ctx, req)
-	handler.HandleResponse(ctx, err, resp)
+	if err != nil {
+		handler.HandleResponse(ctx, err, resp)
+		return
+	}
+	handler.HandleResponse(ctx, nil, &schema.UpdateQuestionResp{WaitForReview: !req.NoNeedReview})
 }
 
 // CloseMsgList close question msg list
@@ -355,8 +494,8 @@ func (qc *QuestionController) UserCollectionList(ctx *gin.Context) {
 	})
 }
 
-// CmsSearchList godoc
-// @Summary CmsSearchList
+// AdminSearchList godoc
+// @Summary AdminSearchList
 // @Description Status:[available,closed,deleted]
 // @Tags admin
 // @Accept json
@@ -365,23 +504,24 @@ func (qc *QuestionController) UserCollectionList(ctx *gin.Context) {
 // @Param page query int false "page size"
 // @Param page_size query int false "page size"
 // @Param status query string false "user status" Enums(available, closed, deleted)
+// @Param query query string false "question id or title"
 // @Success 200 {object} handler.RespBody
 // @Router /answer/admin/api/question/page [get]
-func (qc *QuestionController) CmsSearchList(ctx *gin.Context) {
-	req := &schema.CmsQuestionSearch{}
+func (qc *QuestionController) AdminSearchList(ctx *gin.Context) {
+	req := &schema.AdminQuestionSearch{}
 	if handler.BindAndCheck(ctx, req) {
 		return
 	}
 	userID := middleware.GetLoginUserIDFromContext(ctx)
-	questionList, count, err := qc.questionService.CmsSearchList(ctx, req, userID)
+	questionList, count, err := qc.questionService.AdminSearchList(ctx, req, userID)
 	handler.HandleResponse(ctx, err, gin.H{
 		"list":  questionList,
 		"count": count,
 	})
 }
 
-// CmsSearchAnswerList godoc
-// @Summary CmsSearchList
+// AdminSearchAnswerList godoc
+// @Summary AdminSearchAnswerList
 // @Description Status:[available,deleted]
 // @Tags admin
 // @Accept json
@@ -390,15 +530,17 @@ func (qc *QuestionController) CmsSearchList(ctx *gin.Context) {
 // @Param page query int false "page size"
 // @Param page_size query int false "page size"
 // @Param status query string false "user status" Enums(available,deleted)
+// @Param query query string false "answer id or question title"
+// @Param question_id query string false "question id"
 // @Success 200 {object} handler.RespBody
 // @Router /answer/admin/api/answer/page [get]
-func (qc *QuestionController) CmsSearchAnswerList(ctx *gin.Context) {
-	req := &entity.CmsAnswerSearch{}
+func (qc *QuestionController) AdminSearchAnswerList(ctx *gin.Context) {
+	req := &entity.AdminAnswerSearch{}
 	if handler.BindAndCheck(ctx, req) {
 		return
 	}
 	userID := middleware.GetLoginUserIDFromContext(ctx)
-	questionList, count, err := qc.questionService.CmsSearchAnswerList(ctx, req, userID)
+	questionList, count, err := qc.questionService.AdminSearchAnswerList(ctx, req, userID)
 	handler.HandleResponse(ctx, err, gin.H{
 		"list":  questionList,
 		"count": count,

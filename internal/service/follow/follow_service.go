@@ -3,10 +3,10 @@ package follow
 import (
 	"context"
 
-	"github.com/segmentfault/answer/internal/entity"
-	"github.com/segmentfault/answer/internal/schema"
-	"github.com/segmentfault/answer/internal/service/activity_common"
-	tagcommon "github.com/segmentfault/answer/internal/service/tag_common"
+	"github.com/answerdev/answer/internal/entity"
+	"github.com/answerdev/answer/internal/schema"
+	"github.com/answerdev/answer/internal/service/activity_common"
+	tagcommon "github.com/answerdev/answer/internal/service/tag_common"
 )
 
 type FollowRepo interface {
@@ -15,7 +15,7 @@ type FollowRepo interface {
 }
 
 type FollowService struct {
-	tagRepo          tagcommon.TagRepo
+	tagRepo          tagcommon.TagCommonRepo
 	followRepo       FollowRepo
 	followCommonRepo activity_common.FollowRepo
 }
@@ -23,7 +23,7 @@ type FollowService struct {
 func NewFollowService(
 	followRepo FollowRepo,
 	followCommonRepo activity_common.FollowRepo,
-	tagRepo tagcommon.TagRepo,
+	tagRepo tagcommon.TagCommonRepo,
 ) *FollowService {
 	return &FollowService{
 		followRepo:       followRepo,

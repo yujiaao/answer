@@ -3,10 +3,7 @@ package constant
 import "time"
 
 const (
-	Default_PageSize           = 20        //Default number of pages
-	Key_UserID                 = "_UserID" //session userid
-	LoginUserID                = "login_user_id"
-	LoginUserVerify            = "login_user_verify"
+	DefaultPageSize            = 20 // Default number of pages
 	UserStatusChangedCacheKey  = "answer:user:status:"
 	UserStatusChangedCacheTime = 7 * 24 * time.Hour
 	UserTokenCacheKey          = "answer:user:token:"
@@ -14,6 +11,9 @@ const (
 	AdminTokenCacheKey         = "answer:admin:token:"
 	AdminTokenCacheTime        = 7 * 24 * time.Hour
 	AcceptLanguageFlag         = "Accept-Language"
+	UserTokenMappingCacheKey   = "answer:user-token:mapping:"
+	SiteInfoCacheKey           = "answer:site-info:"
+	SiteInfoCacheTime          = 1 * time.Hour
 )
 
 const (
@@ -30,6 +30,10 @@ const (
 // object TagID AnswerList
 // key equal database's table name
 var (
+	Version string = ""
+
+	PathIgnoreMap map[string]bool
+
 	ObjectTypeStrMapping = map[string]int{
 		QuestionObjectType:   1,
 		AnswerObjectType:     2,
@@ -50,3 +54,20 @@ var (
 		8: ReportObjectType,
 	}
 )
+
+const (
+	SiteTypeGeneral       = "general"
+	SiteTypeInterface     = "interface"
+	SiteTypeBranding      = "branding"
+	SiteTypeWrite         = "write"
+	SiteTypeLegal         = "legal"
+	SiteTypeSeo           = "seo"
+	SiteTypeLogin         = "login"
+	SiteTypeCustomCssHTML = "css-html"
+	SiteTypeTheme         = "theme"
+)
+
+func ExistInPathIgnore(name string) bool {
+	_, ok := PathIgnoreMap[name]
+	return ok
+}

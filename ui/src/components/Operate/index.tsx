@@ -1,19 +1,25 @@
 import { memo, FC } from 'react';
 import { Button } from 'react-bootstrap';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
-import { Modal } from '@answer/components';
-import { useReportModal, useToast } from '@answer/hooks';
-import { deleteQuestion, deleteAnswer } from '@answer/api';
-import { isLogin } from '@answer/utils';
+import { Modal } from '@/components';
+import { useReportModal, useToast } from '@/hooks';
 import Share from '../Share';
+import {
+  deleteQuestion,
+  deleteAnswer,
+  editCheck,
+  reopenQuestion,
+} from '@/services';
+import { tryNormalLogged } from '@/utils/guard';
 
 interface IProps {
   type: 'answer' | 'question';
   qid: string;
   aid?: string;
   title: string;
+  slugTitle: string;
   hasAnswer?: boolean;
   isAccepted: boolean;
   callback: (type: string) => void;
@@ -24,6 +30,7 @@ const Index: FC<IProps> = ({
   qid,
   aid = '',
   title,
+  slugTitle,
   isAccepted = false,
   hasAnswer = false,
   memberActions = [],
@@ -31,8 +38,13 @@ const Index: FC<IProps> = ({
 }) => {
   const { t } = useTranslation('translation', { keyPrefix: 'delete' });
   const toast = useToast();
+  const navigate = useNavigate();
   const reportModal = useReportModal();
-  const closeModal = useReportModal();
+
+  const refershQuestion = () => {
+    callback?.('default');
+  };
+  const closeModal = useReportModal(refershQuestion);
   const editUrl =
     type === 'answer' ? `/posts/${qid}/${aid}/edit` : `/posts/${qid}/edit`;
 
@@ -96,9 +108,38 @@ const Index: FC<IProps> = ({
       });
     }
   };
+  const handleEdit = (evt, targetUrl) => {
+    evt.preventDefault();
+    let checkObjectId = qid;
+    if (type === 'answer') {
+      checkObjectId = aid;
+    }
+    editCheck(checkObjectId).then(() => {
+      navigate(targetUrl);
+    });
+  };
+
+  const handleReopen = () => {
+    Modal.confirm({
+      title: t('title', { keyPrefix: 'question_detail.reopen' }),
+      content: t('content', { keyPrefix: 'question_detail.reopen' }),
+      cancelBtnVariant: 'link',
+      onConfirm: () => {
+        reopenQuestion({
+          question_id: qid,
+        }).then(() => {
+          toast.onShow({
+            msg: t('success', { keyPrefix: 'question_detail.reopen' }),
+            variant: 'success',
+          });
+          refershQuestion();
+        });
+      },
+    });
+  };
 
   const handleAction = (action) => {
-    if (!isLogin(true)) {
+    if (!tryNormalLogged(true)) {
       return;
     }
     if (action === 'delete') {
@@ -112,11 +153,21 @@ const Index: FC<IProps> = ({
     if (action === 'close') {
       handleClose();
     }
+
+    if (action === 'reopen') {
+      handleReopen();
+    }
   };
 
   return (
     <div className="d-flex align-items-center">
-      <Share type={type} qid={qid} aid={aid} title={title} />
+      <Share
+        type={type}
+        qid={qid}
+        aid={aid}
+        title={title}
+        slugTitle={slugTitle}
+      />
       {memberActions?.map((item) => {
         if (item.action === 'edit') {
           return (
@@ -124,6 +175,7 @@ const Index: FC<IProps> = ({
               key={item.action}
               to={editUrl}
               className="link-secondary p-0 fs-14 me-3"
+              onClick={(evt) => handleEdit(evt, editUrl)}
               style={{ lineHeight: '23px' }}>
               {item.name}
             </Link>

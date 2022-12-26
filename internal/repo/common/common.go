@@ -1,11 +1,11 @@
 package common
 
 import (
-	"github.com/segmentfault/answer/internal/base/data"
-	"github.com/segmentfault/answer/internal/base/reason"
-	"github.com/segmentfault/answer/internal/entity"
-	"github.com/segmentfault/answer/internal/service/unique"
-	"github.com/segmentfault/answer/pkg/obj"
+	"github.com/answerdev/answer/internal/base/data"
+	"github.com/answerdev/answer/internal/base/reason"
+	"github.com/answerdev/answer/internal/entity"
+	"github.com/answerdev/answer/internal/service/unique"
+	"github.com/answerdev/answer/pkg/obj"
 	"github.com/segmentfault/pacman/errors"
 	"github.com/segmentfault/pacman/log"
 )
@@ -37,15 +37,13 @@ func (cr *CommonRepo) GetRootObjectID(objectID string) (rootObjectID string, err
 		exist, err = cr.data.DB.ID(objectID).Get(&answer)
 		if !exist {
 			err = errors.BadRequest(reason.ObjectNotFound)
-		} else {
-			objectID = answer.QuestionID
 		}
 	case "comment":
-		exist, err = cr.data.DB.ID(objectID).Get(&comment)
+		exist, _ = cr.data.DB.ID(objectID).Get(&comment)
 		if !exist {
 			err = errors.BadRequest(reason.ObjectNotFound)
 		} else {
-			objectID, err = cr.GetRootObjectID(comment.ObjectID)
+			_, err = cr.GetRootObjectID(comment.ObjectID)
 		}
 	default:
 		rootObjectID = objectID
@@ -72,7 +70,7 @@ func (cr *CommonRepo) GetObjectIDMap(objectID string) (objectIDMap map[string]st
 	}
 	switch objectType {
 	case "answer":
-		exist, err = cr.data.DB.ID(objectID).Get(&answer)
+		exist, _ = cr.data.DB.ID(objectID).Get(&answer)
 		if !exist {
 			err = errors.BadRequest(reason.ObjectNotFound)
 		} else {
@@ -80,7 +78,7 @@ func (cr *CommonRepo) GetObjectIDMap(objectID string) (objectIDMap map[string]st
 			ID = answer.ID
 		}
 	case "comment":
-		exist, err = cr.data.DB.ID(objectID).Get(&comment)
+		exist, _ = cr.data.DB.ID(objectID).Get(&comment)
 		if !exist {
 			err = errors.BadRequest(reason.ObjectNotFound)
 		} else {

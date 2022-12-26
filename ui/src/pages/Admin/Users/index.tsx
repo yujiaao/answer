@@ -1,43 +1,55 @@
-import { FC, useState } from 'react';
-import { Button, Form, Table, Badge } from 'react-bootstrap';
+import { FC } from 'react';
+import { Form, Table, Dropdown, Button, Stack } from 'react-bootstrap';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
-import { useQueryUsers } from '@answer/api';
+import classNames from 'classnames';
+
 import {
   Pagination,
   FormatTime,
   BaseUserCard,
   Empty,
   QueryGroup,
-} from '@answer/components';
-import * as Type from '@answer/common/interface';
-import { useChangeModal } from '@answer/hooks';
-
-import '../index.scss';
+  Icon,
+} from '@/components';
+import * as Type from '@/common/interface';
+import {
+  useUserModal,
+  useChangeModal,
+  useChangeUserRoleModal,
+  useChangePasswordModal,
+  useToast,
+} from '@/hooks';
+import { useQueryUsers, addUser, updateUserPassword } from '@/services';
+import { loggedUserInfoStore } from '@/stores';
+import { formatCount } from '@/utils';
 
 const UserFilterKeys: Type.UserFilterBy[] = [
   'all',
+  'staff',
   'inactive',
   'suspended',
   'deleted',
 ];
 
 const bgMap = {
-  normal: 'success',
-  suspended: 'danger',
-  deleted: 'danger',
-  inactive: 'secondary',
+  normal: 'text-bg-success',
+  suspended: 'text-bg-danger',
+  deleted: 'text-bg-danger',
+  inactive: 'text-bg-secondary',
 };
 
 const PAGE_SIZE = 10;
 const Users: FC = () => {
   const { t } = useTranslation('translation', { keyPrefix: 'admin.users' });
-  const [userName, setUserName] = useState('');
 
-  const [urlSearchParams] = useSearchParams();
+  const [urlSearchParams, setUrlSearchParams] = useSearchParams();
   const curFilter = urlSearchParams.get('filter') || UserFilterKeys[0];
   const curPage = Number(urlSearchParams.get('page') || '1');
+  const curQuery = urlSearchParams.get('query') || '';
+  const currentUser = loggedUserInfoStore((state) => state.user);
+  const Toast = useToast();
   const {
     data,
     isLoading,
@@ -45,47 +57,121 @@ const Users: FC = () => {
   } = useQueryUsers({
     page: curPage,
     page_size: PAGE_SIZE,
-    ...(userName ? { username: userName } : {}),
-    ...(curFilter === 'all' ? {} : { status: curFilter }),
+    query: curQuery,
+    ...(curFilter === 'all'
+      ? {}
+      : curFilter === 'staff'
+      ? { staff: true }
+      : { status: curFilter }),
   });
   const changeModal = useChangeModal({
     callback: refreshUsers,
   });
 
-  const handleClick = ({ user_id, status }) => {
-    changeModal.onShow({
-      id: user_id,
-      type: status,
-    });
+  const changeUserRoleModal = useChangeUserRoleModal({
+    callback: refreshUsers,
+  });
+
+  const userModal = useUserModal({
+    onConfirm: (userModel) => {
+      return new Promise((resolve, reject) => {
+        addUser(userModel)
+          .then(() => {
+            if (/all|staff/.test(curFilter) && curPage === 1) {
+              refreshUsers();
+            }
+            resolve(true);
+          })
+          .catch((e) => {
+            reject(e);
+          });
+      });
+    },
+  });
+  const changePasswordModal = useChangePasswordModal({
+    onConfirm: (rd) => {
+      return new Promise((resolve, reject) => {
+        updateUserPassword(rd)
+          .then(() => {
+            Toast.onShow({
+              msg: t('update_password', { keyPrefix: 'toast' }),
+              variant: 'success',
+            });
+            resolve(true);
+          })
+          .catch((e) => {
+            reject(e);
+          });
+      });
+    },
+  });
+
+  const handleAction = (type, user) => {
+    const { user_id, status, role_id, username } = user;
+    if (username === currentUser.username) {
+      Toast.onShow({
+        msg: t('forbidden_operate_self', { keyPrefix: 'toast' }),
+        variant: 'warning',
+      });
+      return;
+    }
+    if (type === 'status') {
+      changeModal.onShow({
+        id: user_id,
+        type: status,
+      });
+    }
+
+    if (type === 'role') {
+      changeUserRoleModal.onShow({
+        id: user_id,
+        role_id,
+      });
+    }
+    if (type === 'password') {
+      changePasswordModal.onShow(user_id);
+    }
   };
 
+  const handleFilter = (e) => {
+    urlSearchParams.set('query', e.target.value);
+    urlSearchParams.delete('page');
+    setUrlSearchParams(urlSearchParams);
+  };
   return (
     <>
       <h3 className="mb-4">{t('title')}</h3>
       <div className="d-flex justify-content-between align-items-center mb-3">
-        <QueryGroup
-          data={UserFilterKeys}
-          currentSort={curFilter}
-          sortKey="filter"
-          i18nKeyPrefix="admin.users"
-        />
+        <Stack direction="horizontal" gap={3}>
+          <QueryGroup
+            data={UserFilterKeys}
+            currentSort={curFilter}
+            sortKey="filter"
+            i18nKeyPrefix="admin.users"
+          />
+          <Button
+            variant="outline-primary"
+            size="sm"
+            onClick={() => userModal.onShow()}>
+            {t('add_user')}
+          </Button>
+        </Stack>
 
         <Form.Control
-          className="d-none"
           size="sm"
-          value={userName}
-          onChange={(e) => setUserName(e.target.value)}
-          placeholder="Filter by name"
+          value={curQuery}
+          onChange={handleFilter}
+          placeholder={t('filter.placeholder')}
           style={{ width: '12.25rem' }}
         />
       </div>
       <Table>
         <thead>
           <tr>
-            <th style={{ width: '30%' }}>{t('name')}</th>
-            <th>{t('reputation')}</th>
+            <th>{t('name')}</th>
+            <th style={{ width: '12%' }}>{t('reputation')}</th>
             <th style={{ width: '20%' }}>{t('email')}</th>
-            <th className="text-nowrap" style={{ width: '20%' }}>
+            <th className="text-nowrap" style={{ width: '15%' }}>
               {t('created_at')}
             </th>
             {(curFilter === 'deleted' || curFilter === 'suspended') && (
@@ -94,8 +180,15 @@ const Users: FC = () => {
               </th>
             )}
 
-            <th>{t('status')}</th>
-            {curFilter !== 'deleted' ? <th>{t('action')}</th> : null}
+            <th style={{ width: '12%' }}>{t('status')}</th>
+            {curFilter !== 'suspended' && curFilter !== 'deleted' && (
+              <th style={{ width: '12%' }}>{t('role')}</th>
+            )}
+            {curFilter !== 'deleted' ? (
+              <th style={{ width: '8%' }} className="text-end">
+                {t('action')}
+              </th>
+            ) : null}
           </tr>
         </thead>
         <tbody className="align-middle">
@@ -106,10 +199,13 @@ const Users: FC = () => {
                   <BaseUserCard
                     data={user}
                     className="fs-6"
-                    avatarSize="24px"
+                    avatarSize="32px"
+                    avatarSearchStr="s=48"
+                    avatarClass="me-2"
+                    showReputation={false}
                   />
                 </td>
-                <td>{user.rank}</td>
+                <td>{formatCount(user.rank)}</td>
                 <td className="text-break">{user.e_mail}</td>
                 <td>
                   <FormatTime time={user.created_at} />
@@ -125,18 +221,38 @@ const Users: FC = () => {
                   </td>
                 )}
                 <td>
-                  <Badge bg={bgMap[user.status]}>{t(user.status)}</Badge>
+                  <span className={classNames('badge', bgMap[user.status])}>
+                    {t(user.status)}
+                  </span>
                 </td>
-                {curFilter !== 'deleted' ? (
+                {curFilter !== 'suspended' && curFilter !== 'deleted' && (
                   <td>
-                    {user.status !== 'deleted' && (
-                      <Button
-                        className="px-2"
-                        variant="link"
-                        onClick={() => handleClick(user)}>
-                        {t('change')}
-                      </Button>
-                    )}
+                    <span className="badge text-bg-light">
+                      {t(user.role_name)}
+                    </span>
+                  </td>
+                )}
+                {curFilter !== 'deleted' ? (
+                  <td className="text-end">
+                    <Dropdown>
+                      <Dropdown.Toggle variant="link" className="no-toggle">
+                        <Icon name="three-dots-vertical" />
+                      </Dropdown.Toggle>
+                      <Dropdown.Menu>
+                        <Dropdown.Item
+                          onClick={() => handleAction('password', user)}>
+                          {t('set_new_password')}
+                        </Dropdown.Item>
+                        <Dropdown.Item
+                          onClick={() => handleAction('status', user)}>
+                          {t('change_status')}
+                        </Dropdown.Item>
+                        <Dropdown.Item
+                          onClick={() => handleAction('role', user)}>
+                          {t('change_role')}
+                        </Dropdown.Item>
+                      </Dropdown.Menu>
+                    </Dropdown>
                   </td>
                 ) : null}
               </tr>

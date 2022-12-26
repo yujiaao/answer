@@ -1,7 +1,8 @@
 import { FC, memo } from 'react';
 import { ListGroup, ListGroupItem } from 'react-bootstrap';
 
-import { FormatTime } from '@answer/components';
+import { pathFactory } from '@/router/pathFactory';
+import { FormatTime } from '@/components';
 
 interface Props {
   visible: boolean;
@@ -12,24 +13,34 @@ const Index: FC<Props> = ({ visible, data }) => {
   if (!visible || !data?.length) {
     return null;
   }
+
   return (
-    <ListGroup variant="flush">
+    <ListGroup className="rounded-0">
       {data.map((item) => {
         return (
-          <ListGroupItem className="d-flex py-3 px-0" key={item.object_id}>
+          <ListGroupItem
+            className="d-flex py-3 px-0 bg-transparent border-start-0 border-end-0"
+            key={item.object_id}>
             <div
-              className="me-3 text-end text-secondary"
+              className="me-3 text-end text-secondary flex-shrink-0"
               style={{ width: '80px' }}>
               {item.vote_type}
             </div>
             <div>
               <a
                 className="text-break"
-                href={`/questions/${
+                href={
                   item.object_type === 'question'
-                    ? item.question_id
-                    : `${item.question_id}/${item.answer_id}`
-                }`}>
+                    ? pathFactory.questionLanding(
+                        item.question_id,
+                        item.url_title,
+                      )
+                    : pathFactory.answerLanding({
+                        questionId: item.question_id,
+                        slugTitle: item.url_title,
+                        answerId: item.answer_id,
+                      })
+                }>
                 {item.title}
               </a>
               <div className="d-flex align-items-center fs-14 text-secondary">

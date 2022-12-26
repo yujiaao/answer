@@ -3,8 +3,9 @@ import { Container, Row, Col, ListGroup } from 'react-bootstrap';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 
-import { Pagination, PageTitle } from '@answer/components';
-import { useSearch } from '@answer/api';
+import { usePageTags } from '@/hooks';
+import { Pagination } from '@/components';
+import { useSearch } from '@/services';
 
 import { Head, SearchHead, SearchItem, Tips, Empty } from './components';
 
@@ -27,38 +28,36 @@ const Index = () => {
   if (q) {
     pageTitle = `${t('posts_containing', { keyPrefix: 'page_title' })} '${q}'`;
   }
+  usePageTags({
+    title: pageTitle,
+  });
   return (
-    <>
-      <PageTitle title={pageTitle} />
-      <Container className="pt-4 mt-2 mb-5">
-        <Row className="justify-content-center">
-          <Col xxl={7} lg={8} sm={12} className="mb-3">
-            <Head data={extra} />
+    <Container className="pt-4 mt-2 mb-5">
+      <Row className="justify-content-center">
+        <Col xxl={7} lg={8} sm={12} className="mb-3">
+          <Head data={extra} />
+          <SearchHead sort={order} count={count} />
+          <ListGroup className="rounded-0 mb-5">
+            {list?.map((item) => {
+              return <SearchItem key={item.object.id} data={item} />;
+            })}
+          </ListGroup>
 
-            <ListGroup variant="flush" className="mb-5">
-              <SearchHead sort={order} count={count} />
+          {!isLoading && !list?.length && <Empty />}
 
-              {list?.map((item) => {
-                return <SearchItem key={item.object.id} data={item} />;
-              })}
-            </ListGroup>
-
-            {!isLoading && !list?.length && <Empty />}
-
-            <div className="d-flex justify-content-center">
-              <Pagination
-                currentPage={Number(page)}
-                pageSize={20}
-                totalSize={count}
-              />
-            </div>
-          </Col>
-          <Col xxl={3} lg={4} sm={12} className="mt-5 mt-lg-0">
-            <Tips />
-          </Col>
-        </Row>
-      </Container>
-    </>
+          <div className="d-flex justify-content-center">
+            <Pagination
+              currentPage={Number(page)}
+              pageSize={20}
+              totalSize={count}
+            />
+          </div>
+        </Col>
+        <Col xxl={3} lg={4} sm={12} className="mt-5 mt-lg-0">
+          <Tips />
+        </Col>
+      </Row>
+    </Container>
   );
 };
 

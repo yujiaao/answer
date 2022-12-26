@@ -1,7 +1,8 @@
 import { FC, memo } from 'react';
 import { ListGroup, ListGroupItem } from 'react-bootstrap';
 
-import { FormatTime } from '@answer/components';
+import { pathFactory } from '@/router/pathFactory';
+import { FormatTime } from '@/components';
 
 interface Props {
   visible: boolean;
@@ -13,17 +14,23 @@ const Index: FC<Props> = ({ visible, data }) => {
     return null;
   }
   return (
-    <ListGroup variant="flush">
+    <ListGroup className="rounded-0">
       {data.map((item) => {
         return (
-          <ListGroupItem className="py-3 px-0" key={item.comment_id}>
+          <ListGroupItem
+            className="py-3 px-0 bg-transparent border-start-0 border-end-0"
+            key={item.comment_id}>
             <a
               className="text-break"
-              href={`/questions/${
+              href={
                 item.object_type === 'question'
-                  ? item.object_id
-                  : `${item.question_id}/${item.object_id}`
-              }`}>
+                  ? pathFactory.questionLanding(item.object_id, item.url_title)
+                  : pathFactory.answerLanding({
+                      questionId: item.question_id,
+                      slugTitle: item.url_title,
+                      answerId: item.object_id,
+                    })
+              }>
               {item.title}
             </a>
             <div

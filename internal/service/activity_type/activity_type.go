@@ -1,6 +1,6 @@
 package activity_type
 
-import "github.com/segmentfault/answer/internal/repo/config"
+import "github.com/answerdev/answer/internal/repo/config"
 
 const (
 	QuestionVoteUp   = "question.vote_up"
@@ -12,6 +12,14 @@ const (
 )
 
 var (
+	ActivityTypeList = []string{
+		QuestionVoteUp,
+		QuestionVoteDown,
+		AnswerVoteUp,
+		AnswerVoteDown,
+		CommentVoteUp,
+		CommentVoteDown,
+	}
 	activityTypeFlagMapping = map[string]string{
 		QuestionVoteUp:   "upvote",
 		QuestionVoteDown: "downvote",

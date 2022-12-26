@@ -1,17 +1,24 @@
 import { useEffect, useState } from 'react';
 import { Container, Row, Col } from 'react-bootstrap';
-import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
+import {
+  useParams,
+  useSearchParams,
+  useNavigate,
+  useLocation,
+} from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
-import { questionDetail, getAnswers } from '@answer/api';
-import { Pagination, PageTitle } from '@answer/components';
-import { userInfoStore } from '@answer/stores';
-import { scrollTop } from '@answer/utils';
-import { usePageUsers } from '@answer/hooks';
+import Pattern from '@/common/pattern';
+import { Pagination } from '@/components';
+import { loggedUserInfoStore, toastStore } from '@/stores';
+import { scrollTop } from '@/utils';
+import { usePageTags, usePageUsers } from '@/hooks';
 import type {
   ListResult,
   QuestionDetailRes,
   AnswerItem,
-} from '@answer/common/interface';
+} from '@/common/interface';
+import { questionDetail, getAnswers } from '@/services';
 
 import {
   Question,
@@ -26,9 +33,15 @@ import './index.scss';
 
 const Index = () => {
   const navigate = useNavigate();
-  const { qid = '', aid = '' } = useParams();
-  const [urlSearch] = useSearchParams();
+  const { t } = useTranslation('translation');
+  const { qid = '', slugPermalink = '' } = useParams();
+  // Compatible with Permalink
+  let { aid = '' } = useParams();
+  if (!aid && Pattern.isAnswerId.test(slugPermalink)) {
+    aid = slugPermalink;
+  }
 
+  const [urlSearch] = useSearchParams();
   const page = Number(urlSearch.get('page') || 0);
   const order = urlSearch.get('order') || '';
   const [question, setQuestion] = useState<QuestionDetailRes | null>(null);
@@ -37,8 +50,20 @@ const Index = () => {
     list: [],
   });
   const { setUsers } = usePageUsers();
-  const userInfo = userInfoStore((state) => state.user);
+  const userInfo = loggedUserInfoStore((state) => state.user);
   const isAuthor = userInfo?.username === question?.user_info?.username;
+  const isLogged = Boolean(userInfo?.access_token);
+  const { state: locationState } = useLocation();
+
+  useEffect(() => {
+    if (locationState?.isReview) {
+      toastStore.getState().show({
+        msg: t('review', { keyPrefix: 'toast' }),
+        variant: 'warning',
+      });
+    }
+  }, [locationState]);
+
   const requestAnswers = async () => {
     const res = await getAnswers({
       order: order === 'updated' ? order : 'default',
@@ -89,6 +114,12 @@ const Index = () => {
       }, 1000);
       return;
     }
+
+    if (type === 'default') {
+      window.scrollTo(0, 0);
+      getDetail();
+      return;
+    }
     requestAnswers();
   };
 
@@ -97,6 +128,13 @@ const Index = () => {
       count: answers.count + 1,
       list: [...answers.list, obj],
     });
+
+    if (question) {
+      setQuestion({
+        ...question,
+        answered: true,
+      });
+    }
   };
 
   useEffect(() => {
@@ -112,66 +150,70 @@ const Index = () => {
       requestAnswers();
     }
   }, [page, order]);
-
+  usePageTags({
+    title: question?.title,
+    description: question?.description,
+    keywords: question?.tags.map((_) => _.slug_name).join(','),
+  });
   return (
-    <>
-      <PageTitle title={question?.title} />
-      <Container className="pt-4 mt-2 mb-5 questionDetailPage">
-        <Row className="justify-content-center">
-          <Col xxl={7} lg={8} sm={12} className="mb-5 mb-md-0">
-            {question?.operation?.operation_type && (
-              <Alert data={question.operation} />
-            )}
-            <Question
-              data={question}
-              initPage={initPage}
-              hasAnswer={answers.count > 0}
-            />
-            {answers.count > 0 && (
-              <>
-                <AnswerHead count={answers.count} order={order} />
-                {answers?.list?.map((item) => {
-                  return (
-                    <Answer
-                      aid={aid}
-                      key={item?.id}
-                      data={item}
-                      questionTitle={question?.title || ''}
-                      isAuthor={isAuthor}
-                      callback={initPage}
-                    />
-                  );
-                })}
-              </>
-            )}
+    <Container className="pt-4 mt-2 mb-5 questionDetailPage">
+      <Row className="justify-content-center">
+        <Col xxl={7} lg={8} sm={12} className="mb-5 mb-md-0">
+          {question?.operation?.operation_type && (
+            <Alert data={question.operation} />
+          )}
+          <Question
+            data={question}
+            initPage={initPage}
+            hasAnswer={answers.count > 0}
+            isLogged={isLogged}
+          />
+          {answers.count > 0 && (
+            <>
+              <AnswerHead count={answers.count} order={order} />
+              {answers?.list?.map((item) => {
+                return (
+                  <Answer
+                    aid={aid}
+                    key={item?.id}
+                    data={item}
+                    questionTitle={question?.title || ''}
+                    slugTitle={question?.url_title}
+                    isAuthor={isAuthor}
+                    callback={initPage}
+                    isLogged={isLogged}
+                  />
+                );
+              })}
+            </>
+          )}
 
-            {Math.ceil(answers.count / 15) > 1 && (
-              <div className="d-flex justify-content-center answer-item pt-4">
-                <Pagination
-                  currentPage={Number(page || 1)}
-                  pageSize={15}
-                  totalSize={answers?.count || 0}
-                />
-              </div>
-            )}
-
-            {!question?.operation?.operation_type && (
-              <WriteAnswer
-                visible={answers.count === 0}
-                data={{
-                  qid,
-                  answered: question?.answered,
-                }}
-                callback={writeAnswerCallback}
+          {Math.ceil(answers.count / 15) > 1 && (
+            <div className="d-flex justify-content-center answer-item pt-4">
+              <Pagination
+                currentPage={Number(page || 1)}
+                pageSize={15}
+                totalSize={answers?.count || 0}
               />
-            )}
-          </Col>
-          <Col xxl={3} lg={4} sm={12} className="mt-5 mt-lg-0">
-            <RelatedQuestions id={question?.id || ''} />
-          </Col>
-        </Row>
-      </Container>
-    </>
+            </div>
+          )}
+
+          {!question?.operation?.operation_type && (
+            <WriteAnswer
+              visible={answers.count === 0}
+              data={{
+                qid,
+                answered: question?.answered,
+              }}
+              callback={writeAnswerCallback}
+            />
+          )}
+        </Col>
+        <Col xxl={3} lg={4} sm={12} className="mt-5 mt-lg-0">
+          <RelatedQuestions id={question?.id || ''} />
+        </Col>
+      </Row>
+    </Container>
   );
 };
 

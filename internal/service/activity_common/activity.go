@@ -2,8 +2,12 @@ package activity_common
 
 import (
 	"context"
+	"time"
 
-	"github.com/segmentfault/answer/internal/entity"
+	"github.com/answerdev/answer/internal/entity"
+	"github.com/answerdev/answer/internal/service/activity_queue"
+	"github.com/answerdev/answer/pkg/converter"
+	"github.com/segmentfault/pacman/log"
 	"xorm.io/xorm"
 )
 
@@ -12,5 +16,61 @@ type ActivityRepo interface {
 	GetActivityTypeByObjKey(ctx context.Context, objectKey, action string) (activityType int, err error)
 	GetActivity(ctx context.Context, session *xorm.Session, objectID, userID string, activityType int) (
 		existsActivity *entity.Activity, exist bool, err error)
-	GetUserIDObjectIDActivitySum(ctx context.Context, userID, object_id string) (int, error)
+	GetUserIDObjectIDActivitySum(ctx context.Context, userID, objectID string) (int, error)
+	GetActivityTypeByConfigKey(ctx context.Context, configKey string) (activityType int, err error)
+	AddActivity(ctx context.Context, activity *entity.Activity) (err error)
+	GetUsersWhoHasGainedTheMostReputation(
+		ctx context.Context, startTime, endTime time.Time, limit int) (rankStat []*entity.ActivityUserRankStat, err error)
+	GetUsersWhoHasVoteMost(
+		ctx context.Context, startTime, endTime time.Time, limit int) (voteStat []*entity.ActivityUserVoteStat, err error)
+}
+
+type ActivityCommon struct {
+	activityRepo ActivityRepo
+}
+
+// NewActivityCommon new activity common
+func NewActivityCommon(
+	activityRepo ActivityRepo,
+) *ActivityCommon {
+	activity := &ActivityCommon{
+		activityRepo: activityRepo,
+	}
+	activity.HandleActivity()
+	return activity
+}
+
+// HandleActivity handle activity message
+func (ac *ActivityCommon) HandleActivity() {
+	go func() {
+		defer func() {
+			if err := recover(); err != nil {
+				log.Error(err)
+			}
+		}()
+
+		for msg := range activity_queue.ActivityQueue {
+			log.Debugf("received activity %+v", msg)
+
+			activityType, err := ac.activityRepo.GetActivityTypeByConfigKey(context.Background(), string(msg.ActivityTypeKey))
+			if err != nil {
+				log.Errorf("error getting activity type %s, activity type is %d", err, activityType)
+			}
+
+			act := &entity.Activity{
+				UserID:           msg.UserID,
+				TriggerUserID:    msg.TriggerUserID,
+				ObjectID:         msg.ObjectID,
+				OriginalObjectID: msg.OriginalObjectID,
+				ActivityType:     activityType,
+				Cancelled:        entity.ActivityAvailable,
+			}
+			if len(msg.RevisionID) > 0 {
+				act.RevisionID = converter.StringToInt64(msg.RevisionID)
+			}
+			if err := ac.activityRepo.AddActivity(context.TODO(), act); err != nil {
+				log.Error(err)
+			}
+		}
+	}()
 }

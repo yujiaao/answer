@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import classNames from 'classnames';
 import { isEmpty } from 'lodash';
 
-import { Empty } from '@answer/components';
+import { Empty } from '@/components';
 
 import './index.scss';
 
@@ -16,9 +16,7 @@ const Achievements = ({ data, handleReadNotification }) => {
     return <Empty />;
   }
   return (
-    <ListGroup
-      className="border-top border-bottom achievement-wrap"
-      variant="flush">
+    <ListGroup className="achievement-wrap rounded-0">
       {data.map((item) => {
         const { comment, question, answer } =
           item?.object_info?.object_map || {};
@@ -39,7 +37,10 @@ const Achievements = ({ data, handleReadNotification }) => {
         return (
           <ListGroup.Item
             key={item.id}
-            className={classNames('d-flex', !item.is_read && 'warning')}>
+            className={classNames(
+              'd-flex border-start-0 border-end-0',
+              !item.is_read && 'warning',
+            )}>
             {item.rank > 0 && (
               <div className="text-success num text-end">{`+${item.rank}`}</div>
             )}

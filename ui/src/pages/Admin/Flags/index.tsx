@@ -9,12 +9,12 @@ import {
   Empty,
   Pagination,
   QueryGroup,
-} from '@answer/components';
-import { useReportModal } from '@answer/hooks';
-import * as Type from '@answer/common/interface';
-import { useFlagSearch } from '@answer/api';
-
-import '../index.scss';
+} from '@/components';
+import { useReportModal } from '@/hooks';
+import * as Type from '@/common/interface';
+import { useFlagSearch } from '@/services';
+import { escapeRemove } from '@/utils';
+import { pathFactory } from '@/router/pathFactory';
 
 const flagFilterKeys: Type.FlagStatus[] = ['pending', 'completed'];
 const flagTypeKeys: Type.FlagType[] = ['all', 'question', 'answer', 'comment'];
@@ -100,14 +100,17 @@ const Flags: FC = () => {
                     </small>
                     <BaseUserCard data={li.reported_user} className="mt-2" />
                     <a
-                      href={`/questions/${li.question_id}`}
+                      href={pathFactory.questionLanding(
+                        li.question_id,
+                        li.url_title,
+                      )}
                       target="_blank"
                       className="text-wrap text-break mt-2"
                       rel="noreferrer">
                       {li.title}
                     </a>
                     <small className="text-break text-wrap word">
-                      {li.excerpt}
+                      {escapeRemove(li.excerpt)}
                     </small>
                   </Stack>
                 </td>

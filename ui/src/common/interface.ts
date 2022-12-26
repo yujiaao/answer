@@ -2,6 +2,7 @@ export interface FormValue<T = any> {
   value: T;
   isInvalid: boolean;
   errorMsg: string;
+  [prop: string]: any;
 }
 
 export interface FormDataType {
@@ -23,6 +24,8 @@ export interface ReportParams {
 export interface TagBase {
   display_name: string;
   slug_name: string;
+  recommend: boolean;
+  reserved: boolean;
 }
 
 export interface Tag extends TagBase {
@@ -51,6 +54,7 @@ export interface TagInfo extends TagBase {
 }
 export interface QuestionParams {
   title: string;
+  url_title?: string;
   content: string;
   html: string;
   tags: Tag[];
@@ -66,6 +70,7 @@ export interface AnswerParams {
   html: string;
   question_id: string;
   id: string;
+  edit_summary?: string;
 }
 
 export interface LoginReqParams {
@@ -89,7 +94,7 @@ export interface ModifyPasswordReq {
 export interface ModifyUserReq {
   display_name: string;
   username?: string;
-  avatar: string;
+  avatar: any;
   bio: string;
   bio_html?: string;
   location: string;
@@ -97,7 +102,7 @@ export interface ModifyUserReq {
 }
 
 export interface UserInfoBase {
-  avatar: string;
+  avatar: any;
   username: string;
   display_name: string;
   rank: number;
@@ -108,21 +113,26 @@ export interface UserInfoBase {
    */
   status?: string;
   /** roles */
-  is_admin?: true;
+  is_admin?: boolean;
 }
 
 export interface UserInfoRes extends UserInfoBase {
   bio: string;
   bio_html: string;
   create_time?: string;
-  /** value = 1 active; value = 2 inactivated
+  /**
+   * value = 1 active;
+   * value = 2 inactivated
    */
   mail_status: number;
+  language: string;
+  is_admin: boolean;
   e_mail?: string;
   [prop: string]: any;
 }
 
-export interface AvatarUploadReq {
+export type UploadType = 'post' | 'avatar' | 'branding';
+export interface UploadReq {
   file: FormData;
 }
 
@@ -147,6 +157,13 @@ export interface CheckImgReq {
 
 export interface SetNoticeReq {
   notice_switch: boolean;
+}
+
+export interface NotificationStatus {
+  inbox: number;
+  achievement: number;
+  revision: number;
+  can_revision: boolean;
 }
 
 export interface QuestionDetailRes {
@@ -184,7 +201,6 @@ export interface AnswerItem {
   create_time: string;
   update_time: string;
   user_info: UserInfoBase;
-
   [prop: string]: any;
 }
 
@@ -218,7 +234,7 @@ export type QuestionOrderBy =
 
 export interface QueryQuestionsReq extends Paging {
   order: QuestionOrderBy;
-  tags?: string[];
+  tag?: string;
 }
 
 export type AdminQuestionStatus = 'available' | 'closed' | 'deleted';
@@ -227,6 +243,7 @@ export type AdminContentsFilterBy = 'normal' | 'closed' | 'deleted';
 
 export interface AdminContentsReq extends Paging {
   status: AdminContentsFilterBy;
+  query?: string;
 }
 
 /**
@@ -237,7 +254,12 @@ export type AdminAnswerStatus = 'available' | 'deleted';
 /**
  * @description interface for Users
  */
-export type UserFilterBy = 'all' | 'inactive' | 'suspended' | 'deleted';
+export type UserFilterBy =
+  | 'all'
+  | 'staff'
+  | 'inactive'
+  | 'suspended'
+  | 'deleted';
 
 /**
  * @description interface for Flags
@@ -256,18 +278,101 @@ export interface AdminSettingsGeneral {
   name: string;
   short_description: string;
   description: string;
+  site_url: string;
+  contact_email: string;
+}
+
+export interface HelmetBase {
+  pageTitle?: string;
+  description?: string;
+  keywords?: string;
+}
+
+export interface HelmetUpdate extends Omit<HelmetBase, 'pageTitle'> {
+  title?: string;
+  subtitle?: string;
 }
 
 export interface AdminSettingsInterface {
-  logo: string;
   language: string;
-  theme: string;
+  time_zone?: string;
+}
+
+export interface AdminSettingsSmtp {
+  encryption: string;
+  from_email: string;
+  from_name: string;
+  smtp_authentication: boolean;
+  smtp_host: string;
+  smtp_password?: string;
+  smtp_port: number;
+  smtp_username?: string;
+  test_email_recipient?: string;
 }
 
 export interface SiteSettings {
+  branding: AdminSettingBranding;
   general: AdminSettingsGeneral;
   interface: AdminSettingsInterface;
+  login: AdminSettingsLogin;
+  custom_css_html: AdminSettingsCustom;
+  theme: AdminSettingsTheme;
+  site_seo: AdminSettingsSeo;
 }
+
+export interface AdminSettingBranding {
+  logo: string;
+  square_icon: string;
+  mobile_logo?: string;
+  favicon?: string;
+}
+
+export interface AdminSettingsLegal {
+  privacy_policy_original_text?: string;
+  privacy_policy_parsed_text?: string;
+  terms_of_service_original_text?: string;
+  terms_of_service_parsed_text?: string;
+}
+
+export interface AdminSettingsWrite {
+  recommend_tags: string[];
+  required_tag: string;
+  reserved_tags: string[];
+}
+
+export interface AdminSettingsSeo {
+  robots: string;
+  /**
+   * 0: not set
+   * 1：with title
+   * 2: no title
+   */
+  permalink: number;
+}
+
+export type themeConfig = {
+  navbar_style: string;
+  primary_color: string;
+  [k: string]: string | number;
+};
+export interface AdminSettingsTheme {
+  theme: string;
+  theme_options?: { label: string; value: string }[];
+  theme_config: Record<string, themeConfig>;
+}
+
+export interface AdminSettingsCustom {
+  custom_css: string;
+  custom_head: string;
+  custom_header: string;
+  custom_footer: string;
+}
+
+export interface AdminSettingsLogin {
+  allow_new_registrations: boolean;
+  login_required: boolean;
+}
+
 /**
  * @description interface for Activity
  */
@@ -292,7 +397,9 @@ export interface SearchParams {
 export interface SearchResItem {
   object_type: string;
   object: {
+    url_title?: string;
     id: string;
+    question_id?: string;
     title: string;
     excerpt: string;
     created_at: number;
@@ -306,4 +413,105 @@ export interface SearchResItem {
 }
 export interface SearchRes extends ListResult<SearchResItem> {
   extra: any;
+}
+
+export interface AdminDashboard {
+  info: {
+    question_count: number;
+    answer_count: number;
+    comment_count: number;
+    vote_count: number;
+    user_count: number;
+    report_count: number;
+    uploading_files: boolean;
+    smtp: boolean;
+    time_zone: string;
+    occupying_storage_space: string;
+    app_start_time: number;
+    https: boolean;
+    version_info: {
+      remote_version: string;
+      version: string;
+    };
+  };
+}
+
+export interface TimelineReq {
+  show_vote: boolean;
+  object_id: string;
+}
+
+export interface TimelineItem {
+  activity_id: number;
+  revision_id: number;
+  created_at: number;
+  activity_type: string;
+  username: string;
+  user_display_name: string;
+  comment: string;
+  object_id: string;
+  object_type: string;
+  cancelled: boolean;
+  cancelled_at: any;
+}
+
+export interface TimelineObject {
+  title: string;
+  url_title?: string;
+  object_type: string;
+  question_id: string;
+  answer_id: string;
+  main_tag_slug_name?: string;
+  display_name?: string;
+}
+
+export interface TimelineRes {
+  object_info: TimelineObject;
+  timeline: TimelineItem[];
+}
+
+export interface ReviewItem {
+  type: 'question' | 'answer' | 'tag';
+  info: {
+    url_title?: string;
+    object_id: string;
+    title: string;
+    content: string;
+    html: string;
+    tags: Tag[];
+  };
+  unreviewed_info: {
+    id: string;
+    use_id: string;
+    object_id: string;
+    title: string;
+    status: 0 | 1;
+    create_at: number;
+    user_info: UserInfoBase;
+    reason: string;
+    content: Tag | QuestionDetailRes | AnswerItem;
+  };
+}
+export interface ReviewResp {
+  count: number;
+  list: ReviewItem[];
+}
+
+export interface UserRoleItem {
+  id: number;
+  name: string;
+  description: string;
+}
+export interface MemberActionItem {
+  action: string;
+  name: string;
+  type: string;
+}
+
+export interface User {
+  username: string;
+  rank: number;
+  vote_count: number;
+  display_name: string;
+  avatar: string;
 }

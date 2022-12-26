@@ -2,7 +2,8 @@ import { FC, memo } from 'react';
 import { ListGroup, ListGroupItem } from 'react-bootstrap';
 import { useTranslation } from 'react-i18next';
 
-import { Icon, FormatTime, Tag } from '@answer/components';
+import { Icon, FormatTime, Tag } from '@/components';
+import { pathFactory } from '@/router/pathFactory';
 
 interface Props {
   visible: boolean;
@@ -14,13 +15,19 @@ const Index: FC<Props> = ({ visible, data }) => {
     return null;
   }
   return (
-    <ListGroup variant="flush">
+    <ListGroup className="rounded-0">
       {data.map((item) => {
         return (
-          <ListGroupItem className="py-3 px-0" key={item.answer_id}>
+          <ListGroupItem
+            className="py-3 px-0 bg-transparent border-start-0 border-end-0"
+            key={item.answer_id}>
             <h6 className="mb-2">
               <a
-                href={`/questions/${item.question_id}/${item.answer_id}`}
+                href={pathFactory.answerLanding({
+                  questionId: item.question_id,
+                  slugTitle: item.question_info?.url_title,
+                  answerId: item.answer_id,
+                })}
                 className="text-break">
                 {item.question_info?.title}
               </a>
@@ -37,7 +44,7 @@ const Index: FC<Props> = ({ visible, data }) => {
                 <span>{item?.vote_count}</span>
               </div>
 
-              {item.adopted === 2 && (
+              {item.accepted === 2 && (
                 <div className="d-flex align-items-center me-3 text-success">
                   <Icon name="check-circle-fill me-1" />
                   <span>{t('accepted')}</span>
@@ -46,14 +53,7 @@ const Index: FC<Props> = ({ visible, data }) => {
             </div>
             <div>
               {item.question_info?.tags?.map((tag) => {
-                return (
-                  <Tag
-                    href={`/t/${tag.main_tag_slug_name || tag.slug_name}`}
-                    key={tag.slug_name}
-                    className="me-1">
-                    {tag.slug_name}
-                  </Tag>
-                );
+                return <Tag key={tag.slug_name} className="me-1" data={tag} />;
               })}
             </div>
           </ListGroupItem>

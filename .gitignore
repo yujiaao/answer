@@ -9,6 +9,8 @@
 /.fleet
 /.vscode/*.log
 /cmd/answer/*.sh
+/cmd/answer/answer
+/cmd/answer/uploads/*
 /cmd/logs
 /configs/config-dev.yaml
 /go.work*
@@ -19,4 +21,7 @@
 Thumbs*.db
 tmp
 vendor/
-.husky
+/answer-data/
+/answer
+
+dist/

@@ -1,4 +1,5 @@
 module.exports = {
+  root: true,
   env: {
     browser: true,
     es2021: true,
@@ -19,10 +20,12 @@ module.exports = {
     },
     ecmaVersion: 'latest',
     sourceType: 'module',
-    project: './tsconfig.json',
+    tsconfigRootDir: __dirname,
+    project: ['./tsconfig.json'],
   },
-  plugins: ['react', '@typescript-eslint'],
+  plugins: ['react', '@typescript-eslint', 'prettier'],
   rules: {
+    'prettier/prettier': 'error',
     'no-unused-vars': 'off',
     'no-console': 'off',
     'import/prefer-default-export': 'off',
@@ -48,6 +51,7 @@ module.exports = {
     'react-hooks/exhaustive-deps': 'off',
     'react/jsx-props-no-spreading': 'off',
     '@typescript-eslint/default-param-last': 'off',
+    'no-nested-ternary': 'off',
     'import/order': [
       'error',
       {
@@ -64,7 +68,7 @@ module.exports = {
             position: 'before',
           },
           {
-            pattern: '@answer/**',
+            pattern: '@/**',
             group: 'internal',
           },
           {

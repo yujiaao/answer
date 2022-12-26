@@ -6,18 +6,20 @@
 package main
 
 import (
+	"github.com/answerdev/answer/internal/base/conf"
+	"github.com/answerdev/answer/internal/base/cron"
+	"github.com/answerdev/answer/internal/base/data"
+	"github.com/answerdev/answer/internal/base/middleware"
+	"github.com/answerdev/answer/internal/base/server"
+	"github.com/answerdev/answer/internal/base/translator"
+	"github.com/answerdev/answer/internal/controller"
+	"github.com/answerdev/answer/internal/controller/template_render"
+	"github.com/answerdev/answer/internal/controller_admin"
+	"github.com/answerdev/answer/internal/repo"
+	"github.com/answerdev/answer/internal/router"
+	"github.com/answerdev/answer/internal/service"
+	"github.com/answerdev/answer/internal/service/service_config"
 	"github.com/google/wire"
-	"github.com/segmentfault/answer/internal/base/conf"
-	"github.com/segmentfault/answer/internal/base/data"
-	"github.com/segmentfault/answer/internal/base/middleware"
-	"github.com/segmentfault/answer/internal/base/server"
-	"github.com/segmentfault/answer/internal/base/translator"
-	"github.com/segmentfault/answer/internal/controller"
-	"github.com/segmentfault/answer/internal/controller_backyard"
-	"github.com/segmentfault/answer/internal/repo"
-	"github.com/segmentfault/answer/internal/router"
-	"github.com/segmentfault/answer/internal/service"
-	"github.com/segmentfault/answer/internal/service/service_config"
 	"github.com/segmentfault/pacman"
 	"github.com/segmentfault/pacman/log"
 )
@@ -36,8 +38,10 @@ func initApplication(
 		server.ProviderSetServer,
 		router.ProviderSetRouter,
 		controller.ProviderSetController,
-		controller_backyard.ProviderSetController,
+		controller_admin.ProviderSetController,
+		templaterender.ProviderSetTemplateRenderController,
 		service.ProviderSetService,
+		cron.ProviderSetService,
 		repo.ProviderSetRepo,
 		translator.ProviderSet,
 		middleware.ProviderSetMiddleware,

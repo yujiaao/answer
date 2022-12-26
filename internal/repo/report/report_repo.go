@@ -3,15 +3,15 @@ package report
 import (
 	"context"
 
-	"github.com/segmentfault/answer/internal/base/constant"
-	"github.com/segmentfault/answer/internal/base/pager"
-	"github.com/segmentfault/answer/internal/schema"
-	"github.com/segmentfault/answer/internal/service/report_common"
+	"github.com/answerdev/answer/internal/base/constant"
+	"github.com/answerdev/answer/internal/base/pager"
+	"github.com/answerdev/answer/internal/schema"
+	"github.com/answerdev/answer/internal/service/report_common"
 
-	"github.com/segmentfault/answer/internal/base/data"
-	"github.com/segmentfault/answer/internal/base/reason"
-	"github.com/segmentfault/answer/internal/entity"
-	"github.com/segmentfault/answer/internal/service/unique"
+	"github.com/answerdev/answer/internal/base/data"
+	"github.com/answerdev/answer/internal/base/reason"
+	"github.com/answerdev/answer/internal/entity"
+	"github.com/answerdev/answer/internal/service/unique"
 	"github.com/segmentfault/pacman/errors"
 )
 
@@ -76,20 +76,29 @@ func (rr *reportRepo) GetReportListPage(ctx context.Context, dto schema.GetRepor
 }
 
 // GetByID get report by ID
-func (ar *reportRepo) GetByID(ctx context.Context, id string) (report entity.Report, exist bool, err error) {
-	report = entity.Report{}
-	exist, err = ar.data.DB.ID(id).Get(&report)
+func (rr *reportRepo) GetByID(ctx context.Context, id string) (report *entity.Report, exist bool, err error) {
+	report = &entity.Report{}
+	exist, err = rr.data.DB.ID(id).Get(report)
+	if err != nil {
+		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
 	return
 }
 
 // UpdateByID handle report by ID
-func (ar *reportRepo) UpdateByID(
-	ctx context.Context,
-	id string,
-	handleData entity.Report) (err error) {
-	_, err = ar.data.DB.ID(id).Update(&handleData)
+func (rr *reportRepo) UpdateByID(ctx context.Context, id string, handleData entity.Report) (err error) {
+	_, err = rr.data.DB.ID(id).Update(&handleData)
 	if err != nil {
 		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+	return
+}
+
+func (rr *reportRepo) GetReportCount(ctx context.Context) (count int64, err error) {
+	list := make([]*entity.Report, 0)
+	count, err = rr.data.DB.Where("status =?", entity.ReportStatusPending).FindAndCount(&list)
+	if err != nil {
+		return count, errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 	}
 	return
 }

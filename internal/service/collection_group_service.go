@@ -3,10 +3,10 @@ package service
 import (
 	"context"
 
+	"github.com/answerdev/answer/internal/base/reason"
+	"github.com/answerdev/answer/internal/entity"
+	"github.com/answerdev/answer/internal/schema"
 	"github.com/jinzhu/copier"
-	"github.com/segmentfault/answer/internal/base/reason"
-	"github.com/segmentfault/answer/internal/entity"
-	"github.com/segmentfault/answer/internal/schema"
 	"github.com/segmentfault/pacman/errors"
 )
 
@@ -17,7 +17,7 @@ type CollectionGroupRepo interface {
 	UpdateCollectionGroup(ctx context.Context, collectionGroup *entity.CollectionGroup, cols []string) (err error)
 	GetCollectionGroup(ctx context.Context, id string) (collectionGroup *entity.CollectionGroup, exist bool, err error)
 	GetCollectionGroupPage(ctx context.Context, page, pageSize int, collectionGroup *entity.CollectionGroup) (collectionGroupList []*entity.CollectionGroup, total int64, err error)
-	GetDefaultID(ctx context.Context, userId string) (collectionGroup *entity.CollectionGroup, has bool, err error)
+	GetDefaultID(ctx context.Context, userID string) (collectionGroup *entity.CollectionGroup, has bool, err error)
 }
 
 // CollectionGroupService user service

@@ -1,26 +1,32 @@
 package repo
 
 import (
+	"github.com/answerdev/answer/internal/base/data"
+	"github.com/answerdev/answer/internal/repo/activity"
+	"github.com/answerdev/answer/internal/repo/activity_common"
+	"github.com/answerdev/answer/internal/repo/answer"
+	"github.com/answerdev/answer/internal/repo/auth"
+	"github.com/answerdev/answer/internal/repo/captcha"
+	"github.com/answerdev/answer/internal/repo/collection"
+	"github.com/answerdev/answer/internal/repo/comment"
+	"github.com/answerdev/answer/internal/repo/common"
+	"github.com/answerdev/answer/internal/repo/config"
+	"github.com/answerdev/answer/internal/repo/export"
+	"github.com/answerdev/answer/internal/repo/meta"
+	"github.com/answerdev/answer/internal/repo/notification"
+	"github.com/answerdev/answer/internal/repo/question"
+	"github.com/answerdev/answer/internal/repo/rank"
+	"github.com/answerdev/answer/internal/repo/reason"
+	"github.com/answerdev/answer/internal/repo/report"
+	"github.com/answerdev/answer/internal/repo/revision"
+	"github.com/answerdev/answer/internal/repo/role"
+	"github.com/answerdev/answer/internal/repo/search_common"
+	"github.com/answerdev/answer/internal/repo/site_info"
+	"github.com/answerdev/answer/internal/repo/tag"
+	"github.com/answerdev/answer/internal/repo/tag_common"
+	"github.com/answerdev/answer/internal/repo/unique"
+	"github.com/answerdev/answer/internal/repo/user"
 	"github.com/google/wire"
-	"github.com/segmentfault/answer/internal/base/data"
-	"github.com/segmentfault/answer/internal/repo/activity"
-	"github.com/segmentfault/answer/internal/repo/activity_common"
-	"github.com/segmentfault/answer/internal/repo/auth"
-	"github.com/segmentfault/answer/internal/repo/captcha"
-	"github.com/segmentfault/answer/internal/repo/collection"
-	"github.com/segmentfault/answer/internal/repo/comment"
-	"github.com/segmentfault/answer/internal/repo/common"
-	"github.com/segmentfault/answer/internal/repo/config"
-	"github.com/segmentfault/answer/internal/repo/export"
-	"github.com/segmentfault/answer/internal/repo/meta"
-	"github.com/segmentfault/answer/internal/repo/notification"
-	"github.com/segmentfault/answer/internal/repo/rank"
-	"github.com/segmentfault/answer/internal/repo/reason"
-	"github.com/segmentfault/answer/internal/repo/report"
-	"github.com/segmentfault/answer/internal/repo/revision"
-	"github.com/segmentfault/answer/internal/repo/tag"
-	"github.com/segmentfault/answer/internal/repo/unique"
-	"github.com/segmentfault/answer/internal/repo/user"
 )
 
 // ProviderSetRepo is data providers.
@@ -38,26 +44,32 @@ var ProviderSetRepo = wire.NewSet(
 	activity_common.NewVoteRepo,
 	config.NewConfigRepo,
 	user.NewUserRepo,
-	user.NewUserBackyardRepo,
+	user.NewUserAdminRepo,
 	rank.NewUserRankRepo,
-	NewQuestionRepo,
-	NewAnswerRepo,
-	NewActivityRepo,
+	question.NewQuestionRepo,
+	answer.NewAnswerRepo,
+	activity_common.NewActivityRepo,
 	activity.NewVoteRepo,
 	activity.NewFollowRepo,
 	activity.NewAnswerActivityRepo,
 	activity.NewQuestionActivityRepo,
 	activity.NewUserActiveActivityRepo,
+	activity.NewActivityRepo,
 	tag.NewTagRepo,
-	tag.NewTagListRepo,
+	tag_common.NewTagCommonRepo,
+	tag.NewTagRelRepo,
 	collection.NewCollectionRepo,
 	collection.NewCollectionGroupRepo,
 	auth.NewAuthRepo,
 	revision.NewRevisionRepo,
-	NewSearchRepo,
+	search_common.NewSearchRepo,
 	meta.NewMetaRepo,
 	export.NewEmailRepo,
 	reason.NewReasonRepo,
-	NewSiteInfo,
+	site_info.NewSiteInfo,
 	notification.NewNotificationRepo,
+	role.NewRoleRepo,
+	role.NewUserRoleRelRepo,
+	role.NewRolePowerRelRepo,
+	role.NewPowerRepo,
 )

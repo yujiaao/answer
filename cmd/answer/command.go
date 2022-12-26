@@ -4,15 +4,14 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/segmentfault/answer/internal/base/data"
-	"github.com/segmentfault/answer/internal/cli"
-	"github.com/segmentfault/answer/internal/migrations"
+	"github.com/answerdev/answer/internal/base/conf"
+	"github.com/answerdev/answer/internal/cli"
+	"github.com/answerdev/answer/internal/install"
+	"github.com/answerdev/answer/internal/migrations"
 	"github.com/spf13/cobra"
 )
 
 var (
-	// configFilePath is the config file path
-	configFilePath string
 	// dataDirPath save all answer application data in this directory. like config file, upload file...
 	dataDirPath string
 	// dumpDataPath dump data path
@@ -22,17 +21,13 @@ var (
 func init() {
 	rootCmd.Version = fmt.Sprintf("%s\nrevision: %s\nbuild time: %s", Version, Revision, Time)
 
-	initCmd.Flags().StringVarP(&dataDirPath, "data-path", "C", "/data/", "data path, eg: -C ./data/")
-
-	rootCmd.PersistentFlags().StringVarP(&configFilePath, "config", "c", "", "config path, eg: -c config.yaml")
+	rootCmd.PersistentFlags().StringVarP(&dataDirPath, "data-path", "C", "/data/", "data path, eg: -C ./data/")
 
 	dumpCmd.Flags().StringVarP(&dumpDataPath, "path", "p", "./", "dump data path, eg: -p ./dump/data/")
 
-	rootCmd.AddCommand(initCmd)
-	rootCmd.AddCommand(checkCmd)
-	rootCmd.AddCommand(runCmd)
-	rootCmd.AddCommand(dumpCmd)
-	rootCmd.AddCommand(upgradeCmd)
+	for _, cmd := range []*cobra.Command{initCmd, checkCmd, runCmd, dumpCmd, upgradeCmd} {
+		rootCmd.AddCommand(cmd)
+	}
 }
 
 var (
@@ -51,7 +46,10 @@ To run answer, use:
 		Use:   "run",
 		Short: "Run the application",
 		Long:  `Run the application`,
-		Run: func(cmd *cobra.Command, args []string) {
+		Run: func(_ *cobra.Command, _ []string) {
+			cli.FormatAllPath(dataDirPath)
+			fmt.Println("config file path: ", cli.GetConfigFilePath())
+			fmt.Println("Answer is string..........................")
 			runApp()
 		},
 	}
@@ -61,19 +59,28 @@ To run answer, use:
 		Use:   "init",
 		Short: "init answer application",
 		Long:  `init answer application`,
-		Run: func(cmd *cobra.Command, args []string) {
+		Run: func(_ *cobra.Command, _ []string) {
+			// check config file and database. if config file exists and database is already created, init done
 			cli.InstallAllInitialEnvironment(dataDirPath)
-			c, err := readConfig()
-			if err != nil {
-				fmt.Println("read config failed: ", err.Error())
-				return
+
+			configFileExist := cli.CheckConfigFile(cli.GetConfigFilePath())
+			if configFileExist {
+				fmt.Println("config file exists, try to read the config...")
+				c, err := conf.ReadConfig(cli.GetConfigFilePath())
+				if err != nil {
+					fmt.Println("read config failed: ", err.Error())
+					return
+				}
+
+				fmt.Println("config file read successfully, try to connect database...")
+				if cli.CheckDBTableExist(c.Data.Database) {
+					fmt.Println("connect to database successfully and table already exists, do nothing.")
+					return
+				}
 			}
-			fmt.Println("read config successfully")
-			if err := cli.InitDB(c.Data.Database); err != nil {
-				fmt.Println("init database error: ", err.Error())
-				return
-			}
-			fmt.Println("init database successfully")
+
+			// start installation server to install
+			install.Run(cli.GetConfigFilePath())
 		},
 	}
 
@@ -82,19 +89,14 @@ To run answer, use:
 		Use:   "upgrade",
 		Short: "upgrade Answer version",
 		Long:  `upgrade Answer version`,
-		Run: func(cmd *cobra.Command, args []string) {
-			c, err := readConfig()
+		Run: func(_ *cobra.Command, _ []string) {
+			cli.FormatAllPath(dataDirPath)
+			c, err := conf.ReadConfig(cli.GetConfigFilePath())
 			if err != nil {
 				fmt.Println("read config failed: ", err.Error())
 				return
 			}
-			fmt.Println("read config successfully")
-			db, err := data.NewDB(false, c.Data.Database)
-			if err != nil {
-				fmt.Println("new database failed: ", err.Error())
-				return
-			}
-			if err = migrations.Migrate(db); err != nil {
+			if err = migrations.Migrate(c.Data.Database, c.Data.Cache); err != nil {
 				fmt.Println("migrate failed: ", err.Error())
 				return
 			}
@@ -107,9 +109,10 @@ To run answer, use:
 		Use:   "dump",
 		Short: "back up data",
 		Long:  `back up data`,
-		Run: func(cmd *cobra.Command, args []string) {
+		Run: func(_ *cobra.Command, _ []string) {
 			fmt.Println("Answer is backing up data")
-			c, err := readConfig()
+			cli.FormatAllPath(dataDirPath)
+			c, err := conf.ReadConfig(cli.GetConfigFilePath())
 			if err != nil {
 				fmt.Println("read config failed: ", err.Error())
 				return
@@ -128,9 +131,10 @@ To run answer, use:
 		Use:   "check",
 		Short: "checking the required environment",
 		Long:  `Check if the current environment meets the startup requirements`,
-		Run: func(cmd *cobra.Command, args []string) {
+		Run: func(_ *cobra.Command, _ []string) {
+			cli.FormatAllPath(dataDirPath)
 			fmt.Println("Start checking the required environment...")
-			if cli.CheckConfigFile(configFilePath) {
+			if cli.CheckConfigFile(cli.GetConfigFilePath()) {
 				fmt.Println("config file exists [✔]")
 			} else {
 				fmt.Println("config file not exists [x]")
@@ -142,13 +146,13 @@ To run answer, use:
 				fmt.Println("upload directory not exists [x]")
 			}
 
-			c, err := readConfig()
+			c, err := conf.ReadConfig(cli.GetConfigFilePath())
 			if err != nil {
 				fmt.Println("read config failed: ", err.Error())
 				return
 			}
 
-			if cli.CheckDB(c.Data.Database) {
+			if cli.CheckDBConnection(c.Data.Database) {
 				fmt.Println("db connection successfully [✔]")
 			} else {
 				fmt.Println("db connection failed [x]")

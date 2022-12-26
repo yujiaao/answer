@@ -3,41 +3,24 @@ package rank
 import (
 	"context"
 
-	"github.com/segmentfault/answer/internal/base/pager"
-	"github.com/segmentfault/answer/internal/base/reason"
-	"github.com/segmentfault/answer/internal/entity"
-	"github.com/segmentfault/answer/internal/schema"
-	"github.com/segmentfault/answer/internal/service/activity_type"
-	"github.com/segmentfault/answer/internal/service/config"
-	"github.com/segmentfault/answer/internal/service/object_info"
-	usercommon "github.com/segmentfault/answer/internal/service/user_common"
+	"github.com/answerdev/answer/internal/base/constant"
+	"github.com/answerdev/answer/internal/base/pager"
+	"github.com/answerdev/answer/internal/base/reason"
+	"github.com/answerdev/answer/internal/entity"
+	"github.com/answerdev/answer/internal/schema"
+	"github.com/answerdev/answer/internal/service/activity_type"
+	"github.com/answerdev/answer/internal/service/config"
+	"github.com/answerdev/answer/internal/service/object_info"
+	"github.com/answerdev/answer/internal/service/permission"
+	"github.com/answerdev/answer/internal/service/role"
+	usercommon "github.com/answerdev/answer/internal/service/user_common"
 	"github.com/segmentfault/pacman/errors"
 	"github.com/segmentfault/pacman/log"
 	"xorm.io/xorm"
 )
 
 const (
-	QuestionAddRank      = "rank.question.add"
-	QuestionEditRank     = "rank.question.edit"
-	QuestionDeleteRank   = "rank.question.delete"
-	QuestionVoteUpRank   = "rank.question.vote_up"
-	QuestionVoteDownRank = "rank.question.vote_down"
-	AnswerAddRank        = "rank.answer.add"
-	AnswerEditRank       = "rank.answer.edit"
-	AnswerDeleteRank     = "rank.answer.delete"
-	AnswerAcceptRank     = "rank.answer.accept"
-	AnswerVoteUpRank     = "rank.answer.vote_up"
-	AnswerVoteDownRank   = "rank.answer.vote_down"
-	CommentAddRank       = "rank.comment.add"
-	CommentEditRank      = "rank.comment.edit"
-	CommentDeleteRank    = "rank.comment.delete"
-	ReportAddRank        = "rank.report.add"
-	TagAddRank           = "rank.tag.add"
-	TagEditRank          = "rank.tag.edit"
-	TagDeleteRank        = "rank.tag.delete"
-	TagSynonymRank       = "rank.tag.synonym"
-	LinkUrlLimitRank     = "rank.link.url_limit"
-	VoteDetailRank       = "rank.vote.detail"
+	PermissionPrefix = "rank."
 )
 
 type UserRankRepo interface {
@@ -51,6 +34,8 @@ type RankService struct {
 	configRepo        config.ConfigRepo
 	userRankRepo      UserRankRepo
 	objectInfoService *object_info.ObjService
+	roleService       *role.UserRoleRelService
+	rolePowerService  *role.RolePowerRelService
 }
 
 // NewRankService new rank service
@@ -58,17 +43,22 @@ func NewRankService(
 	userCommon *usercommon.UserCommon,
 	userRankRepo UserRankRepo,
 	objectInfoService *object_info.ObjService,
+	roleService *role.UserRoleRelService,
+	rolePowerService *role.RolePowerRelService,
 	configRepo config.ConfigRepo) *RankService {
 	return &RankService{
 		userCommon:        userCommon,
 		configRepo:        configRepo,
 		userRankRepo:      userRankRepo,
 		objectInfoService: objectInfoService,
+		roleService:       roleService,
+		rolePowerService:  rolePowerService,
 	}
 }
 
-// CheckRankPermission check whether the user reputation meets the permission
-func (rs *RankService) CheckRankPermission(ctx context.Context, userID string, action string) (can bool, err error) {
+// CheckOperationPermission verify that the user has permission
+func (rs *RankService) CheckOperationPermission(ctx context.Context, userID string, action string, objectID string) (
+	can bool, err error) {
 	if len(userID) == 0 {
 		return false, nil
 	}
@@ -81,20 +71,155 @@ func (rs *RankService) CheckRankPermission(ctx context.Context, userID string, a
 	if !exist {
 		return false, nil
 	}
-	currentUserRank := userInfo.Rank
+	powerMapping := rs.getUserPowerMapping(ctx, userID)
+	if powerMapping[action] {
+		return true, nil
+	}
 
+	if len(objectID) > 0 {
+		objectInfo, err := rs.objectInfoService.GetInfo(ctx, objectID)
+		if err != nil {
+			return can, err
+		}
+		// if the user is this object creator, the user can operate this object.
+		if objectInfo != nil &&
+			objectInfo.ObjectCreatorUserID == userID {
+			return true, nil
+		}
+	}
+
+	can = rs.checkUserRank(ctx, userInfo.ID, userInfo.Rank, PermissionPrefix+action)
+	return can, nil
+}
+
+// CheckOperationPermissions verify that the user has permission
+func (rs *RankService) CheckOperationPermissions(ctx context.Context, userID string, actions []string) (
+	can []bool, err error) {
+	can = make([]bool, len(actions))
+	if len(userID) == 0 {
+		return can, nil
+	}
+
+	// get the rank of the current user
+	userInfo, exist, err := rs.userCommon.GetUserBasicInfoByID(ctx, userID)
+	if err != nil {
+		return can, err
+	}
+	if !exist {
+		return can, nil
+	}
+
+	powerMapping := rs.getUserPowerMapping(ctx, userID)
+	for idx, action := range actions {
+		if powerMapping[action] {
+			can[idx] = true
+			continue
+		}
+		meetRank := rs.checkUserRank(ctx, userInfo.ID, userInfo.Rank, PermissionPrefix+action)
+		can[idx] = meetRank
+	}
+	return can, nil
+}
+
+// CheckOperationObjectOwner check operation object owner
+func (rs *RankService) CheckOperationObjectOwner(ctx context.Context, userID, objectID string) bool {
+	objectInfo, err := rs.objectInfoService.GetInfo(ctx, objectID)
+	if err != nil {
+		log.Error(err)
+		return false
+	}
+	// if the user is this object creator, the user can operate this object.
+	if objectInfo != nil &&
+		objectInfo.ObjectCreatorUserID == userID {
+		return true
+	}
+	return false
+}
+
+// CheckVotePermission verify that the user has vote permission
+func (rs *RankService) CheckVotePermission(ctx context.Context, userID, objectID string, voteUp bool) (
+	can bool, err error) {
+	if len(userID) == 0 || len(objectID) == 0 {
+		return false, nil
+	}
+
+	// get the rank of the current user
+	userInfo, exist, err := rs.userCommon.GetUserBasicInfoByID(ctx, userID)
+	if err != nil {
+		return can, err
+	}
+	if !exist {
+		return can, nil
+	}
+	objectInfo, err := rs.objectInfoService.GetInfo(ctx, objectID)
+	if err != nil {
+		return can, err
+	}
+	action := ""
+	switch objectInfo.ObjectType {
+	case constant.QuestionObjectType:
+		if voteUp {
+			action = permission.QuestionVoteUp
+		} else {
+			action = permission.QuestionVoteDown
+		}
+	case constant.AnswerObjectType:
+		if voteUp {
+			action = permission.AnswerVoteUp
+		} else {
+			action = permission.AnswerVoteDown
+		}
+	case constant.CommentObjectType:
+		if voteUp {
+			action = permission.CommentVoteUp
+		} else {
+			action = permission.CommentVoteDown
+		}
+	}
+	powerMapping := rs.getUserPowerMapping(ctx, userID)
+	if powerMapping[action] {
+		return true, nil
+	}
+
+	meetRank := rs.checkUserRank(ctx, userInfo.ID, userInfo.Rank, PermissionPrefix+action)
+	return meetRank, nil
+}
+
+// getUserPowerMapping get user power mapping
+func (rs *RankService) getUserPowerMapping(ctx context.Context, userID string) (powerMapping map[string]bool) {
+	powerMapping = make(map[string]bool, 0)
+	userRole, err := rs.roleService.GetUserRole(ctx, userID)
+	if err != nil {
+		log.Error(err)
+		return powerMapping
+	}
+	powers, err := rs.rolePowerService.GetRolePowerList(ctx, userRole)
+	if err != nil {
+		log.Error(err)
+		return powerMapping
+	}
+
+	for _, power := range powers {
+		powerMapping[power] = true
+	}
+	return powerMapping
+}
+
+// CheckRankPermission verify that the user meets the prestige criteria
+func (rs *RankService) checkUserRank(ctx context.Context, userID string, userRank int, action string) (
+	can bool) {
 	// get the amount of rank required for the current operation
 	requireRank, err := rs.configRepo.GetInt(action)
 	if err != nil {
-		return false, err
+		log.Error(err)
+		return false
 	}
-
-	if currentUserRank < requireRank {
+	if userRank < requireRank || requireRank < 0 {
 		log.Debugf("user %s want to do action %s, but rank %d < %d",
-			userInfo.DisplayName, action, currentUserRank, requireRank)
-		return false, nil
+			userID, action, userRank, requireRank)
+		return false
 	}
-	return true, nil
+	return true
 }
 
 // GetRankPersonalWithPage get personal comment list page
@@ -120,23 +245,24 @@ func (rs *RankService) GetRankPersonalWithPage(ctx context.Context, req *schema.
 	}
 	resp := make([]*schema.GetRankPersonalWithPageResp, 0)
 	for _, userRankInfo := range userRankPage {
+		if len(userRankInfo.ObjectID) == 0 || userRankInfo.ObjectID == "0" {
+			continue
+		}
 		commentResp := &schema.GetRankPersonalWithPageResp{
 			CreatedAt:  userRankInfo.CreatedAt.Unix(),
 			ObjectID:   userRankInfo.ObjectID,
 			Reputation: userRankInfo.Rank,
 		}
-		if len(userRankInfo.ObjectID) > 0 {
-			objInfo, err := rs.objectInfoService.GetInfo(ctx, userRankInfo.ObjectID)
-			if err != nil {
-				log.Error(err)
-			} else {
-				commentResp.RankType = activity_type.Format(userRankInfo.ActivityType)
-				commentResp.ObjectType = objInfo.ObjectType
-				commentResp.Title = objInfo.Title
-				commentResp.Content = objInfo.Content
-				commentResp.QuestionID = objInfo.QuestionID
-				commentResp.AnswerID = objInfo.AnswerID
-			}
+		objInfo, err := rs.objectInfoService.GetInfo(ctx, userRankInfo.ObjectID)
+		if err != nil {
+			log.Error(err)
+		} else {
+			commentResp.RankType = activity_type.Format(userRankInfo.ActivityType)
+			commentResp.ObjectType = objInfo.ObjectType
+			commentResp.Title = objInfo.Title
+			commentResp.Content = objInfo.Content
+			commentResp.QuestionID = objInfo.QuestionID
+			commentResp.AnswerID = objInfo.AnswerID
 		}
 		resp = append(resp, commentResp)
 	}

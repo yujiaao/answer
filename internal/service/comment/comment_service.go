@@ -3,18 +3,19 @@ package comment
 import (
 	"context"
 
+	"github.com/answerdev/answer/internal/base/constant"
+	"github.com/answerdev/answer/internal/base/pager"
+	"github.com/answerdev/answer/internal/base/reason"
+	"github.com/answerdev/answer/internal/entity"
+	"github.com/answerdev/answer/internal/schema"
+	"github.com/answerdev/answer/internal/service/activity_common"
+	"github.com/answerdev/answer/internal/service/activity_queue"
+	"github.com/answerdev/answer/internal/service/comment_common"
+	"github.com/answerdev/answer/internal/service/notice_queue"
+	"github.com/answerdev/answer/internal/service/object_info"
+	"github.com/answerdev/answer/internal/service/permission"
+	usercommon "github.com/answerdev/answer/internal/service/user_common"
 	"github.com/jinzhu/copier"
-	"github.com/segmentfault/answer/internal/base/constant"
-	"github.com/segmentfault/answer/internal/base/pager"
-	"github.com/segmentfault/answer/internal/base/reason"
-	"github.com/segmentfault/answer/internal/entity"
-	"github.com/segmentfault/answer/internal/schema"
-	"github.com/segmentfault/answer/internal/service/activity_common"
-	"github.com/segmentfault/answer/internal/service/comment_common"
-	"github.com/segmentfault/answer/internal/service/notice_queue"
-	object_info "github.com/segmentfault/answer/internal/service/object_info"
-	"github.com/segmentfault/answer/internal/service/permission"
-	usercommon "github.com/segmentfault/answer/internal/service/user_common"
 	"github.com/segmentfault/pacman/errors"
 	"github.com/segmentfault/pacman/log"
 )
@@ -24,6 +25,7 @@ type CommentRepo interface {
 	AddComment(ctx context.Context, comment *entity.Comment) (err error)
 	RemoveComment(ctx context.Context, commentID string) (err error)
 	UpdateComment(ctx context.Context, comment *entity.Comment) (err error)
+	GetComment(ctx context.Context, commentID string) (comment *entity.Comment, exist bool, err error)
 	GetCommentPage(ctx context.Context, commentQuery *CommentQuery) (
 		comments []*entity.Comment, total int64, err error)
 }
@@ -110,9 +112,9 @@ func (cs *CommentService) AddComment(ctx context.Context, req *schema.AddComment
 	}
 
 	if objInfo.ObjectType == constant.QuestionObjectType {
-		cs.notificationQuestionComment(ctx, objInfo.ObjectCreator, comment.ID, req.UserID)
+		cs.notificationQuestionComment(ctx, objInfo.ObjectCreatorUserID, comment.ID, req.UserID)
 	} else if objInfo.ObjectType == constant.AnswerObjectType {
-		cs.notificationAnswerComment(ctx, objInfo.ObjectCreator, comment.ID, req.UserID)
+		cs.notificationAnswerComment(ctx, objInfo.ObjectCreatorUserID, comment.ID, req.UserID)
 	}
 	if len(req.MentionUsernameList) > 0 {
 		cs.notificationMention(ctx, req.MentionUsernameList, comment.ID, req.UserID)
@@ -120,7 +122,7 @@ func (cs *CommentService) AddComment(ctx context.Context, req *schema.AddComment
 
 	resp = &schema.GetCommentResp{}
 	resp.SetFromComment(comment)
-	resp.MemberActions = permission.GetCommentPermission(req.UserID, resp.UserID)
+	resp.MemberActions = permission.GetCommentPermission(ctx, req.UserID, resp.UserID, req.CanEdit, req.CanDelete)
 
 	// get reply user info
 	if len(resp.ReplyUserID) > 0 {
@@ -147,22 +149,30 @@ func (cs *CommentService) AddComment(ctx context.Context, req *schema.AddComment
 		resp.UserAvatar = userInfo.Avatar
 		resp.UserStatus = userInfo.Status
 	}
+
+	activityMsg := &schema.ActivityMsg{
+		UserID:           comment.UserID,
+		ObjectID:         comment.ID,
+		OriginalObjectID: req.ObjectID,
+		ActivityTypeKey:  constant.ActQuestionCommented,
+	}
+	switch objInfo.ObjectType {
+	case constant.QuestionObjectType:
+		activityMsg.ActivityTypeKey = constant.ActQuestionCommented
+	case constant.AnswerObjectType:
+		activityMsg.ActivityTypeKey = constant.ActAnswerCommented
+	}
+	activity_queue.AddActivity(activityMsg)
 	return resp, nil
 }
 
 // RemoveComment delete comment
 func (cs *CommentService) RemoveComment(ctx context.Context, req *schema.RemoveCommentReq) (err error) {
-	if err := cs.checkCommentWhetherOwner(ctx, req.UserID, req.CommentID); err != nil {
-		return err
-	}
 	return cs.commentRepo.RemoveComment(ctx, req.CommentID)
 }
 
 // UpdateComment update comment
 func (cs *CommentService) UpdateComment(ctx context.Context, req *schema.UpdateCommentReq) (err error) {
-	if err := cs.checkCommentWhetherOwner(ctx, req.UserID, req.CommentID); err != nil {
-		return err
-	}
 	comment := &entity.Comment{}
 	_ = copier.Copy(comment, req)
 	comment.ID = req.CommentID
@@ -221,7 +231,7 @@ func (cs *CommentService) GetComment(ctx context.Context, req *schema.GetComment
 	// check if current user vote this comment
 	resp.IsVote = cs.checkIsVote(ctx, req.UserID, resp.CommentID)
 
-	resp.MemberActions = permission.GetCommentPermission(req.UserID, resp.UserID)
+	resp.MemberActions = permission.GetCommentPermission(ctx, req.UserID, resp.UserID, req.CanEdit, req.CanDelete)
 	return resp, nil
 }
 
@@ -239,52 +249,86 @@ func (cs *CommentService) GetCommentWithPage(ctx context.Context, req *schema.Ge
 	}
 	resp := make([]*schema.GetCommentResp, 0)
 	for _, comment := range commentList {
-		commentResp := &schema.GetCommentResp{
-			CommentID:      comment.ID,
-			CreatedAt:      comment.CreatedAt.Unix(),
-			UserID:         comment.UserID,
-			ReplyUserID:    comment.GetReplyUserID(),
-			ReplyCommentID: comment.GetReplyCommentID(),
-			ObjectID:       comment.ObjectID,
-			VoteCount:      comment.VoteCount,
-			OriginalText:   comment.OriginalText,
-			ParsedText:     comment.ParsedText,
+		commentResp, err := cs.convertCommentEntity2Resp(ctx, req, comment)
+		if err != nil {
+			return nil, err
 		}
-
-		// get comment user info
-		if len(commentResp.UserID) > 0 {
-			commentUser, exist, err := cs.userCommon.GetUserBasicInfoByID(ctx, commentResp.UserID)
-			if err != nil {
-				return nil, err
-			}
-			if exist {
-				commentResp.Username = commentUser.Username
-				commentResp.UserDisplayName = commentUser.DisplayName
-				commentResp.UserAvatar = commentUser.Avatar
-				commentResp.UserStatus = commentUser.Status
-			}
-		}
-
-		// get reply user info
-		if len(commentResp.ReplyUserID) > 0 {
-			replyUser, exist, err := cs.userCommon.GetUserBasicInfoByID(ctx, commentResp.ReplyUserID)
-			if err != nil {
-				return nil, err
-			}
-			if exist {
-				commentResp.ReplyUsername = replyUser.Username
-				commentResp.ReplyUserDisplayName = replyUser.DisplayName
-				commentResp.ReplyUserStatus = replyUser.Status
-			}
-		}
-
-		// check if current user vote this comment
-		commentResp.IsVote = cs.checkIsVote(ctx, req.UserID, commentResp.CommentID)
-
-		commentResp.MemberActions = permission.GetCommentPermission(req.UserID, commentResp.UserID)
 		resp = append(resp, commentResp)
 	}
+
+	// if user request the specific comment, add it if not exist.
+	if len(req.CommentID) > 0 {
+		commentExist := false
+		for _, t := range resp {
+			if t.CommentID == req.CommentID {
+				commentExist = true
+				break
+			}
+		}
+		if !commentExist {
+			comment, exist, err := cs.commentCommonRepo.GetComment(ctx, req.CommentID)
+			if err != nil {
+				return nil, err
+			}
+			if exist && comment.ObjectID == req.ObjectID {
+				commentResp, err := cs.convertCommentEntity2Resp(ctx, req, comment)
+				if err != nil {
+					return nil, err
+				}
+				resp = append(resp, commentResp)
+			}
+		}
+	}
 	return pager.NewPageModel(total, resp), nil
+}
+
+func (cs *CommentService) convertCommentEntity2Resp(ctx context.Context, req *schema.GetCommentWithPageReq,
+	comment *entity.Comment) (commentResp *schema.GetCommentResp, err error) {
+	commentResp = &schema.GetCommentResp{
+		CommentID:      comment.ID,
+		CreatedAt:      comment.CreatedAt.Unix(),
+		UserID:         comment.UserID,
+		ReplyUserID:    comment.GetReplyUserID(),
+		ReplyCommentID: comment.GetReplyCommentID(),
+		ObjectID:       comment.ObjectID,
+		VoteCount:      comment.VoteCount,
+		OriginalText:   comment.OriginalText,
+		ParsedText:     comment.ParsedText,
+	}
+
+	// get comment user info
+	if len(commentResp.UserID) > 0 {
+		commentUser, exist, err := cs.userCommon.GetUserBasicInfoByID(ctx, commentResp.UserID)
+		if err != nil {
+			return nil, err
+		}
+		if exist {
+			commentResp.Username = commentUser.Username
+			commentResp.UserDisplayName = commentUser.DisplayName
+			commentResp.UserAvatar = commentUser.Avatar
+			commentResp.UserStatus = commentUser.Status
+		}
+	}
+
+	// get reply user info
+	if len(commentResp.ReplyUserID) > 0 {
+		replyUser, exist, err := cs.userCommon.GetUserBasicInfoByID(ctx, commentResp.ReplyUserID)
+		if err != nil {
+			return nil, err
+		}
+		if exist {
+			commentResp.ReplyUsername = replyUser.Username
+			commentResp.ReplyUserDisplayName = replyUser.DisplayName
+			commentResp.ReplyUserStatus = replyUser.Status
+		}
+	}
+
+	// check if current user vote this comment
+	commentResp.IsVote = cs.checkIsVote(ctx, req.UserID, commentResp.CommentID)
+
+	commentResp.MemberActions = permission.GetCommentPermission(ctx,
+		req.UserID, commentResp.UserID, req.CanEdit, req.CanDelete)
+	return commentResp, nil
 }
 
 func (cs *CommentService) checkCommentWhetherOwner(ctx context.Context, userID, commentID string) error {

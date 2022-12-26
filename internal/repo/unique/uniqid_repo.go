@@ -3,13 +3,12 @@ package unique
 import (
 	"context"
 	"fmt"
-	"strconv"
 
-	"github.com/segmentfault/answer/internal/base/constant"
-	"github.com/segmentfault/answer/internal/base/data"
-	"github.com/segmentfault/answer/internal/base/reason"
-	"github.com/segmentfault/answer/internal/entity"
-	"github.com/segmentfault/answer/internal/service/unique"
+	"github.com/answerdev/answer/internal/base/constant"
+	"github.com/answerdev/answer/internal/base/data"
+	"github.com/answerdev/answer/internal/base/reason"
+	"github.com/answerdev/answer/internal/entity"
+	"github.com/answerdev/answer/internal/service/unique"
 	"github.com/segmentfault/pacman/errors"
 )
 
@@ -25,21 +24,8 @@ func NewUniqueIDRepo(data *data.Data) unique.UniqueIDRepo {
 	}
 }
 
-// GenUniqueID generate unique id
-// 1 + 00x(objectType) + 000000000000x(id)
-func (ur *uniqueIDRepo) GenUniqueID(ctx context.Context, key string) (uniqueID int64, err error) {
-	idStr, err := ur.GenUniqueIDStr(ctx, key)
-	if err != nil {
-		return 0, errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
-	}
-	uniqueID, err = strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		return 0, errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
-	}
-	return uniqueID, nil
-}
-
 // GenUniqueIDStr generate unique id string
+// 1 + 00x(objectType) + 000000000000x(id)
 func (ur *uniqueIDRepo) GenUniqueIDStr(ctx context.Context, key string) (uniqueID string, err error) {
 	objectType := constant.ObjectTypeStrMapping[key]
 	bean := &entity.Uniqid{UniqidType: objectType}

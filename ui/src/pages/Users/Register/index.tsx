@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Container } from 'react-bootstrap';
 import { useTranslation } from 'react-i18next';
 
-import { PageTitle, Unactivate } from '@answer/components';
-import { isLogin } from '@answer/utils';
+import { usePageTags } from '@/hooks';
+import { Unactivate } from '@/components';
 
 import SignUpForm from './components/SignUpForm';
 
@@ -14,15 +14,12 @@ const Index: React.FC = () => {
   const onStep = () => {
     setShowForm((bol) => !bol);
   };
-
-  useEffect(() => {
-    isLogin();
-  }, []);
-
+  usePageTags({
+    title: t('sign_up', { keyPrefix: 'page_title' }),
+  });
   return (
     <Container style={{ paddingTop: '4rem', paddingBottom: '5rem' }}>
       <h3 className="text-center mb-5">{t('page_title')}</h3>
-      <PageTitle title={t('sign_up', { keyPrefix: 'page_title' })} />
       {showForm ? (
         <SignUpForm callback={onStep} />
       ) : (

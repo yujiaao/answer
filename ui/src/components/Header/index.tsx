@@ -17,9 +17,18 @@ import {
   useLocation,
 } from 'react-router-dom';
 
-import { userInfoStore, siteInfoStore, interfaceStore } from '@answer/stores';
-import { logout, useQueryNotificationStatus } from '@answer/api';
-import Storage from '@answer/utils/storage';
+import classnames from 'classnames';
+
+import {
+  loggedUserInfoStore,
+  siteInfoStore,
+  brandingStore,
+  loginSettingStore,
+  themeSettingStore,
+} from '@/stores';
+import { logout, useQueryNotificationStatus } from '@/services';
+import { RouteAlias } from '@/router/alias';
+import { DEFAULT_SITE_NAME } from '@/common/constants';
 
 import NavItems from './components/NavItems';
 
@@ -27,13 +36,14 @@ import './index.scss';
 
 const Header: FC = () => {
   const navigate = useNavigate();
-  const { user, clear } = userInfoStore();
+  const { user, clear } = loggedUserInfoStore();
   const { t } = useTranslation();
   const [urlSearch] = useSearchParams();
   const q = urlSearch.get('q');
   const [searchStr, setSearch] = useState('');
   const siteInfo = siteInfoStore((state) => state.siteInfo);
-  const { interface: interfaceInfo } = interfaceStore();
+  const brandingInfo = brandingStore((state) => state.branding);
+  const loginSetting = loginSettingStore((state) => state.login);
   const { data: redDot } = useQueryNotificationStatus();
   const location = useLocation();
   const handleInput = (val) => {
@@ -42,9 +52,8 @@ const Header: FC = () => {
 
   const handleLogout = async () => {
     await logout();
-    Storage.remove('token');
     clear();
-    navigate('/');
+    navigate(RouteAlias.home);
   };
 
   useEffect(() => {
@@ -63,8 +72,18 @@ const Header: FC = () => {
     }
   }, [location.pathname]);
 
+  let navbarStyle = 'theme-colored';
+  const { theme, theme_config } = themeSettingStore((_) => _);
+  if (theme_config?.[theme]?.navbar_style) {
+    navbarStyle = `theme-${theme_config[theme].navbar_style}`;
+  }
+
   return (
-    <Navbar variant="dark" expand="lg" className="sticky-top" id="header">
+    <Navbar
+      variant={navbarStyle === 'theme-colored' ? 'dark' : ''}
+      expand="lg"
+      className={classnames('sticky-top', navbarStyle)}
+      id="header">
       <Container className="d-flex align-items-center">
         <Navbar.Toggle
           aria-controls="navBarContent"
@@ -72,16 +91,24 @@ const Header: FC = () => {
           id="navBarToggle"
         />
 
-        <div className="left-wrap d-flex justify-content-between align-items-center nav-grow">
-          <Navbar.Brand to="/" as={Link} className="lh-1">
-            {interfaceInfo.logo ? (
-              <img
-                className="logo rounded-1 me-0"
-                src={interfaceInfo.logo}
-                alt=""
-              />
+        <div className="d-flex justify-content-between align-items-center nav-grow flex-nowrap">
+          <Navbar.Brand to="/" as={Link} className="lh-1 me-0 me-sm-3">
+            {brandingInfo.logo ? (
+              <>
+                <img
+                  className="d-none d-lg-block logo rounded-1 me-0"
+                  src={brandingInfo.logo}
+                  alt=""
+                />
+
+                <img
+                  className="lg-none logo rounded-1 me-0"
+                  src={brandingInfo.mobile_logo || brandingInfo.logo}
+                  alt=""
+                />
+              </>
             ) : (
-              <span>{siteInfo.name || 'Answer'}</span>
+              <span>{siteInfo.name || DEFAULT_SITE_NAME}</span>
             )}
           </Navbar.Brand>
 
@@ -91,15 +118,18 @@ const Header: FC = () => {
               <NavItems redDot={redDot} userInfo={user} logOut={handleLogout} />
             ) : (
               <>
-                <Button
-                  variant="link"
-                  className="me-2 text-white"
-                  href="/users/login">
+                <Button variant="link" className="me-2" href="/users/login">
                   {t('btns.login')}
                 </Button>
-                <Button variant="light" href="/users/register">
-                  {t('btns.signup')}
-                </Button>
+                {loginSetting.allow_new_registrations && (
+                  <Button
+                    variant={
+                      navbarStyle === 'theme-colored' ? 'light' : 'primary'
+                    }
+                    href="/users/register">
+                    {t('btns.signup')}
+                  </Button>
+                )}
               </>
             )}
           </div>
@@ -115,7 +145,7 @@ const Header: FC = () => {
               <NavLink className="nav-link" to="/tags">
                 {t('header.nav.tag')}
               </NavLink>
-              <NavLink className="nav-link d-none" to="/users">
+              <NavLink className="nav-link" to="/users">
                 {t('header.nav.user')}
               </NavLink>
             </Nav>
@@ -126,7 +156,7 @@ const Header: FC = () => {
             <Form action="/search" className="w-75 px-0 px-lg-2">
               <FormControl
                 placeholder={t('header.search.placeholder')}
-                className="text-white placeholder-search"
+                className="placeholder-search"
                 value={searchStr}
                 name="q"
                 onChange={(e) => handleInput(e.target.value)}
@@ -150,7 +180,10 @@ const Header: FC = () => {
                 <Nav.Item className="me-3">
                   <Link
                     to="/questions/ask"
-                    className="text-capitalize text-nowrap btn btn-light">
+                    className={classnames('text-capitalize text-nowrap btn', {
+                      'btn-light': navbarStyle !== 'theme-light',
+                      'btn-primary': navbarStyle === 'theme-light',
+                    })}>
                     {t('btns.add_question')}
                   </Link>
                 </Nav.Item>
@@ -165,13 +198,22 @@ const Header: FC = () => {
               <>
                 <Button
                   variant="link"
-                  className="me-2 text-white"
+                  className={classnames('me-2', {
+                    'link-light': navbarStyle === 'theme-colored',
+                    'link-primary': navbarStyle !== 'theme-colored',
+                  })}
                   href="/users/login">
                   {t('btns.login')}
                 </Button>
-                <Button variant="light" href="/users/register">
-                  {t('btns.signup')}
-                </Button>
+                {loginSetting.allow_new_registrations && (
+                  <Button
+                    variant={
+                      navbarStyle === 'theme-colored' ? 'light' : 'primary'
+                    }
+                    href="/users/register">
+                    {t('btns.signup')}
+                  </Button>
+                )}
               </>
             )}
           </Col>

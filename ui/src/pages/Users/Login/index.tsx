@@ -1,26 +1,31 @@
 import React, { FormEvent, useState, useEffect } from 'react';
 import { Container, Form, Button, Col } from 'react-bootstrap';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Trans, useTranslation } from 'react-i18next';
 
-import { login, checkImgCode } from '@answer/api';
+import { usePageTags } from '@/hooks';
 import type {
   LoginReqParams,
   ImgCodeRes,
   FormDataType,
-} from '@answer/common/interface';
-import { PageTitle, Unactivate } from '@answer/components';
-import { userInfoStore } from '@answer/stores';
-import { isLogin, getQueryString } from '@answer/utils';
-
+} from '@/common/interface';
+import { Unactivate } from '@/components';
+import { loggedUserInfoStore, loginSettingStore } from '@/stores';
+import { guard, floppyNavigation, handleFormError } from '@/utils';
+import { login, checkImgCode } from '@/services';
+import { REDIRECT_PATH_STORAGE_KEY } from '@/common/constants';
+import { RouteAlias } from '@/router/alias';
 import { PicAuthCodeModal } from '@/components/Modal';
 import Storage from '@/utils/storage';
 
 const Index: React.FC = () => {
   const { t } = useTranslation('translation', { keyPrefix: 'login' });
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [refresh, setRefresh] = useState(0);
-  const updateUser = userInfoStore((state) => state.update);
-  const storeUser = userInfoStore((state) => state.user);
+  const updateUser = loggedUserInfoStore((state) => state.update);
+  const storeUser = loggedUserInfoStore((state) => state.user);
+  const loginSetting = loginSettingStore((state) => state.login);
   const [formData, setFormData] = useState<FormDataType>({
     e_mail: {
       value: '',
@@ -102,28 +107,37 @@ const Index: React.FC = () => {
     login(params)
       .then((res) => {
         updateUser(res);
-        if (res.mail_status === 2) {
+        const userStat = guard.deriveLoginState();
+        if (userStat.isNotActivated) {
           // inactive
           setStep(2);
           setRefresh((pre) => pre + 1);
-        }
-        if (res.mail_status === 1) {
-          const path = Storage.get('ANSWER_PATH') || '/';
-          Storage.remove('ANSWER_PATH');
-          window.location.replace(path);
+        } else {
+          const path =
+            Storage.get(REDIRECT_PATH_STORAGE_KEY) || RouteAlias.home;
+          Storage.remove(REDIRECT_PATH_STORAGE_KEY);
+          floppyNavigation.navigate(path, () => {
+            navigate(path, { replace: true });
+          });
         }
 
         setModalState(false);
       })
       .catch((err) => {
-        if (err.isError && err.key) {
-          formData[err.key].isInvalid = true;
-          formData[err.key].errorMsg = err.value;
-          if (err.key.indexOf('captcha') < 0) {
+        // if (err.isError && err.key) {
+        //   formData[err.key].isInvalid = true;
+        //   formData[err.key].errorMsg = err.value;
+        //   if (err.key.indexOf('captcha') < 0) {
+        //     setModalState(false);
+        //   }
+        // }
+        if (err.isError) {
+          const data = handleFormError(err, formData);
+          if (!err.list.find((v) => v.error_field.indexOf('captcha') >= 0)) {
             setModalState(false);
           }
+          setFormData({ ...data });
         }
-        setFormData({ ...formData });
         setRefresh((pre) => pre + 1);
       });
   };
@@ -149,19 +163,18 @@ const Index: React.FC = () => {
   }, [refresh]);
 
   useEffect(() => {
-    const isInactive = getQueryString('status');
+    const isInactive = searchParams.get('status');
 
     if ((storeUser.id && storeUser.mail_status === 2) || isInactive) {
       setStep(2);
-    } else {
-      isLogin();
     }
   }, []);
-
+  usePageTags({
+    title: t('login', { keyPrefix: 'page_title' }),
+  });
   return (
     <Container style={{ paddingTop: '4rem', paddingBottom: '5rem' }}>
       <h3 className="text-center mb-5">{t('page_title')}</h3>
-      <PageTitle title={t('login', { keyPrefix: 'page_title' })} />
       {step === 1 && (
         <Col className="mx-auto" md={3}>
           <Form noValidate onSubmit={handleSubmit}>
@@ -224,15 +237,16 @@ const Index: React.FC = () => {
               </Button>
             </div>
           </Form>
-
-          <div className="text-center mt-5">
-            <Trans i18nKey="login.info_sign" ns="translation">
-              Don’t have an account?
-              <Link to="/users/register" tabIndex={2}>
-                Sign up
-              </Link>
-            </Trans>
-          </div>
+          {loginSetting.allow_new_registrations && (
+            <div className="text-center mt-5">
+              <Trans i18nKey="login.info_sign" ns="translation">
+                Don’t have an account?
+                <Link to="/users/register" tabIndex={2}>
+                  Sign up
+                </Link>
+              </Trans>
+            </div>
+          )}
         </Col>
       )}
 

@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/segmentfault/answer/internal/schema"
-	"github.com/segmentfault/answer/internal/service/config"
-	"github.com/segmentfault/answer/internal/service/reason_common"
+	"github.com/answerdev/answer/internal/schema"
+	"github.com/answerdev/answer/internal/service/config"
+	"github.com/answerdev/answer/internal/service/reason_common"
+	"github.com/segmentfault/pacman/log"
 )
 
 type reasonRepo struct {
@@ -20,9 +21,9 @@ func NewReasonRepo(configRepo config.ConfigRepo) reason_common.ReasonRepo {
 	}
 }
 
-func (rr *reasonRepo) ListReasons(ctx context.Context, req schema.ReasonReq) (resp []schema.ReasonItem, err error) {
+func (rr *reasonRepo) ListReasons(ctx context.Context, objectType, action string) (resp []schema.ReasonItem, err error) {
 	var (
-		reasonAction = fmt.Sprintf("%s.%s.reasons", req.ObjectType, req.Action)
+		reasonAction = fmt.Sprintf("%s.%s.reasons", objectType, action)
 		reasonKeys   []string
 		cfgValue     string
 	)
@@ -40,15 +41,18 @@ func (rr *reasonRepo) ListReasons(ctx context.Context, req schema.ReasonReq) (re
 
 		cfgValue, err = rr.configRepo.GetString(reasonKey)
 		if err != nil {
+			log.Error(err)
 			continue
 		}
 
 		err = json.Unmarshal([]byte(cfgValue), &reason)
 		if err != nil {
+			log.Error(err)
 			continue
 		}
 		reasonType, err = rr.configRepo.GetConfigType(reasonKey)
 		if err != nil {
+			log.Error(err)
 			continue
 		}
 

@@ -3,111 +3,69 @@ package tag
 import (
 	"context"
 	"encoding/json"
-	"strings"
 
-	"github.com/segmentfault/answer/internal/service/revision_common"
+	"github.com/answerdev/answer/internal/base/constant"
+	"github.com/answerdev/answer/internal/service/activity_queue"
+	"github.com/answerdev/answer/internal/service/revision_common"
+	"github.com/answerdev/answer/internal/service/siteinfo_common"
+	tagcommonser "github.com/answerdev/answer/internal/service/tag_common"
+	"github.com/answerdev/answer/pkg/htmltext"
 
+	"github.com/answerdev/answer/internal/base/pager"
+	"github.com/answerdev/answer/internal/base/reason"
+	"github.com/answerdev/answer/internal/entity"
+	"github.com/answerdev/answer/internal/schema"
+	"github.com/answerdev/answer/internal/service/activity_common"
+	"github.com/answerdev/answer/internal/service/permission"
+	"github.com/answerdev/answer/pkg/converter"
 	"github.com/jinzhu/copier"
-	"github.com/segmentfault/answer/internal/base/pager"
-	"github.com/segmentfault/answer/internal/base/reason"
-	"github.com/segmentfault/answer/internal/entity"
-	"github.com/segmentfault/answer/internal/schema"
-	"github.com/segmentfault/answer/internal/service/activity_common"
-	"github.com/segmentfault/answer/internal/service/permission"
-	tagcommon "github.com/segmentfault/answer/internal/service/tag_common"
-	"github.com/segmentfault/answer/pkg/converter"
 	"github.com/segmentfault/pacman/errors"
 	"github.com/segmentfault/pacman/log"
 )
 
 // TagService user service
 type TagService struct {
-	tagRepo         tagcommon.TagRepo
-	revisionService *revision_common.RevisionService
-	followCommon    activity_common.FollowRepo
+	tagRepo          tagcommonser.TagRepo
+	tagCommonService *tagcommonser.TagCommonService
+	revisionService  *revision_common.RevisionService
+	followCommon     activity_common.FollowRepo
+	siteInfoService  *siteinfo_common.SiteInfoCommonService
 }
 
 // NewTagService new tag service
 func NewTagService(
-	tagRepo tagcommon.TagRepo,
+	tagRepo tagcommonser.TagRepo,
+	tagCommonService *tagcommonser.TagCommonService,
 	revisionService *revision_common.RevisionService,
-	followCommon activity_common.FollowRepo) *TagService {
+	followCommon activity_common.FollowRepo,
+	siteInfoService *siteinfo_common.SiteInfoCommonService) *TagService {
 	return &TagService{
-		tagRepo:         tagRepo,
-		revisionService: revisionService,
-		followCommon:    followCommon,
+		tagRepo:          tagRepo,
+		tagCommonService: tagCommonService,
+		revisionService:  revisionService,
+		followCommon:     followCommon,
+		siteInfoService:  siteInfoService,
 	}
-}
-
-// SearchTagLike get tag list all
-func (ts *TagService) SearchTagLike(ctx context.Context, req *schema.SearchTagLikeReq) (resp []string, err error) {
-	tags, err := ts.tagRepo.GetTagListByName(ctx, req.Tag, 5)
-	if err != nil {
-		return
-	}
-	for _, tag := range tags {
-		resp = append(resp, tag.SlugName)
-	}
-	return resp, nil
 }
 
 // RemoveTag delete tag
-func (ts *TagService) RemoveTag(ctx context.Context, tagID string) (err error) {
-	// TODO permission
-
-	err = ts.tagRepo.RemoveTag(ctx, tagID)
+func (ts *TagService) RemoveTag(ctx context.Context, req *schema.RemoveTagReq) (err error) {
+	err = ts.tagRepo.RemoveTag(ctx, req.TagID)
 	if err != nil {
 		return err
 	}
+	activity_queue.AddActivity(&schema.ActivityMsg{
+		UserID:           req.UserID,
+		ObjectID:         req.TagID,
+		OriginalObjectID: req.TagID,
+		ActivityTypeKey:  constant.ActTagDeleted,
+	})
 	return nil
 }
 
 // UpdateTag update tag
 func (ts *TagService) UpdateTag(ctx context.Context, req *schema.UpdateTagReq) (err error) {
-	tag := &entity.Tag{}
-	_ = copier.Copy(tag, req)
-	tag.ID = req.TagID
-	err = ts.tagRepo.UpdateTag(ctx, tag)
-	if err != nil {
-		return err
-	}
-
-	tagInfo, exist, err := ts.tagRepo.GetTagByID(ctx, req.TagID)
-	if err != nil {
-		return err
-	}
-	if !exist {
-		return errors.BadRequest(reason.TagNotFound)
-	}
-	if tagInfo.MainTagID == 0 && len(req.SlugName) > 0 {
-		log.Debugf("tag %s update slug_name", tagInfo.SlugName)
-		tagList, err := ts.tagRepo.GetTagList(ctx, &entity.Tag{MainTagID: converter.StringToInt64(tagInfo.ID)})
-		if err != nil {
-			return err
-		}
-		updateTagSlugNames := make([]string, 0)
-		for _, tag := range tagList {
-			updateTagSlugNames = append(updateTagSlugNames, tag.SlugName)
-		}
-		err = ts.tagRepo.UpdateTagSynonym(ctx, updateTagSlugNames, converter.StringToInt64(tagInfo.ID), tagInfo.MainTagSlugName)
-		if err != nil {
-			return err
-		}
-	}
-
-	revisionDTO := &schema.AddRevisionDTO{
-		UserID:   req.UserID,
-		ObjectID: tag.ID,
-		Title:    tag.SlugName,
-		Log:      req.EditSummary,
-	}
-	tagInfoJson, _ := json.Marshal(tagInfo)
-	revisionDTO.Content = string(tagInfoJson)
-	err = ts.revisionService.AddRevision(ctx, revisionDTO, true)
-	if err != nil {
-		return err
-	}
-	return
+	return ts.tagCommonService.UpdateTag(ctx, req)
 }
 
 // GetTagInfo get tag one
@@ -117,9 +75,9 @@ func (ts *TagService) GetTagInfo(ctx context.Context, req *schema.GetTagInfoReq)
 		exist   bool
 	)
 	if len(req.ID) > 0 {
-		tagInfo, exist, err = ts.tagRepo.GetTagByID(ctx, req.ID)
+		tagInfo, exist, err = ts.tagCommonService.GetTagByID(ctx, req.ID)
 	} else {
-		tagInfo, exist, err = ts.tagRepo.GetTagBySlugName(ctx, req.Name)
+		tagInfo, exist, err = ts.tagCommonService.GetTagBySlugName(ctx, req.Name)
 	}
 	if err != nil {
 		return nil, err
@@ -131,7 +89,7 @@ func (ts *TagService) GetTagInfo(ctx context.Context, req *schema.GetTagInfoReq)
 	resp = &schema.GetTagResp{}
 	// if tag is synonyms get original tag info
 	if tagInfo.MainTagID > 0 {
-		tagInfo, exist, err = ts.tagRepo.GetTagByID(ctx, converter.IntToString(tagInfo.MainTagID))
+		tagInfo, exist, err = ts.tagCommonService.GetTagByID(ctx, converter.IntToString(tagInfo.MainTagID))
 		if err != nil {
 			return nil, err
 		}
@@ -147,10 +105,13 @@ func (ts *TagService) GetTagInfo(ctx context.Context, req *schema.GetTagInfoReq)
 	resp.DisplayName = tagInfo.DisplayName
 	resp.OriginalText = tagInfo.OriginalText
 	resp.ParsedText = tagInfo.ParsedText
+	resp.Description = htmltext.FetchExcerpt(tagInfo.ParsedText, "...", 240)
 	resp.FollowCount = tagInfo.FollowCount
 	resp.QuestionCount = tagInfo.QuestionCount
+	resp.Recommend = tagInfo.Recommend
+	resp.Reserved = tagInfo.Reserved
 	resp.IsFollower = ts.checkTagIsFollow(ctx, req.UserID, tagInfo.ID)
-	resp.MemberActions = permission.GetTagPermission(req.UserID, req.UserID)
+	resp.MemberActions = permission.GetTagPermission(ctx, req.CanEdit, req.CanDelete)
 	resp.GetExcerpt()
 	return resp, nil
 }
@@ -166,7 +127,7 @@ func (ts *TagService) GetFollowingTags(ctx context.Context, userID string) (
 	if err != nil {
 		return nil, err
 	}
-	tagList, err := ts.tagRepo.GetTagListByIDs(ctx, objIDs)
+	tagList, err := ts.tagCommonService.GetTagListByIDs(ctx, objIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -175,9 +136,11 @@ func (ts *TagService) GetFollowingTags(ctx context.Context, userID string) (
 			TagID:       t.ID,
 			SlugName:    t.SlugName,
 			DisplayName: t.DisplayName,
+			Recommend:   t.Recommend,
+			Reserved:    t.Reserved,
 		}
 		if t.MainTagID > 0 {
-			mainTag, exist, err := ts.tagRepo.GetTagByID(ctx, converter.IntToString(t.MainTagID))
+			mainTag, exist, err := ts.tagCommonService.GetTagByID(ctx, converter.IntToString(t.MainTagID))
 			if err != nil {
 				return nil, err
 			}
@@ -192,8 +155,9 @@ func (ts *TagService) GetFollowingTags(ctx context.Context, userID string) (
 
 // GetTagSynonyms get tag synonyms
 func (ts *TagService) GetTagSynonyms(ctx context.Context, req *schema.GetTagSynonymsReq) (
-	resp []*schema.GetTagSynonymsResp, err error) {
-	tag, exist, err := ts.tagRepo.GetTagByID(ctx, req.TagID)
+	resp *schema.GetTagSynonymsResp, err error) {
+	resp = &schema.GetTagSynonymsResp{Synonyms: make([]*schema.TagSynonym, 0)}
+	tag, exist, err := ts.tagCommonService.GetTagByID(ctx, req.TagID)
 	if err != nil {
 		return
 	}
@@ -224,15 +188,15 @@ func (ts *TagService) GetTagSynonyms(ctx context.Context, req *schema.GetTagSyno
 		mainTagSlugName = tag.SlugName
 	}
 
-	resp = make([]*schema.GetTagSynonymsResp, 0)
 	for _, t := range tagList {
-		resp = append(resp, &schema.GetTagSynonymsResp{
+		resp.Synonyms = append(resp.Synonyms, &schema.TagSynonym{
 			TagID:           t.ID,
 			SlugName:        t.SlugName,
 			DisplayName:     t.DisplayName,
 			MainTagSlugName: mainTagSlugName,
 		})
 	}
+	resp.MemberActions = permission.GetTagSynonymPermission(ctx, req.CanEdit)
 	return
 }
 
@@ -242,7 +206,7 @@ func (ts *TagService) UpdateTagSynonym(ctx context.Context, req *schema.UpdateTa
 	req.Format()
 	addSynonymTagList := make([]string, 0)
 	removeSynonymTagList := make([]string, 0)
-	mainTagInfo, exist, err := ts.tagRepo.GetTagByID(ctx, req.TagID)
+	mainTagInfo, exist, err := ts.tagCommonService.GetTagByID(ctx, req.TagID)
 	if err != nil {
 		return err
 	}
@@ -252,9 +216,12 @@ func (ts *TagService) UpdateTagSynonym(ctx context.Context, req *schema.UpdateTa
 
 	// find all exist tag
 	for _, item := range req.SynonymTagList {
+		if item.SlugName == mainTagInfo.SlugName {
+			return errors.BadRequest(reason.TagCannotSetSynonymAsItself)
+		}
 		addSynonymTagList = append(addSynonymTagList, item.SlugName)
 	}
-	tagListInDB, err := ts.tagRepo.GetTagListByNames(ctx, addSynonymTagList)
+	tagListInDB, err := ts.tagCommonService.GetTagListByNames(ctx, addSynonymTagList)
 	if err != nil {
 		return err
 	}
@@ -275,11 +242,12 @@ func (ts *TagService) UpdateTagSynonym(ctx context.Context, req *schema.UpdateTa
 		item.OriginalText = tag.OriginalText
 		item.ParsedText = tag.ParsedText
 		item.Status = entity.TagStatusAvailable
+		item.UserID = req.UserID
 		needAddTagList = append(needAddTagList, item)
 	}
 
 	if len(needAddTagList) > 0 {
-		err = ts.tagRepo.AddTagList(ctx, needAddTagList)
+		err = ts.tagCommonService.AddTagList(ctx, needAddTagList)
 		if err != nil {
 			return err
 		}
@@ -293,10 +261,17 @@ func (ts *TagService) UpdateTagSynonym(ctx context.Context, req *schema.UpdateTa
 			}
 			tagInfoJson, _ := json.Marshal(tag)
 			revisionDTO.Content = string(tagInfoJson)
-			err = ts.revisionService.AddRevision(ctx, revisionDTO, true)
+			revisionID, err := ts.revisionService.AddRevision(ctx, revisionDTO, true)
 			if err != nil {
 				return err
 			}
+			activity_queue.AddActivity(&schema.ActivityMsg{
+				UserID:           req.UserID,
+				ObjectID:         tag.ID,
+				OriginalObjectID: tag.ID,
+				ActivityTypeKey:  constant.ActTagCreated,
+				RevisionID:       revisionID,
+			})
 		}
 	}
 
@@ -333,28 +308,32 @@ func (ts *TagService) UpdateTagSynonym(ctx context.Context, req *schema.UpdateTa
 func (ts *TagService) GetTagWithPage(ctx context.Context, req *schema.GetTagWithPageReq) (pageModel *pager.PageModel, err error) {
 	tag := &entity.Tag{}
 	_ = copier.Copy(tag, req)
+	tag.UserID = ""
 
 	page := req.Page
 	pageSize := req.PageSize
 
-	tags, total, err := ts.tagRepo.GetTagPage(ctx, page, pageSize, tag, req.QueryCond)
+	tags, total, err := ts.tagCommonService.GetTagPage(ctx, page, pageSize, tag, req.QueryCond)
 	if err != nil {
 		return
 	}
 
 	resp := make([]*schema.GetTagPageResp, 0)
 	for _, tag := range tags {
+		//excerpt := htmltext.FetchExcerpt(tag.ParsedText, "...", 240)
 		resp = append(resp, &schema.GetTagPageResp{
 			TagID:         tag.ID,
 			SlugName:      tag.SlugName,
 			DisplayName:   tag.DisplayName,
-			OriginalText:  cutOutTagParsedText(tag.OriginalText),
-			ParsedText:    cutOutTagParsedText(tag.ParsedText),
+			OriginalText:  tag.OriginalText,
+			ParsedText:    tag.ParsedText,
 			FollowCount:   tag.FollowCount,
 			QuestionCount: tag.QuestionCount,
 			IsFollower:    ts.checkTagIsFollow(ctx, req.UserID, tag.ID),
 			CreatedAt:     tag.CreatedAt.Unix(),
 			UpdatedAt:     tag.UpdatedAt.Unix(),
+			Recommend:     tag.Recommend,
+			Reserved:      tag.Reserved,
 		})
 	}
 	return pager.NewPageModel(total, resp), nil
@@ -370,13 +349,4 @@ func (ts *TagService) checkTagIsFollow(ctx context.Context, userID, tagID string
 		log.Error(err)
 	}
 	return followed
-}
-
-func cutOutTagParsedText(parsedText string) string {
-	parsedText = strings.TrimSpace(parsedText)
-	idx := strings.Index(parsedText, "\n")
-	if idx >= 0 {
-		parsedText = parsedText[0:idx]
-	}
-	return parsedText
 }

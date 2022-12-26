@@ -1,51 +1,52 @@
-import React, { Suspense, lazy } from 'react';
+import { Suspense, lazy } from 'react';
 import { RouteObject, createBrowserRouter } from 'react-router-dom';
 
-import routeConfig, { RouteNode } from '@/router/route-config';
-import RouteRules from '@/router/route-rules';
+import Layout from '@/pages/Layout';
+import ErrorBoundary from '@/pages/50X';
+import baseRoutes, { RouteNode } from '@/router/routes';
+import RouteGuard from '@/router/RouteGuard';
 
 const routes: RouteObject[] = [];
 
-const routeGen = (routeNodes: RouteNode[], root: RouteObject[]) => {
+const routeWrapper = (routeNodes: RouteNode[], root: RouteObject[]) => {
   routeNodes.forEach((rn) => {
-    rn.page = rn.page.replace('pages/', '');
-    /**
-     * cannot use a fully dynamic import statement
-     * ref: https://webpack.js.org/api/module-methods/#import-1
-     */
-    const Control = lazy(() => import(`@/pages/${rn.page}`));
-    rn.element = (
-      <Suspense>
-        <Control />
-      </Suspense>
-    );
-    root.push(rn);
-    if (Array.isArray(rn.rules)) {
-      const ruleFunc: Function[] = [];
-      if (typeof rn.loader === 'function') {
-        ruleFunc.push(rn.loader);
-      }
-      rn.rules.forEach((ruleKey) => {
-        const func = RouteRules[ruleKey];
-        if (typeof func === 'function') {
-          ruleFunc.push(func);
-        }
-      });
-      rn.loader = ({ params }) => {
-        ruleFunc.forEach((func) => {
-          func(params);
-        });
-      };
+    if (rn.page === 'pages/Layout') {
+      rn.element = rn.guard ? (
+        <RouteGuard onEnter={rn.guard} path={rn.path}>
+          <Layout />
+        </RouteGuard>
+      ) : (
+        <Layout />
+      );
+      rn.errorElement = <ErrorBoundary />;
+    } else {
+      /**
+       * cannot use a fully dynamic import statement
+       * ref: https://webpack.js.org/api/module-methods/#import-1
+       */
+      const pagePath = rn.page.replace('pages/', '');
+      const Ctrl = lazy(() => import(`@/pages/${pagePath}`));
+      rn.element = (
+        <Suspense>
+          {rn.guard ? (
+            <RouteGuard onEnter={rn.guard} path={rn.path}>
+              <Ctrl />
+            </RouteGuard>
+          ) : (
+            <Ctrl />
+          )}
+        </Suspense>
+      );
     }
+    root.push(rn);
     const children = Array.isArray(rn.children) ? rn.children : null;
     if (children) {
       rn.children = [];
-      routeGen(children, rn.children);
+      routeWrapper(children, rn.children);
     }
   });
 };
 
-routeGen(routeConfig, routes);
+routeWrapper(baseRoutes, routes);
 
-const router = createBrowserRouter(routes);
-export default router;
+export { routes, createBrowserRouter };

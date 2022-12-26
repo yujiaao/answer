@@ -7,8 +7,11 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/answerdev/answer/internal/controller"
+	"github.com/answerdev/answer/internal/service/siteinfo_common"
+	"github.com/answerdev/answer/pkg/htmltext"
+	"github.com/answerdev/answer/ui"
 	"github.com/gin-gonic/gin"
-	"github.com/segmentfault/answer/ui"
 	"github.com/segmentfault/pacman/log"
 )
 
@@ -18,11 +21,19 @@ const UIStaticPath = "build/static"
 
 // UIRouter is an interface that provides ui static file routers
 type UIRouter struct {
+	siteInfoController *controller.SiteinfoController
+	siteInfoService    *siteinfo_common.SiteInfoCommonService
 }
 
 // NewUIRouter creates a new UIRouter instance with the embed resources
-func NewUIRouter() *UIRouter {
-	return &UIRouter{}
+func NewUIRouter(
+	siteInfoController *controller.SiteinfoController,
+	siteInfoService *siteinfo_common.SiteInfoCommonService,
+) *UIRouter {
+	return &UIRouter{
+		siteInfoController: siteInfoController,
+		siteInfoService:    siteInfoService,
+	}
 }
 
 // _resource is an interface that provides static file, it's a private interface
@@ -68,23 +79,35 @@ func (a *UIRouter) Register(r *gin.Engine) {
 
 	// specify the not router for default routes and redirect
 	r.NoRoute(func(c *gin.Context) {
-		name := c.Request.URL.Path
+		urlPath := c.Request.URL.Path
 		filePath := ""
-		var file []byte
-		var err error
-		switch name {
+		switch urlPath {
 		case "/favicon.ico":
-			c.Header("content-type", "image/vnd.microsoft.icon")
-			filePath = UIRootFilePath + name
-		case "/logo192.png":
-			filePath = UIRootFilePath + name
-		case "/logo512.png":
-			filePath = UIRootFilePath + name
+			branding, err := a.siteInfoService.GetSiteBranding(c)
+			if err != nil {
+				log.Error(err)
+			}
+			if branding.Favicon != "" {
+				c.String(http.StatusOK, htmltext.GetPicByUrl(branding.Favicon))
+				return
+			} else {
+				c.Header("content-type", "image/vnd.microsoft.icon")
+				filePath = UIRootFilePath + urlPath
+
+			}
+		case "/manifest.json":
+			// filePath = UIRootFilePath + urlPath
+			a.siteInfoController.GetManifestJson(c)
+			return
+		case "/install":
+			// if answer is running by run command user can not access install page.
+			c.Redirect(http.StatusFound, "/")
+			return
 		default:
 			filePath = UIIndexFilePath
 			c.Header("content-type", "text/html;charset=utf-8")
 		}
-		file, err = ui.Build.ReadFile(filePath)
+		file, err := ui.Build.ReadFile(filePath)
 		if err != nil {
 			log.Error(err)
 			c.Status(http.StatusNotFound)

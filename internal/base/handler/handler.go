@@ -4,10 +4,10 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/answerdev/answer/internal/base/constant"
+	"github.com/answerdev/answer/internal/base/reason"
+	"github.com/answerdev/answer/internal/base/validator"
 	"github.com/gin-gonic/gin"
-	"github.com/segmentfault/answer/internal/base/constant"
-	"github.com/segmentfault/answer/internal/base/reason"
-	"github.com/segmentfault/answer/internal/base/validator"
 	myErrors "github.com/segmentfault/pacman/errors"
 	"github.com/segmentfault/pacman/log"
 )
@@ -40,7 +40,6 @@ func HandleResponse(ctx *gin.Context, err error, data interface{}) {
 		respBody.Data = data
 	}
 	ctx.JSON(myErr.Code, respBody)
-	return
 }
 
 // BindAndCheck bind request and check
@@ -53,10 +52,24 @@ func BindAndCheck(ctx *gin.Context, data interface{}) bool {
 		return true
 	}
 
-	errField, err := validator.GetValidatorByLang(lang.Abbr()).Check(data)
+	errField, err := validator.GetValidatorByLang(lang).Check(data)
 	if err != nil {
 		HandleResponse(ctx, err, errField)
 		return true
 	}
 	return false
+}
+
+// BindAndCheckReturnErr bind request and check
+func BindAndCheckReturnErr(ctx *gin.Context, data interface{}) (errFields []*validator.FormErrorField) {
+	lang := GetLang(ctx)
+	if err := ctx.ShouldBind(data); err != nil {
+		log.Errorf("http_handle BindAndCheck fail, %s", err.Error())
+		HandleResponse(ctx, myErrors.New(http.StatusBadRequest, reason.RequestFormatError), nil)
+		ctx.Abort()
+		return nil
+	}
+
+	errFields, _ = validator.GetValidatorByLang(lang).Check(data)
+	return errFields
 }

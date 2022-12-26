@@ -3,20 +3,20 @@ package service
 import (
 	"context"
 
-	"github.com/segmentfault/answer/internal/base/pager"
-	"github.com/segmentfault/answer/internal/entity"
-	"github.com/segmentfault/answer/internal/service/activity_type"
-	"github.com/segmentfault/answer/internal/service/comment_common"
-	"github.com/segmentfault/answer/internal/service/config"
-	"github.com/segmentfault/answer/internal/service/object_info"
-	"github.com/segmentfault/answer/pkg/obj"
+	"github.com/answerdev/answer/internal/base/pager"
+	"github.com/answerdev/answer/internal/entity"
+	"github.com/answerdev/answer/internal/service/activity_type"
+	"github.com/answerdev/answer/internal/service/comment_common"
+	"github.com/answerdev/answer/internal/service/config"
+	"github.com/answerdev/answer/internal/service/object_info"
+	"github.com/answerdev/answer/pkg/obj"
 	"github.com/segmentfault/pacman/log"
 
-	"github.com/segmentfault/answer/internal/base/reason"
-	"github.com/segmentfault/answer/internal/schema"
-	answercommon "github.com/segmentfault/answer/internal/service/answer_common"
-	questioncommon "github.com/segmentfault/answer/internal/service/question_common"
-	"github.com/segmentfault/answer/internal/service/unique"
+	"github.com/answerdev/answer/internal/base/reason"
+	"github.com/answerdev/answer/internal/schema"
+	answercommon "github.com/answerdev/answer/internal/service/answer_common"
+	questioncommon "github.com/answerdev/answer/internal/service/question_common"
+	"github.com/answerdev/answer/internal/service/unique"
 	"github.com/segmentfault/pacman/errors"
 )
 
@@ -67,7 +67,7 @@ func (as *VoteService) VoteUp(ctx context.Context, dto *schema.VoteDTO) (voteRes
 
 	var objectUserID string
 
-	objectUserID, err = as.GetObjectUserId(ctx, dto.ObjectID)
+	objectUserID, err = as.GetObjectUserID(ctx, dto.ObjectID)
 	if err != nil {
 		return
 	}
@@ -91,7 +91,7 @@ func (as *VoteService) VoteDown(ctx context.Context, dto *schema.VoteDTO) (voteR
 
 	var objectUserID string
 
-	objectUserID, err = as.GetObjectUserId(ctx, dto.ObjectID)
+	objectUserID, err = as.GetObjectUserID(ctx, dto.ObjectID)
 	if err != nil {
 		return
 	}
@@ -109,7 +109,7 @@ func (as *VoteService) VoteDown(ctx context.Context, dto *schema.VoteDTO) (voteR
 	}
 }
 
-func (vs *VoteService) GetObjectUserId(ctx context.Context, objectID string) (userID string, err error) {
+func (vs *VoteService) GetObjectUserID(ctx context.Context, objectID string) (userID string, err error) {
 	var objectKey string
 	objectKey, err = obj.GetObjectTypeStrByObjectID(objectID)
 
@@ -162,7 +162,8 @@ func (vs *VoteService) ListUserVotes(ctx context.Context, req schema.GetVoteWith
 	)
 
 	for _, typeKey := range typeKeys {
-		t, err := vs.configRepo.GetConfigType(typeKey)
+		var t int
+		t, err = vs.configRepo.GetConfigType(typeKey)
 		if err != nil {
 			continue
 		}
@@ -175,9 +176,11 @@ func (vs *VoteService) ListUserVotes(ctx context.Context, req schema.GetVoteWith
 	}
 
 	for _, voteInfo := range voteList {
-		objInfo, err := vs.objectService.GetInfo(ctx, voteInfo.ObjectID)
+		var objInfo *schema.SimpleObjectInfo
+		objInfo, err = vs.objectService.GetInfo(ctx, voteInfo.ObjectID)
 		if err != nil {
 			log.Error(err)
+			continue
 		}
 
 		item := schema.GetVoteWithPageResp{
