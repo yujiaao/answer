@@ -1,12 +1,16 @@
 package controller
 
 import (
+	"fmt"
+
 	"github.com/answerdev/answer/internal/base/handler"
 	"github.com/answerdev/answer/internal/base/middleware"
 	"github.com/answerdev/answer/internal/base/reason"
+	"github.com/answerdev/answer/internal/base/translator"
 	"github.com/answerdev/answer/internal/schema"
 	"github.com/answerdev/answer/internal/service"
 	"github.com/answerdev/answer/internal/service/rank"
+	"github.com/answerdev/answer/pkg/uid"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
 	"github.com/segmentfault/pacman/errors"
@@ -38,14 +42,18 @@ func (vc *VoteController) VoteUp(ctx *gin.Context) {
 	if handler.BindAndCheck(ctx, req) {
 		return
 	}
+	req.ObjectID = uid.DeShortID(req.ObjectID)
 	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
-	can, err := vc.rankService.CheckVotePermission(ctx, req.UserID, req.ObjectID, true)
+	can, rank, err := vc.rankService.CheckVotePermission(ctx, req.UserID, req.ObjectID, true)
 	if err != nil {
 		handler.HandleResponse(ctx, err, nil)
 		return
 	}
 	if !can {
-		handler.HandleResponse(ctx, errors.Forbidden(reason.RankFailToMeetTheCondition), nil)
+		lang := handler.GetLang(ctx)
+		msg := translator.Tr(lang, reason.VoteRankFailToMeetTheCondition)
+		msg = handler.MsgWithParameter(msg, map[string]string{"rank": fmt.Sprintf("%d", rank)})
+		handler.HandleResponse(ctx, errors.Forbidden(reason.VoteRankFailToMeetTheCondition).WithMsg(msg), nil)
 		return
 	}
 
@@ -74,15 +82,18 @@ func (vc *VoteController) VoteDown(ctx *gin.Context) {
 	if handler.BindAndCheck(ctx, req) {
 		return
 	}
-
+	req.ObjectID = uid.DeShortID(req.ObjectID)
 	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
-	can, err := vc.rankService.CheckVotePermission(ctx, req.UserID, req.ObjectID, false)
+	can, rank, err := vc.rankService.CheckVotePermission(ctx, req.UserID, req.ObjectID, false)
 	if err != nil {
 		handler.HandleResponse(ctx, err, nil)
 		return
 	}
 	if !can {
-		handler.HandleResponse(ctx, errors.Forbidden(reason.RankFailToMeetTheCondition), nil)
+		lang := handler.GetLang(ctx)
+		msg := translator.Tr(lang, reason.VoteRankFailToMeetTheCondition)
+		msg = handler.MsgWithParameter(msg, map[string]string{"rank": fmt.Sprintf("%d", rank)})
+		handler.HandleResponse(ctx, errors.Forbidden(reason.VoteRankFailToMeetTheCondition).WithMsg(msg), nil)
 		return
 	}
 

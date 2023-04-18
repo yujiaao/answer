@@ -1,15 +1,25 @@
 import { FC, useEffect, useState } from 'react';
 import { Container, Row, Col, Button } from 'react-bootstrap';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import {
+  useParams,
+  Link,
+  useNavigate,
+  useSearchParams,
+} from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 import { usePageTags } from '@/hooks';
 import * as Type from '@/common/interface';
 import { FollowingTags } from '@/components';
-import { useTagInfo, useFollow, useQuerySynonymsTags } from '@/services';
+import {
+  useTagInfo,
+  useFollow,
+  useQuerySynonymsTags,
+  useQuestionList,
+} from '@/services';
 import QuestionList from '@/components/QuestionList';
 import HotQuestions from '@/components/HotQuestions';
-import { escapeRemove } from '@/utils';
+import { escapeRemove, guard } from '@/utils';
 import { pathFactory } from '@/router/pathFactory';
 
 const Questions: FC = () => {
@@ -17,17 +27,37 @@ const Questions: FC = () => {
   const navigate = useNavigate();
   const routeParams = useParams();
   const curTagName = routeParams.tagName || '';
+  const [urlSearchParams] = useSearchParams();
+  const curOrder = urlSearchParams.get('order') || 'active';
+  const curPage = Number(urlSearchParams.get('page')) || 1;
+  const reqParams: Type.QueryQuestionsReq = {
+    page_size: 20,
+    page: curPage,
+    order: curOrder as Type.QuestionOrderBy,
+    tag: routeParams.tagName,
+  };
   const [tagInfo, setTagInfo] = useState<any>({});
   const [tagFollow, setTagFollow] = useState<Type.FollowParams>();
-  const { data: tagResp } = useTagInfo({ name: curTagName });
+  const { data: tagResp, isLoading } = useTagInfo({ name: curTagName });
+  const { data: listData, isLoading: listLoading } = useQuestionList(reqParams);
   const { data: followResp } = useFollow(tagFollow);
   const { data: synonymsRes } = useQuerySynonymsTags(tagInfo?.tag_id);
   const toggleFollow = () => {
+    if (!guard.tryNormalLogged(true)) {
+      return;
+    }
     setTagFollow({
       is_cancel: tagInfo.is_follower,
       object_id: tagInfo.tag_id,
     });
   };
+
+  useEffect(() => {
+    if (!listLoading) {
+      window.scrollTo(0, 0);
+    }
+  }, [listLoading]);
+
   useEffect(() => {
     if (tagResp) {
       const info = { ...tagResp };
@@ -73,38 +103,53 @@ const Questions: FC = () => {
     <Container className="pt-4 mt-2 mb-5">
       <Row className="justify-content-center">
         <Col xxl={7} lg={8} sm={12}>
-          <div className="tag-box mb-5">
-            <h3 className="mb-3">
-              <Link
-                to={pathFactory.tagLanding(tagInfo.slug_name)}
-                replace
-                className="link-dark">
-                {tagInfo.display_name}
-              </Link>
-            </h3>
+          {isLoading || listLoading ? (
+            <div className="tag-box mb-5 placeholder-glow">
+              <div className="mb-3 h3 placeholder" style={{ width: '120px' }} />
+              <p
+                className="placeholder w-100 d-block align-top"
+                style={{ height: '24px' }}
+              />
 
-            <p className="text-break">
-              {escapeRemove(tagInfo.excerpt) || t('no_desc')}
-              <Link to={pathFactory.tagInfo(curTagName)} className="ms-1">
-                [{t('more')}]
-              </Link>
-            </p>
-
-            <div className="box-ft">
-              {tagInfo.is_follower ? (
-                <Button variant="primary" onClick={() => toggleFollow()}>
-                  {t('button_following')}
-                </Button>
-              ) : (
-                <Button
-                  variant="outline-primary"
-                  onClick={() => toggleFollow()}>
-                  {t('button_follow')}
-                </Button>
-              )}
+              <div
+                className="placeholder d-block align-top"
+                style={{ height: '38px', width: '100px' }}
+              />
             </div>
-          </div>
-          <QuestionList source="tag" />
+          ) : (
+            <div className="tag-box mb-5">
+              <h3 className="mb-3">
+                <Link
+                  to={pathFactory.tagLanding(tagInfo.slug_name)}
+                  replace
+                  className="link-dark">
+                  {tagInfo.display_name}
+                </Link>
+              </h3>
+
+              <p className="text-break">
+                {escapeRemove(tagInfo.excerpt) || t('no_desc')}
+                <Link to={pathFactory.tagInfo(curTagName)} className="ms-1">
+                  [{t('more')}]
+                </Link>
+              </p>
+
+              <div className="box-ft">
+                {tagInfo.is_follower ? (
+                  <Button variant="primary" onClick={() => toggleFollow()}>
+                    {t('button_following')}
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline-primary"
+                    onClick={() => toggleFollow()}>
+                    {t('button_follow')}
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+          <QuestionList source="tag" data={listData} isLoading={listLoading} />
         </Col>
         <Col xxl={3} lg={4} sm={12} className="mt-5 mt-lg-0">
           <FollowingTags />

@@ -19,9 +19,14 @@ const Index: FC = () => {
         type: 'number',
         title: t('permalink.label'),
         description: t('permalink.text'),
-        enum: [1, 2],
-        enumNames: ['/questions/123/post-title', '/questions/123'],
-        default: 1,
+        enum: [4, 3, 2, 1],
+        enumNames: [
+          '/questions/D1D1',
+          '/questions/D1D1/post-title',
+          '/questions/10010000000000001',
+          '/questions/10010000000000001/post-title',
+        ],
+        default: 4,
       },
       robots: {
         type: 'string',
@@ -38,6 +43,7 @@ const Index: FC = () => {
       'ui:widget': 'textarea',
       'ui:options': {
         rows: 10,
+        className: 'font-monospace',
       },
     },
   };
@@ -73,7 +79,7 @@ const Index: FC = () => {
         const formMeta = { ...formData };
         formMeta.robots.value = setting.robots;
         formMeta.permalink.value = setting.permalink;
-        if (formMeta.permalink.value !== 1 && formMeta.permalink.value !== 2) {
+        if (!/[1234]/.test(formMeta.permalink.value)) {
           formMeta.permalink.value = 1;
         }
         setFormData(formMeta);

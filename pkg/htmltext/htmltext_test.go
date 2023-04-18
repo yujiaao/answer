@@ -50,6 +50,10 @@ func TestFetchExcerpt(t *testing.T) {
 	expected = "hello你好😂..."
 	text = FetchExcerpt("<p>hello你好😂world</p>", "...", 8)
 	assert.Equal(t, expected, text)
+
+	expected = "hello你好"
+	text = FetchExcerpt("<p>hello你好</p>", "...", 8)
+	assert.Equal(t, expected, text)
 }
 
 func TestUrlTitle(t *testing.T) {
@@ -60,6 +64,5 @@ func TestUrlTitle(t *testing.T) {
 	for _, title := range list {
 		formatTitle := UrlTitle(title)
 		spew.Dump(formatTitle)
-
 	}
 }

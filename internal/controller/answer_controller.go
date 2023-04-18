@@ -11,6 +11,7 @@ import (
 	"github.com/answerdev/answer/internal/service/dashboard"
 	"github.com/answerdev/answer/internal/service/permission"
 	"github.com/answerdev/answer/internal/service/rank"
+	"github.com/answerdev/answer/pkg/uid"
 	"github.com/gin-gonic/gin"
 	"github.com/segmentfault/pacman/errors"
 )
@@ -49,15 +50,18 @@ func (ac *AnswerController) RemoveAnswer(ctx *gin.Context) {
 	if handler.BindAndCheck(ctx, req) {
 		return
 	}
-
+	req.ID = uid.DeShortID(req.ID)
 	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
-	req.IsAdmin = middleware.GetIsAdminFromContext(ctx)
-	can, err := ac.rankService.CheckOperationPermission(ctx, req.UserID, permission.AnswerDelete, req.ID)
+	objectOwner := ac.rankService.CheckOperationObjectOwner(ctx, req.UserID, req.ID)
+	canList, err := ac.rankService.CheckOperationPermissions(ctx, req.UserID, []string{
+		permission.AnswerDelete,
+	})
 	if err != nil {
 		handler.HandleResponse(ctx, err, nil)
 		return
 	}
-	if !can {
+	req.CanDelete = canList[0] || objectOwner
+	if !req.CanDelete {
 		handler.HandleResponse(ctx, errors.Forbidden(reason.RankFailToMeetTheCondition), nil)
 		return
 	}
@@ -77,6 +81,7 @@ func (ac *AnswerController) RemoveAnswer(ctx *gin.Context) {
 // @Success 200 {string} string ""
 func (ac *AnswerController) Get(ctx *gin.Context) {
 	id := ctx.Query("id")
+	id = uid.DeShortID(id)
 	userID := middleware.GetLoginUserIDFromContext(ctx)
 
 	info, questionInfo, has, err := ac.answerService.Get(ctx, id, userID)
@@ -109,6 +114,7 @@ func (ac *AnswerController) Add(ctx *gin.Context) {
 	if handler.BindAndCheck(ctx, req) {
 		return
 	}
+	req.QuestionID = uid.DeShortID(req.QuestionID)
 	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
 
 	can, err := ac.rankService.CheckOperationPermission(ctx, req.UserID, permission.AnswerAdd, "")
@@ -132,10 +138,27 @@ func (ac *AnswerController) Add(ctx *gin.Context) {
 		return
 	}
 	if !has {
-		// todo !has
 		handler.HandleResponse(ctx, nil, nil)
 		return
 	}
+
+	canList, err := ac.rankService.CheckOperationPermissions(ctx, req.UserID, []string{
+		permission.AnswerEdit,
+		permission.AnswerDelete,
+	})
+	if err != nil {
+		handler.HandleResponse(ctx, err, nil)
+		return
+	}
+
+	objectOwner := ac.rankService.CheckOperationObjectOwner(ctx, req.UserID, info.ID)
+	req.CanEdit = canList[0] || objectOwner
+	req.CanDelete = canList[1] || objectOwner
+	if !can {
+		handler.HandleResponse(ctx, errors.Forbidden(reason.RankFailToMeetTheCondition), nil)
+		return
+	}
+	info.MemberActions = permission.GetAnswerPermission(ctx, req.UserID, info.UserID, req.CanEdit, req.CanDelete)
 	handler.HandleResponse(ctx, nil, gin.H{
 		"info":     info,
 		"question": questionInfo,
@@ -158,6 +181,7 @@ func (ac *AnswerController) Update(ctx *gin.Context) {
 		return
 	}
 	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
+	req.QuestionID = uid.DeShortID(req.QuestionID)
 
 	canList, err := ac.rankService.CheckOperationPermissions(ctx, req.UserID, []string{
 		permission.AnswerEdit,
@@ -209,6 +233,7 @@ func (ac *AnswerController) AnswerList(ctx *gin.Context) {
 	}
 
 	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
+	req.QuestionID = uid.DeShortID(req.QuestionID)
 
 	canList, err := ac.rankService.CheckOperationPermissions(ctx, req.UserID, []string{
 		permission.AnswerEdit,
@@ -249,6 +274,8 @@ func (ac *AnswerController) Accepted(ctx *gin.Context) {
 	}
 
 	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
+	req.AnswerID = uid.DeShortID(req.AnswerID)
+	req.QuestionID = uid.DeShortID(req.QuestionID)
 	can, err := ac.rankService.CheckOperationPermission(ctx, req.UserID, permission.AnswerAccept, req.QuestionID)
 	if err != nil {
 		handler.HandleResponse(ctx, err, nil)
@@ -278,6 +305,7 @@ func (ac *AnswerController) AdminSetAnswerStatus(ctx *gin.Context) {
 	if handler.BindAndCheck(ctx, req) {
 		return
 	}
+	req.AnswerID = uid.DeShortID(req.AnswerID)
 
 	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
 

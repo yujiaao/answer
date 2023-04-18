@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import classNames from 'classnames';
 
 import { usePageTags } from '@/hooks';
-import { Tag, TagSelector, FormatTime, Modal } from '@/components';
+import { Tag, TagSelector, FormatTime, Modal, htmlRender } from '@/components';
 import {
   useTagInfo,
   useQuerySynonymsTags,
@@ -44,6 +44,15 @@ const TagIntroduction = () => {
       });
     }
   }, [locationState]);
+
+  useEffect(() => {
+    const fmt = document.querySelector('.content.fmt') as HTMLElement;
+    if (!fmt) {
+      return;
+    }
+    htmlRender(fmt);
+  }, [tagInfo?.parsed_text]);
+
   if (!tagInfo) {
     return null;
   }
@@ -86,17 +95,31 @@ const TagIntroduction = () => {
     if (synonymsData?.synonyms && synonymsData.synonyms.length > 0) {
       Modal.confirm({
         title: t('delete.title'),
-        content: t('delete.content2'),
+        content: t('delete.tip_with_synonyms'),
         showConfirm: false,
         cancelText: t('delete.close'),
       });
       return;
     }
+    if (tagInfo.question_count > 0) {
+      Modal.confirm({
+        title: t('delete.title'),
+        content: t('delete.tip_with_posts'),
+        showConfirm: false,
+        cancelText: t('delete.close'),
+      });
+      return;
+    }
+
     Modal.confirm({
       title: t('delete.title'),
-      content: t('delete.content'),
+      content: t('delete.tip'),
+      confirmText: t('delete', { keyPrefix: 'btns' }),
+      confirmBtnVariant: 'danger',
       onConfirm: () => {
-        deleteTag(tagInfo.tag_id);
+        deleteTag(tagInfo.tag_id).then(() => {
+          navigate('/tags', { replace: true });
+        });
       },
     });
   };
@@ -131,7 +154,7 @@ const TagIntroduction = () => {
           </div>
 
           <div
-            className="content text-break"
+            className="content text-break fmt"
             dangerouslySetInnerHTML={{ __html: tagInfo?.parsed_text }}
           />
           <div className="mt-4">
@@ -192,7 +215,8 @@ const TagIntroduction = () => {
                       data={{
                         slug_name: tagName || '',
                         main_tag_slug_name: '',
-                        display_name: '',
+                        display_name:
+                          tagInfo?.display_name || tagInfo?.slug_name || '',
                         recommend: false,
                         reserved: false,
                       }}

@@ -8,6 +8,7 @@ import (
 	"github.com/google/wire"
 	myTran "github.com/segmentfault/pacman/contrib/i18n"
 	"github.com/segmentfault/pacman/i18n"
+	"github.com/segmentfault/pacman/log"
 	"gopkg.in/yaml.v3"
 )
 
@@ -19,6 +20,8 @@ var GlobalTrans i18n.Translator
 type LangOption struct {
 	Label string `json:"label"`
 	Value string `json:"value"`
+	// Translation completion percentage
+	Progress int `json:"progress"`
 }
 
 // DefaultLangOption default language option. If user config the language is default, the language option is admin choose.
@@ -46,6 +49,7 @@ func NewTranslator(c *I18n) (tr i18n.Translator, err error) {
 		if filepath.Ext(file.Name()) != ".yaml" && file.Name() != "i18n.yaml" {
 			continue
 		}
+		log.Debugf("try to read file: %s", file.Name())
 		buf, err := os.ReadFile(filepath.Join(c.BundleDir, file.Name()))
 		if err != nil {
 			return nil, fmt.Errorf("read file failed: %s %s", file.Name(), err)
@@ -68,12 +72,14 @@ func NewTranslator(c *I18n) (tr i18n.Translator, err error) {
 
 		content, err := yaml.Marshal(translation)
 		if err != nil {
-			return nil, fmt.Errorf("marshal translation content failed: %s %s", file.Name(), err)
+			log.Debugf("marshal translation content failed: %s %s", file.Name(), err)
+			continue
 		}
 
 		// add translator use backend translation
 		if err = myTran.AddTranslator(content, file.Name()); err != nil {
-			return nil, fmt.Errorf("add translator failed: %s %s", file.Name(), err)
+			log.Debugf("add translator failed: %s %s", file.Name(), err)
+			continue
 		}
 	}
 	GlobalTrans = myTran.GlobalTrans
@@ -91,6 +97,11 @@ func NewTranslator(c *I18n) (tr i18n.Translator, err error) {
 		return nil, fmt.Errorf("i18n file parsing failed: %s", err)
 	}
 	LanguageOptions = s.LangOption
+	for _, option := range LanguageOptions {
+		if option.Progress != 100 {
+			option.Label = fmt.Sprintf("%s (%d%%)", option.Label, option.Progress)
+		}
+	}
 	return GlobalTrans, err
 }
 
@@ -105,4 +116,13 @@ func CheckLanguageIsValid(lang string) bool {
 		}
 	}
 	return false
+}
+
+// Tr use language to translate data. If this language translation is not available, return default english translation.
+func Tr(lang i18n.Language, data string) string {
+	translation := GlobalTrans.Tr(lang, data)
+	if translation == data {
+		return GlobalTrans.Tr(i18n.DefaultLanguage, data)
+	}
+	return translation
 }

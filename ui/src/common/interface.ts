@@ -24,13 +24,13 @@ export interface ReportParams {
 export interface TagBase {
   display_name: string;
   slug_name: string;
-  recommend: boolean;
-  reserved: boolean;
+  original_text?: string;
+  recommend?: boolean;
+  reserved?: boolean;
 }
 
 export interface Tag extends TagBase {
   main_tag_slug_name?: string;
-  original_text?: string;
   parsed_text?: string;
 }
 
@@ -56,8 +56,11 @@ export interface QuestionParams {
   title: string;
   url_title?: string;
   content: string;
-  html: string;
   tags: Tag[];
+}
+
+export interface QuestionWithAnswer extends QuestionParams {
+  answer_content: string;
 }
 
 export interface ListResult<T = any> {
@@ -101,7 +104,13 @@ export interface ModifyUserReq {
   website: string;
 }
 
+enum RoleId {
+  User = 1,
+  Admin = 2,
+  Moderator = 3,
+}
 export interface UserInfoBase {
+  id?: string;
   avatar: any;
   username: string;
   display_name: string;
@@ -113,7 +122,7 @@ export interface UserInfoBase {
    */
   status?: string;
   /** roles */
-  is_admin?: boolean;
+  role_id: RoleId;
 }
 
 export interface UserInfoRes extends UserInfoBase {
@@ -126,7 +135,6 @@ export interface UserInfoRes extends UserInfoBase {
    */
   mail_status: number;
   language: string;
-  is_admin: boolean;
   e_mail?: string;
   [prop: string]: any;
 }
@@ -206,7 +214,7 @@ export interface AnswerItem {
 
 export interface PostAnswerReq {
   content: string;
-  html: string;
+  html?: string;
   question_id: string;
 }
 
@@ -296,6 +304,7 @@ export interface HelmetUpdate extends Omit<HelmetBase, 'pageTitle'> {
 export interface AdminSettingsInterface {
   language: string;
   time_zone?: string;
+  default_avatar?: string;
 }
 
 export interface AdminSettingsSmtp {
@@ -318,6 +327,8 @@ export interface SiteSettings {
   custom_css_html: AdminSettingsCustom;
   theme: AdminSettingsTheme;
   site_seo: AdminSettingsSeo;
+  version: string;
+  revision: string;
 }
 
 export interface AdminSettingBranding {

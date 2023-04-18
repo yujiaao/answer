@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -11,14 +12,15 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/answerdev/answer/internal/base/handler"
 	"github.com/answerdev/answer/internal/base/reason"
 	"github.com/answerdev/answer/internal/service/service_config"
 	"github.com/answerdev/answer/internal/service/siteinfo_common"
+	"github.com/answerdev/answer/pkg/checker"
 	"github.com/answerdev/answer/pkg/dir"
 	"github.com/answerdev/answer/pkg/uid"
 	"github.com/disintegration/imaging"
 	"github.com/gin-gonic/gin"
+	exifremove "github.com/scottleedavis/go-exif-remove"
 	"github.com/segmentfault/pacman/errors"
 )
 
@@ -40,10 +42,10 @@ var (
 		".jpg":  imaging.JPEG,
 		".jpeg": imaging.JPEG,
 		".png":  imaging.PNG,
-		".gif":  imaging.GIF,
-		".tif":  imaging.TIFF,
-		".tiff": imaging.TIFF,
-		".bmp":  imaging.BMP,
+		//".gif":  imaging.GIF,
+		//".tif":  imaging.TIFF,
+		//".tiff": imaging.TIFF,
+		//".bmp":  imaging.BMP,
 	}
 )
 
@@ -74,13 +76,11 @@ func (us *UploaderService) UploadAvatarFile(ctx *gin.Context) (url string, err e
 	ctx.Request.Body = http.MaxBytesReader(ctx.Writer, ctx.Request.Body, 5*1024*1024)
 	_, file, err := ctx.Request.FormFile("file")
 	if err != nil {
-		handler.HandleResponse(ctx, errors.BadRequest(reason.RequestFormatError), nil)
-		return
+		return "", errors.BadRequest(reason.RequestFormatError).WithError(err)
 	}
 	fileExt := strings.ToLower(path.Ext(file.Filename))
 	if _, ok := FormatExts[fileExt]; !ok {
-		handler.HandleResponse(ctx, errors.BadRequest(reason.RequestFormatError), nil)
-		return
+		return "", errors.BadRequest(reason.RequestFormatError).WithError(err)
 	}
 
 	newFilename := fmt.Sprintf("%s%s", uid.IDStr12(), fileExt)
@@ -147,13 +147,11 @@ func (us *UploaderService) UploadPostFile(ctx *gin.Context) (
 	ctx.Request.Body = http.MaxBytesReader(ctx.Writer, ctx.Request.Body, 10*1024*1024)
 	_, file, err := ctx.Request.FormFile("file")
 	if err != nil {
-		handler.HandleResponse(ctx, errors.BadRequest(reason.RequestFormatError), nil)
-		return
+		return "", errors.BadRequest(reason.RequestFormatError).WithError(err)
 	}
 	fileExt := strings.ToLower(path.Ext(file.Filename))
 	if _, ok := FormatExts[fileExt]; !ok {
-		handler.HandleResponse(ctx, errors.BadRequest(reason.RequestFormatError), nil)
-		return
+		return "", errors.BadRequest(reason.RequestFormatError).WithError(err)
 	}
 
 	newFilename := fmt.Sprintf("%s%s", uid.IDStr12(), fileExt)
@@ -167,14 +165,12 @@ func (us *UploaderService) UploadBrandingFile(ctx *gin.Context) (
 	ctx.Request.Body = http.MaxBytesReader(ctx.Writer, ctx.Request.Body, 10*1024*1024)
 	_, file, err := ctx.Request.FormFile("file")
 	if err != nil {
-		handler.HandleResponse(ctx, errors.BadRequest(reason.RequestFormatError), nil)
-		return
+		return "", errors.BadRequest(reason.RequestFormatError).WithError(err)
 	}
 	fileExt := strings.ToLower(path.Ext(file.Filename))
 	_, ok := FormatExts[fileExt]
 	if !ok && fileExt != ".ico" {
-		handler.HandleResponse(ctx, errors.BadRequest(reason.RequestFormatError), nil)
-		return
+		return "", errors.BadRequest(reason.RequestFormatError).WithError(err)
 	}
 
 	newFilename := fmt.Sprintf("%s%s", uid.IDStr12(), fileExt)
@@ -192,6 +188,34 @@ func (us *UploaderService) uploadFile(ctx *gin.Context, file *multipart.FileHead
 	if err := ctx.SaveUploadedFile(file, filePath); err != nil {
 		return "", errors.InternalServer(reason.UnknownError).WithError(err).WithStack()
 	}
+
+	src, err := file.Open()
+	if err != nil {
+		return "", errors.InternalServer(reason.UnknownError).WithError(err).WithStack()
+	}
+	defer src.Close()
+	Dexif(filePath, filePath)
+
+	if !checker.IsSupportedImageFile(src, filepath.Ext(fileSubPath)) {
+		return "", errors.BadRequest(reason.UploadFileUnsupportedFileFormat)
+	}
+
 	url = fmt.Sprintf("%s/uploads/%s", siteGeneral.SiteUrl, fileSubPath)
 	return url, nil
+}
+
+func Dexif(filepath string, destpath string) error {
+	img, err := ioutil.ReadFile(filepath)
+	if err != nil {
+		return err
+	}
+	noExifBytes, err := exifremove.Remove(img)
+	if err != nil {
+		return err
+	}
+	err = os.WriteFile(destpath, noExifBytes, 0644)
+	if err != nil {
+		return err
+	}
+	return nil
 }

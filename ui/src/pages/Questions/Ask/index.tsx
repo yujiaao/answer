@@ -1,23 +1,27 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Container, Row, Col, Form, Button, Card } from 'react-bootstrap';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 import dayjs from 'dayjs';
 import classNames from 'classnames';
+import { isEqual } from 'lodash';
 
-import { usePageTags } from '@/hooks';
+import { usePageTags, usePromptWithUnload } from '@/hooks';
 import { Editor, EditorRef, TagSelector } from '@/components';
 import type * as Type from '@/common/interface';
+import { DRAFT_QUESTION_STORAGE_KEY } from '@/common/constants';
 import {
   saveQuestion,
   questionDetail,
   modifyQuestion,
   useQueryRevisions,
-  postAnswer,
+  // postAnswer,
   useQueryQuestionByTitle,
+  getTagsBySlugName,
+  saveQuestionWidthAnaser,
 } from '@/services';
-import { handleFormError } from '@/utils';
+import { handleFormError, SaveDraft, storageExpires } from '@/utils';
 import { pathFactory } from '@/router/pathFactory';
 
 import SearchQuestion from './components/SearchQuestion';
@@ -26,9 +30,11 @@ interface FormDataItem {
   title: Type.FormValue<string>;
   tags: Type.FormValue<Type.Tag[]>;
   content: Type.FormValue<string>;
-  answer: Type.FormValue<string>;
+  answer_content: Type.FormValue<string>;
   edit_summary: Type.FormValue<string>;
 }
+
+const saveDraft = new SaveDraft({ type: 'question' });
 
 const Ask = () => {
   const initFormData = {
@@ -47,7 +53,7 @@ const Ask = () => {
       isInvalid: false,
       errorMsg: '',
     },
-    answer: {
+    answer_content: {
       value: '',
       isInvalid: false,
       errorMsg: '',
@@ -60,8 +66,11 @@ const Ask = () => {
   };
   const { t } = useTranslation('translation', { keyPrefix: 'ask' });
   const [formData, setFormData] = useState<FormDataItem>(initFormData);
+  const [immData, setImmData] = useState<FormDataItem>(initFormData);
   const [checked, setCheckState] = useState(false);
+  const [contentChanged, setContentChanged] = useState(false);
   const [focusType, setForceType] = useState('');
+  const [hasDraft, setHasDraft] = useState(false);
   const resetForm = () => {
     setFormData(initFormData);
     setCheckState(false);
@@ -77,16 +86,99 @@ const Ask = () => {
 
   const { qid } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const initQueryTags = () => {
+    const queryTags = searchParams.get('tags');
+    if (!queryTags) {
+      return;
+    }
+    getTagsBySlugName(queryTags).then((tags) => {
+      // eslint-disable-next-line
+      handleTagsChange(tags);
+    });
+  };
 
   const isEdit = qid !== undefined;
   const { data: similarQuestions = { list: [] } } = useQueryQuestionByTitle(
     isEdit ? '' : formData.title.value,
   );
+
+  const removeDraft = () => {
+    saveDraft.save.cancel();
+    saveDraft.remove();
+    setHasDraft(false);
+  };
+
   useEffect(() => {
-    if (!isEdit) {
-      resetForm();
+    if (!qid) {
+      initQueryTags();
+      const draft = storageExpires.get(DRAFT_QUESTION_STORAGE_KEY);
+      if (draft) {
+        formData.title.value = draft.title;
+        formData.content.value = draft.content;
+        formData.tags.value = draft.tags;
+        formData.answer_content.value = draft.answer_content;
+        setCheckState(Boolean(draft.answer_content));
+        setHasDraft(true);
+        setFormData({ ...formData });
+      } else {
+        resetForm();
+      }
     }
-  }, [isEdit]);
+
+    return () => {
+      resetForm();
+    };
+  }, [qid]);
+
+  useEffect(() => {
+    const { title, tags, content, answer_content } = formData;
+    const { title: editTitle, tags: editTags, content: editContent } = immData;
+
+    // edited
+    if (qid) {
+      if (
+        editTitle.value !== title.value ||
+        editContent.value !== content.value ||
+        !isEqual(
+          editTags.value.map((v) => v.slug_name),
+          tags.value.map((v) => v.slug_name),
+        )
+      ) {
+        setContentChanged(true);
+      } else {
+        setContentChanged(false);
+      }
+      return;
+    }
+    // write
+    if (
+      title.value ||
+      tags.value.length > 0 ||
+      content.value ||
+      answer_content.value
+    ) {
+      // save draft
+      saveDraft.save({
+        params: {
+          title: title.value,
+          tags: tags.value,
+          content: content.value,
+          answer_content: answer_content.value,
+        },
+        callback: () => setHasDraft(true),
+      });
+      setContentChanged(true);
+    } else {
+      removeDraft();
+      setContentChanged(false);
+    }
+  }, [formData]);
+
+  usePromptWithUnload({
+    when: contentChanged,
+  });
+
   const { data: revisions = [] } = useQueryRevisions(qid);
 
   useEffect(() => {
@@ -103,6 +195,7 @@ const Ask = () => {
           original_text: '',
         };
       });
+      setImmData({ ...formData });
       setFormData({ ...formData });
     });
   }, [qid]);
@@ -110,25 +203,25 @@ const Ask = () => {
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
       ...formData,
-      title: { ...formData.title, value: e.currentTarget.value },
+      title: { ...formData.title, value: e.currentTarget.value, errorMsg: '' },
     });
   };
   const handleContentChange = (value: string) => {
     setFormData({
       ...formData,
-      content: { ...formData.content, value },
+      content: { ...formData.content, value, errorMsg: '' },
     });
   };
   const handleTagsChange = (value) =>
     setFormData({
       ...formData,
-      tags: { ...formData.tags, value },
+      tags: { ...formData.tags, value, errorMsg: '' },
     });
 
   const handleAnswerChange = (value: string) =>
     setFormData({
       ...formData,
-      answer: { ...formData.answer, value },
+      answer_content: { ...formData.answer_content, value, errorMsg: '' },
     });
 
   const handleSummaryChange = (evt: React.ChangeEvent<HTMLInputElement>) =>
@@ -140,94 +233,22 @@ const Ask = () => {
       },
     });
 
-  const checkValidated = (): boolean => {
-    const bol = true;
-    const { title, content, tags, answer } = formData;
-    if (!title.value) {
-      // bol = false;
-      // formData.title = {
-      //   value: '',
-      //   isInvalid: true,
-      //   errorMsg: t('form.fields.title.msg.empty'),
-      // };
-    } else if (Array.from(title.value).length > 150) {
-      // bol = false;
-      // formData.title = {
-      //   value: title.value,
-      //   isInvalid: true,
-      //   errorMsg: t('form.fields.title.msg.range'),
-      // };
-    } else {
-      formData.title = {
-        value: title.value,
-        isInvalid: false,
-        errorMsg: '',
-      };
+  const deleteDraft = () => {
+    const res = window.confirm(t('discard_confirm', { keyPrefix: 'draft' }));
+    if (res) {
+      removeDraft();
+      resetForm();
     }
-
-    if (!content.value) {
-      // bol = false;
-      // formData.content = {
-      //   value: '',
-      //   isInvalid: true,
-      //   errorMsg: t('form.fields.body.msg.empty'),
-      // };
-    } else {
-      formData.content = {
-        value: content.value,
-        isInvalid: false,
-        errorMsg: '',
-      };
-    }
-
-    if (tags.value.length === 0) {
-      // bol = false;
-      // formData.tags = {
-      //   value: [],
-      //   isInvalid: true,
-      //   errorMsg: t('form.fields.tags.msg.empty'),
-      // };
-    } else {
-      formData.tags = {
-        value: tags.value,
-        isInvalid: false,
-        errorMsg: '',
-      };
-    }
-    if (checked) {
-      if (!answer.value) {
-        // bol = false;
-        // formData.answer = {
-        //   value: '',
-        //   isInvalid: true,
-        //   errorMsg: t('form.fields.answer.msg.empty'),
-        // };
-      } else {
-        formData.answer = {
-          value: answer.value,
-          isInvalid: false,
-          errorMsg: '',
-        };
-      }
-    }
-
-    setFormData({
-      ...formData,
-    });
-    return bol;
   };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    setContentChanged(false);
     event.preventDefault();
     event.stopPropagation();
-    if (!checkValidated()) {
-      return;
-    }
 
     const params: Type.QuestionParams = {
       title: formData.title.value,
       content: formData.content.value,
-      html: editorRef.current.getHtml(),
       tags: formData.tags.value,
     };
     if (isEdit) {
@@ -248,34 +269,35 @@ const Ask = () => {
           }
         });
     } else {
-      const res = await saveQuestion(params).catch((err) => {
-        if (err.isError) {
-          const data = handleFormError(err, formData);
-          setFormData({ ...data });
-        }
-      });
+      let res;
+      if (checked) {
+        res = await saveQuestionWidthAnaser({
+          ...params,
+          answer_content: formData.answer_content.value,
+        }).catch((err) => {
+          if (err.isError) {
+            const data = handleFormError(err, formData);
+            setFormData({ ...data });
+          }
+        });
+      } else {
+        res = await saveQuestion(params).catch((err) => {
+          if (err.isError) {
+            const data = handleFormError(err, formData);
+            setFormData({ ...data });
+          }
+        });
+      }
 
-      const id = res?.id;
+      const id = res?.id || res?.question?.id;
       if (id) {
         if (checked) {
-          postAnswer({
-            question_id: id,
-            content: formData.answer.value,
-            html: editorRef2.current.getHtml(),
-          })
-            .then(() => {
-              navigate(pathFactory.questionLanding(id, params.url_title));
-            })
-            .catch((err) => {
-              if (err.isError) {
-                const data = handleFormError(err, formData);
-                setFormData({ ...data });
-              }
-            });
+          navigate(pathFactory.questionLanding(id, res?.question?.url_title));
         } else {
           navigate(pathFactory.questionLanding(id));
         }
       }
+      removeDraft();
     }
   };
   const backPage = () => {
@@ -286,6 +308,7 @@ const Ask = () => {
     const index = e.target.value;
     const revision = revisions[index];
     formData.content.value = revision.content.content;
+    setImmData({ ...formData });
     setFormData({ ...formData });
   };
   const bool = similarQuestions.length > 0 && !isEdit;
@@ -403,10 +426,17 @@ const Ask = () => {
                 <Button type="submit" className="me-2">
                   {isEdit ? t('btn_save_edits') : t('btn_post_question')}
                 </Button>
+                {isEdit && (
+                  <Button variant="link" onClick={backPage}>
+                    {t('cancel', { keyPrefix: 'btns' })}
+                  </Button>
+                )}
 
-                <Button variant="link" onClick={backPage}>
-                  {t('cancel', { keyPrefix: 'btns' })}
-                </Button>
+                {hasDraft && (
+                  <Button variant="link" onClick={deleteDraft}>
+                    {t('discard_draft', { keyPrefix: 'btns' })}
+                  </Button>
+                )}
               </div>
             )}
             {!isEdit && (
@@ -423,7 +453,7 @@ const Ask = () => {
                   <Form.Group controlId="answer" className="mt-4">
                     <Form.Label>{t('form.fields.answer.label')}</Form.Label>
                     <Editor
-                      value={formData.answer.value}
+                      value={formData.answer_content.value}
                       onChange={handleAnswerChange}
                       ref={editorRef2}
                       className={classNames(
@@ -438,22 +468,26 @@ const Ask = () => {
                       }}
                     />
                     <Form.Control
-                      value={formData.answer.value}
                       type="text"
-                      isInvalid={formData.answer.isInvalid}
+                      isInvalid={formData.answer_content.isInvalid}
                       hidden
                     />
                     <Form.Control.Feedback type="invalid">
-                      {formData.answer.errorMsg}
+                      {formData.answer_content.errorMsg}
                     </Form.Control.Feedback>
                   </Form.Group>
                 )}
               </>
             )}
             {checked && (
-              <Button type="submit" className="mt-3">
-                {t('post_question&answer')}
-              </Button>
+              <div className="mt-3">
+                <Button type="submit">{t('post_question&answer')}</Button>
+                {hasDraft && (
+                  <Button variant="link" className="ms-2" onClick={deleteDraft}>
+                    {t('discard_draft', { keyPrefix: 'btns' })}
+                  </Button>
+                )}
+              </div>
             )}
           </Form>
         </Col>

@@ -12,6 +12,7 @@ import (
 	"github.com/answerdev/answer/internal/base/reason"
 	"github.com/answerdev/answer/internal/entity"
 	"github.com/answerdev/answer/internal/schema"
+	"github.com/answerdev/answer/internal/service/activity"
 	"github.com/answerdev/answer/internal/service/auth"
 	"github.com/answerdev/answer/internal/service/role"
 	usercommon "github.com/answerdev/answer/internal/service/user_common"
@@ -38,6 +39,7 @@ type UserAdminService struct {
 	userRoleRelService *role.UserRoleRelService
 	authService        *auth.AuthService
 	userCommonService  *usercommon.UserCommon
+	userActivity       activity.UserActiveActivityRepo
 }
 
 // NewUserAdminService new user admin service
@@ -46,17 +48,23 @@ func NewUserAdminService(
 	userRoleRelService *role.UserRoleRelService,
 	authService *auth.AuthService,
 	userCommonService *usercommon.UserCommon,
+	userActivity activity.UserActiveActivityRepo,
 ) *UserAdminService {
 	return &UserAdminService{
 		userRepo:           userRepo,
 		userRoleRelService: userRoleRelService,
 		authService:        authService,
 		userCommonService:  userCommonService,
+		userActivity:       userActivity,
 	}
 }
 
 // UpdateUserStatus update user
 func (us *UserAdminService) UpdateUserStatus(ctx context.Context, req *schema.UpdateUserStatusReq) (err error) {
+	// Admin cannot modify their status
+	if req.UserID == req.LoginUserID {
+		return errors.BadRequest(reason.AdminCannotModifySelfStatus)
+	}
 	userInfo, exist, err := us.userRepo.GetUserInfo(ctx, req.UserID)
 	if err != nil {
 		return
@@ -83,7 +91,17 @@ func (us *UserAdminService) UpdateUserStatus(ctx context.Context, req *schema.Up
 		userInfo.Status = entity.UserStatusAvailable
 		userInfo.MailStatus = entity.EmailStatusAvailable
 	}
-	return us.userRepo.UpdateUserStatus(ctx, userInfo.ID, userInfo.Status, userInfo.MailStatus, userInfo.EMail)
+
+	err = us.userRepo.UpdateUserStatus(ctx, userInfo.ID, userInfo.Status, userInfo.MailStatus, userInfo.EMail)
+	if err != nil {
+		return err
+	}
+
+	// if user reputation is zero means this user is inactive, so try to activate this user.
+	if req.IsNormal() && userInfo.Rank == 0 {
+		return us.userActivity.UserActive(ctx, userInfo.ID)
+	}
+	return nil
 }
 
 // UpdateUserRole update user role
@@ -98,7 +116,7 @@ func (us *UserAdminService) UpdateUserRole(ctx context.Context, req *schema.Upda
 		return err
 	}
 
-	us.authService.RemoveAllUserTokens(ctx, req.UserID)
+	us.authService.RemoveUserTokens(ctx, req.UserID)
 	return
 }
 
@@ -139,6 +157,10 @@ func (us *UserAdminService) AddUser(ctx context.Context, req *schema.AddUserReq)
 
 // UpdateUserPassword update user password
 func (us *UserAdminService) UpdateUserPassword(ctx context.Context, req *schema.UpdateUserPasswordReq) (err error) {
+	// Users cannot modify their password
+	if req.UserID == req.LoginUserID {
+		return errors.BadRequest(reason.AdminCannotUpdateTheirPassword)
+	}
 	userInfo, exist, err := us.userRepo.GetUserInfo(ctx, req.UserID)
 	if err != nil {
 		return err
@@ -157,7 +179,7 @@ func (us *UserAdminService) UpdateUserPassword(ctx context.Context, req *schema.
 		return err
 	}
 	// logout this user
-	us.authService.RemoveAllUserTokens(ctx, req.UserID)
+	us.authService.RemoveUserTokens(ctx, req.UserID)
 	return
 }
 
@@ -219,7 +241,7 @@ func (us *UserAdminService) GetUserPage(ctx context.Context, req *schema.GetUser
 
 	resp := make([]*schema.GetUserPageResp, 0)
 	for _, u := range users {
-		avatar := schema.FormatAvatarInfo(u.Avatar)
+		avatar := schema.FormatAvatarInfo(u.Avatar, u.EMail)
 		t := &schema.GetUserPageResp{
 			UserID:      u.ID,
 			CreatedAt:   u.CreatedAt.Unix(),

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"math/rand"
-	"regexp"
 	"strings"
 
 	"github.com/Chain-Zhang/pinyin"
@@ -91,7 +90,7 @@ func (us *UserCommon) FormatUserBasicInfo(ctx context.Context, userInfo *entity.
 	userBasicInfo.Username = userInfo.Username
 	userBasicInfo.Rank = userInfo.Rank
 	userBasicInfo.DisplayName = userInfo.DisplayName
-	userBasicInfo.Avatar = schema.FormatAvatarInfo(userInfo.Avatar)
+	userBasicInfo.Avatar = schema.FormatAvatarInfo(userInfo.Avatar, userInfo.EMail)
 	userBasicInfo.Website = userInfo.Website
 	userBasicInfo.Location = userInfo.Location
 	userBasicInfo.IPInfo = userInfo.IPInfo
@@ -120,9 +119,11 @@ func (us *UserCommon) MakeUsername(ctx context.Context, displayName string) (use
 	username = strings.ToLower(username)
 	suffix := ""
 
-	re := regexp.MustCompile(`^[a-z0-9._-]{4,30}$`)
-	match := re.MatchString(username)
-	if !match {
+	if checker.IsInvalidUsername(username) {
+		return "", errors.BadRequest(reason.UsernameInvalid)
+	}
+
+	if checker.IsReservedUsername(username) {
 		return "", errors.BadRequest(reason.UsernameInvalid)
 	}
 

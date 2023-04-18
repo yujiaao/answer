@@ -1,7 +1,7 @@
-import { FC } from 'react';
+import { FC, useEffect, useLayoutEffect } from 'react';
 import { Helmet } from 'react-helmet-async';
 
-import { brandingStore, pageTagStore } from '@/stores';
+import { brandingStore, pageTagStore, siteInfoStore } from '@/stores';
 
 const doInsertCustomCSS = !document.querySelector('link[href*="custom.css"]');
 
@@ -10,6 +10,35 @@ const Index: FC = () => {
   const { pageTitle, keywords, description } = pageTagStore(
     (state) => state.items,
   );
+  const appVersion = siteInfoStore((_) => _.version);
+  const hashVersion = siteInfoStore((_) => _.revision);
+  const setAppGenerator = () => {
+    if (!appVersion) {
+      return;
+    }
+    const generatorMetaNode = document.querySelector('meta[name="generator"]');
+    if (generatorMetaNode) {
+      generatorMetaNode.setAttribute(
+        'content',
+        `Answer ${appVersion} - https://github.com/answerdev/answer version ${hashVersion}`,
+      );
+    }
+  };
+  const setDocTitle = () => {
+    try {
+      if (pageTitle) {
+        document.title = pageTitle;
+      }
+      // eslint-disable-next-line no-empty
+    } catch (ex) {}
+  };
+
+  useEffect(() => {
+    setAppGenerator();
+  }, [appVersion]);
+  useLayoutEffect(() => {
+    setDocTitle();
+  }, [pageTitle]);
   return (
     <Helmet>
       <link

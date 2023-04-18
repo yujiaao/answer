@@ -5,12 +5,16 @@ import { Link } from 'react-router-dom';
 
 import classNames from 'classnames';
 import { unionBy } from 'lodash';
-import { marked } from 'marked';
 
 import * as Types from '@/common/interface';
 import { Modal } from '@/components';
 import { usePageUsers, useReportModal } from '@/hooks';
-import { matchedUsers, parseUserInfo, scrollTop } from '@/utils';
+import {
+  matchedUsers,
+  parseUserInfo,
+  scrollToElementTop,
+  bgFadeOut,
+} from '@/utils';
 import { tryNormalLogged } from '@/utils/guard';
 import {
   useQueryComments,
@@ -27,7 +31,6 @@ import './index.scss';
 const Comment = ({ objectId, mode, commentId }) => {
   const pageUsers = usePageUsers();
   const [pageIndex, setPageIndex] = useState(0);
-  const [comments, setComments] = useState<any>([]);
   const [visibleComment, setVisibleComment] = useState(false);
   const pageSize = pageIndex === 0 ? 3 : 15;
   const { data, mutate } = useQueryComments({
@@ -36,6 +39,7 @@ const Comment = ({ objectId, mode, commentId }) => {
     page: pageIndex,
     page_size: pageSize,
   });
+  const [comments, setComments] = useState<any>([]);
 
   const reportModal = useReportModal();
 
@@ -43,7 +47,8 @@ const Comment = ({ objectId, mode, commentId }) => {
   const scrollCallback = useCallback((el, co) => {
     if (pageIndex === 0 && co.comment_id === commentId) {
       setTimeout(() => {
-        scrollTop(el);
+        scrollToElementTop(el);
+        bgFadeOut(el);
       }, 100);
     }
   }, []);
@@ -74,6 +79,9 @@ const Comment = ({ objectId, mode, commentId }) => {
   }, [data]);
 
   const handleReply = (id) => {
+    if (!tryNormalLogged(true)) {
+      return;
+    }
     setComments(
       comments.map((item) => {
         if (item.comment_id === id) {
@@ -98,12 +106,12 @@ const Comment = ({ objectId, mode, commentId }) => {
   const handleSendReply = (item) => {
     const users = matchedUsers(item.value);
     const userNames = unionBy(users.map((user) => user.userName));
-    const html = marked.parse(parseUserInfo(item.value));
+    const commentMarkDown = parseUserInfo(item.value);
+
     const params = {
       object_id: objectId,
-      original_text: item.value,
+      original_text: commentMarkDown,
       mention_username_list: userNames,
-      parsed_text: html,
       ...(item.type === 'reply'
         ? {
             reply_comment_id: item.comment_id,
@@ -112,45 +120,44 @@ const Comment = ({ objectId, mode, commentId }) => {
     };
 
     if (item.type === 'edit') {
-      updateComment({
+      return updateComment({
         ...params,
         comment_id: item.comment_id,
-      }).then(() => {
+      }).then((res) => {
         setComments(
           comments.map((comment) => {
             if (comment.comment_id === item.comment_id) {
               comment.showEdit = false;
-              comment.parsed_text = html;
-              comment.original_text = item.value;
+              comment.parsed_text = res.parsed_text;
+              comment.original_text = res.original_text;
             }
             return comment;
           }),
         );
       });
-    } else {
-      addComment(params).then((res) => {
-        if (item.type === 'reply') {
-          const index = comments.findIndex(
-            (comment) => comment.comment_id === item.comment_id,
-          );
-          comments[index].showReply = false;
-          comments.splice(index + 1, 0, res);
-          setComments([...comments]);
-        } else {
-          setComments([
-            ...comments.map((comment) => {
-              if (comment.comment_id === item.comment_id) {
-                comment.showReply = false;
-              }
-              return comment;
-            }),
-            res,
-          ]);
-        }
-
-        setVisibleComment(false);
-      });
     }
+    return addComment(params).then((res) => {
+      if (item.type === 'reply') {
+        const index = comments.findIndex(
+          (comment) => comment.comment_id === item.comment_id,
+        );
+        comments[index].showReply = false;
+        comments.splice(index + 1, 0, res);
+        setComments([...comments]);
+      } else {
+        setComments([
+          ...comments.map((comment) => {
+            if (comment.comment_id === item.comment_id) {
+              comment.showReply = false;
+            }
+            return comment;
+          }),
+          res,
+        ]);
+      }
+
+      setVisibleComment(false);
+    });
   };
 
   const handleDelete = (id) => {
@@ -163,9 +170,8 @@ const Comment = ({ objectId, mode, commentId }) => {
         deleteComment(id).then(() => {
           if (pageIndex === 0) {
             mutate();
-          } else {
-            setComments(comments.filter((item) => item.comment_id !== id));
           }
+          setComments(comments.filter((item) => item.comment_id !== id));
         });
       },
     });
@@ -258,7 +264,7 @@ const Comment = ({ objectId, mode, commentId }) => {
                 )}
 
                 <div
-                  className="fmt fs-14"
+                  className="fmt fs-14 text-break text-wrap"
                   dangerouslySetInnerHTML={{ __html: item.parsed_text }}
                 />
               </div>
@@ -302,7 +308,9 @@ const Comment = ({ objectId, mode, commentId }) => {
           variant="link"
           className="p-0 fs-14 btn-no-border"
           onClick={() => {
-            setVisibleComment(!visibleComment);
+            if (tryNormalLogged(true)) {
+              setVisibleComment(!visibleComment);
+            }
           }}>
           {t('btn_add_comment')}
         </Button>

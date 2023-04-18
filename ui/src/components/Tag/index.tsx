@@ -1,4 +1,5 @@
 import React, { memo, FC } from 'react';
+import { Link } from 'react-router-dom';
 
 import classNames from 'classnames';
 
@@ -21,16 +22,18 @@ const Index: FC<IProps> = ({
   href ||= pathFactory.tagLanding(data?.slug_name);
 
   return (
-    <a
-      href={href}
+    <Link
+      to={href}
       className={classNames(
         'badge-tag rounded-1',
         data.reserved && 'badge-tag-reserved',
         data.recommend && 'badge-tag-required',
         className,
       )}>
-      <span className={textClassName}>{data.slug_name}</span>
-    </a>
+      <span className={textClassName}>
+        {data.display_name || data.slug_name}
+      </span>
+    </Link>
   );
 };
 

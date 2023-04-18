@@ -2,19 +2,27 @@ import axios, { AxiosResponse } from 'axios';
 import type { AxiosInstance, AxiosRequestConfig, AxiosError } from 'axios';
 
 import { Modal } from '@/components';
-import { loggedUserInfoStore, toastStore } from '@/stores';
-import { LOGGED_TOKEN_STORAGE_KEY } from '@/common/constants';
+import { loggedUserInfoStore, toastStore, errorCodeStore } from '@/stores';
+import { LOGGED_TOKEN_STORAGE_KEY, IGNORE_PATH_LIST } from '@/common/constants';
 import { RouteAlias } from '@/router/alias';
 import { getCurrentLang } from '@/utils/localize';
 
 import Storage from './storage';
 import { floppyNavigation } from './floppyNavigation';
+import { isIgnoredPath } from './guard';
 
 const baseConfig = {
-  baseUrl: process.env.REACT_APP_API_URL || '',
   timeout: 10000,
   withCredentials: true,
 };
+
+interface ApiConfig extends AxiosRequestConfig {
+  // Configure whether to allow takeover of 404 errors
+  allow404?: boolean;
+  ignoreError?: '403' | '50X';
+  // Configure whether to pass errors directly
+  passingError?: boolean;
+}
 
 class Request {
   instance: AxiosInstance;
@@ -48,11 +56,17 @@ class Request {
         return data;
       },
       (error) => {
-        const { status, data: respData } = error.response || {};
-        const { data = {}, msg = '' } = respData || {};
+        const {
+          status,
+          data: errModel,
+          config: errConfig,
+        } = error.response || {};
+        const { data = {}, msg = '' } = errModel || {};
         if (status === 400) {
-          // show error message
-          if (data instanceof Object && data.err_type) {
+          if (data?.err_type && errConfig?.passingError) {
+            return errModel;
+          }
+          if (data?.err_type) {
             if (data.err_type === 'toast') {
               // toast error message
               toastStore.getState().show({
@@ -80,7 +94,12 @@ class Request {
 
           if (data instanceof Array && data.length > 0) {
             // handle form error
-            return Promise.reject({ isError: true, list: data });
+            return Promise.reject({
+              code: status,
+              msg,
+              isError: true,
+              list: data,
+            });
           }
 
           if (!data || Object.keys(data).length <= 0) {
@@ -94,6 +113,7 @@ class Request {
         // 401: Re-login required
         if (status === 401) {
           // clear userinfo
+          errorCodeStore.getState().reset();
           loggedUserInfoStore.getState().clear();
           floppyNavigation.navigateToLogin();
           return Promise.reject(false);
@@ -122,6 +142,14 @@ class Request {
             return Promise.reject(false);
           }
 
+          if (isIgnoredPath(IGNORE_PATH_LIST)) {
+            return Promise.reject(false);
+          }
+          if (error.config?.url.includes('/admin/api')) {
+            errorCodeStore.getState().update('403');
+            return Promise.reject(false);
+          }
+
           if (msg) {
             toastStore.getState().show({
               msg,
@@ -130,7 +158,23 @@ class Request {
           }
           return Promise.reject(false);
         }
+
+        if (status === 404 && error.config?.allow404) {
+          if (isIgnoredPath(IGNORE_PATH_LIST)) {
+            return Promise.reject(false);
+          }
+          errorCodeStore.getState().update('404');
+          return Promise.reject(false);
+        }
         if (status >= 500) {
+          if (isIgnoredPath(IGNORE_PATH_LIST)) {
+            return Promise.reject(false);
+          }
+
+          if (error.config?.ignoreError !== '50X') {
+            errorCodeStore.getState().update('50X');
+          }
+
           console.error(
             `Request failed with status code ${status}, ${msg || ''}`,
           );
@@ -144,7 +188,7 @@ class Request {
     return this.instance.request(config);
   }
 
-  public get<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
+  public get<T = any>(url: string, config?: ApiConfig): Promise<T> {
     return this.instance.get(url, config);
   }
 

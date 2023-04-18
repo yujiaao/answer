@@ -1,9 +1,15 @@
-import { RouteObject } from 'react-router-dom';
+import type { IndexRouteObject, NonIndexRouteObject } from 'react-router-dom';
 
 import { guard } from '@/utils';
 import type { TGuardFunc } from '@/utils/guard';
+import { editCheck } from '@/services';
+import { isEditable } from '@/utils/guard';
 
-export interface RouteNode extends RouteObject {
+type IndexRouteNode = Omit<IndexRouteObject, 'children'>;
+type NonIndexRouteNode = Omit<NonIndexRouteObject, 'children'>;
+type UnionRouteNode = IndexRouteNode | NonIndexRouteNode;
+
+export type RouteNode = UnionRouteNode & {
   page: string;
   children?: RouteNode[];
   /**
@@ -14,7 +20,7 @@ export interface RouteNode extends RouteObject {
    * then auto redirect route to the `redirect` target.
    */
   guard?: TGuardFunc;
-}
+};
 
 const routes: RouteNode[] = [
   {
@@ -66,6 +72,13 @@ const routes: RouteNode[] = [
       {
         path: 'posts/:qid/:aid/edit',
         page: 'pages/Questions/EditAnswer',
+        loader: async ({ params }) => {
+          const ret = await editCheck(params.aid as string, true);
+          return ret;
+        },
+        guard: (args) => {
+          return isEditable(args);
+        },
       },
       {
         path: '/search',
@@ -75,6 +88,13 @@ const routes: RouteNode[] = [
       {
         path: 'tags',
         page: 'pages/Tags',
+      },
+      {
+        path: 'tags/create',
+        page: 'pages/Tags/Create',
+        guard: () => {
+          return guard.isAdminOrModerator();
+        },
       },
       {
         path: 'tags/:tagName',
@@ -230,6 +250,7 @@ const routes: RouteNode[] = [
         page: 'pages/Admin',
         loader: async () => {
           await guard.pullLoggedUser(true);
+          return null;
         },
         guard: () => {
           return guard.admin();
@@ -336,6 +357,10 @@ const routes: RouteNode[] = [
             page: 'pages/Legal/Privacy',
           },
         ],
+      },
+      {
+        path: '/users/unsubscribe',
+        page: 'pages/Users/Unsubscribe',
       },
     ],
   },

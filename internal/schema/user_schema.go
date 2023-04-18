@@ -2,12 +2,14 @@ package schema
 
 import (
 	"encoding/json"
-	"regexp"
 
+	"github.com/answerdev/answer/internal/base/constant"
 	"github.com/answerdev/answer/internal/base/reason"
 	"github.com/answerdev/answer/internal/base/validator"
 	"github.com/answerdev/answer/internal/entity"
 	"github.com/answerdev/answer/pkg/checker"
+	"github.com/answerdev/answer/pkg/converter"
+	"github.com/answerdev/answer/pkg/gravatar"
 	"github.com/jinzhu/copier"
 	"github.com/segmentfault/pacman/errors"
 )
@@ -66,15 +68,15 @@ type GetUserResp struct {
 	Language string `json:"language"`
 	// access token
 	AccessToken string `json:"access_token"`
-	// is admin
-	IsAdmin bool `json:"is_admin"`
+	// role id
+	RoleID int `json:"role_id"`
 	// user status
 	Status string `json:"status"`
 }
 
 func (r *GetUserResp) GetFromUserEntity(userInfo *entity.User) {
 	_ = copier.Copy(r, userInfo)
-	r.Avatar = FormatAvatarInfo(userInfo.Avatar)
+	r.Avatar = FormatAvatarInfo(userInfo.Avatar, userInfo.EMail)
 	r.CreatedAt = userInfo.CreatedAt.Unix()
 	r.LastLoginDate = userInfo.LastLoginDate.Unix()
 	statusShow, ok := UserStatusShow[userInfo.Status]
@@ -98,11 +100,21 @@ func (r *GetUserToSetShowResp) GetFromUserEntity(userInfo *entity.User) {
 	}
 	avatarInfo := &AvatarInfo{}
 	_ = json.Unmarshal([]byte(userInfo.Avatar), avatarInfo)
+	if constant.DefaultAvatar == "gravatar" && avatarInfo.Type == "" {
+		avatarInfo.Type = "gravatar"
+		avatarInfo.Gravatar = gravatar.GetAvatarURL(userInfo.EMail)
+	}
 	// if json.Unmarshal Error avatarInfo.Type is Empty
 	r.Avatar = avatarInfo
 }
 
-func FormatAvatarInfo(avatarJson string) string {
+func FormatAvatarInfo(avatarJson, email string) (res string) {
+	defer func() {
+		if constant.DefaultAvatar == "gravatar" && len(res) == 0 {
+			res = gravatar.GetAvatarURL(email)
+		}
+	}()
+
 	if avatarJson == "" {
 		return ""
 	}
@@ -159,18 +171,14 @@ type GetOtherUserInfoByUsernameResp struct {
 	// website
 	Website string `json:"website"`
 	// location
-	Location string `json:"location"`
-	// ip info
-	IPInfo string `json:"ip_info"`
-	// is admin
-	IsAdmin   bool   `json:"is_admin"`
+	Location  string `json:"location"`
 	Status    string `json:"status"`
 	StatusMsg string `json:"status_msg,omitempty"`
 }
 
 func (r *GetOtherUserInfoByUsernameResp) GetFromUserEntity(userInfo *entity.User) {
 	_ = copier.Copy(r, userInfo)
-	Avatar := FormatAvatarInfo(userInfo.Avatar)
+	Avatar := FormatAvatarInfo(userInfo.Avatar, userInfo.EMail)
 	r.Avatar = Avatar
 
 	r.CreatedAt = userInfo.CreatedAt.Unix()
@@ -228,7 +236,7 @@ type UserEmailLogin struct {
 // UserRegisterReq user register request
 type UserRegisterReq struct {
 	// name
-	Name string `validate:"required,gt=4,lte=30" json:"name"`
+	Name string `validate:"required,gt=3,lte=30" json:"name"`
 	// email
 	Email string `validate:"required,email,gt=0,lte=500" json:"e_mail" `
 	// password
@@ -277,13 +285,13 @@ type UpdateInfoRequest struct {
 	// display_name
 	DisplayName string `validate:"required,gt=0,lte=30" json:"display_name"`
 	// username
-	Username string `validate:"omitempty,gt=0,lte=30" json:"username"`
+	Username string `validate:"omitempty,gt=3,lte=30" json:"username"`
 	// avatar
 	Avatar AvatarInfo `json:"avatar"`
 	// bio
 	Bio string `validate:"omitempty,gt=0,lte=4096" json:"bio"`
 	// bio
-	BioHTML string `validate:"omitempty,gt=0,lte=4096" json:"bio_html"`
+	BioHTML string `json:"-"`
 	// website
 	Website string `validate:"omitempty,gt=0,lte=500" json:"website"`
 	// location
@@ -298,19 +306,18 @@ type AvatarInfo struct {
 	Custom   string `validate:"omitempty,gt=0,lte=200"  json:"custom"`
 }
 
-func (u *UpdateInfoRequest) Check() (errFields []*validator.FormErrorField, err error) {
-	if len(u.Username) > 0 {
-		re := regexp.MustCompile(`^[a-z0-9._-]{4,30}$`)
-		match := re.MatchString(u.Username)
-		if !match {
+func (req *UpdateInfoRequest) Check() (errFields []*validator.FormErrorField, err error) {
+	if len(req.Username) > 0 {
+		if checker.IsInvalidUsername(req.Username) {
 			errField := &validator.FormErrorField{
 				ErrorField: "username",
-				ErrorMsg:   err.Error(),
+				ErrorMsg:   reason.UsernameInvalid,
 			}
 			errFields = append(errFields, errField)
 			return errFields, errors.BadRequest(reason.UsernameInvalid)
 		}
 	}
+	req.BioHTML = converter.Markdown2BasicHTML(req.Bio)
 	return nil, nil
 }
 
@@ -349,8 +356,8 @@ func (u *UserRePassWordRequest) Check() (errFields []*validator.FormErrorField, 
 }
 
 type UserNoticeSetRequest struct {
-	UserID       string `json:"-" ` // user_id
-	NoticeSwitch bool   `json:"notice_switch" `
+	NoticeSwitch bool   `json:"notice_switch"`
+	UserID       string `json:"-"`
 }
 
 type UserNoticeSetResp struct {
@@ -387,27 +394,12 @@ type GetOtherUserInfoByUsernameReq struct {
 
 type GetOtherUserInfoResp struct {
 	Info *GetOtherUserInfoByUsernameResp `json:"info"`
-	Has  bool                            `json:"has"`
 }
 
 type UserChangeEmailSendCodeReq struct {
 	UserVerifyEmailSendReq
 	Email  string `validate:"required,email,gt=0,lte=500" json:"e_mail"`
 	UserID string `json:"-"`
-}
-
-type EmailCodeContent struct {
-	Email  string `json:"e_mail"`
-	UserID string `json:"user_id"`
-}
-
-func (r *EmailCodeContent) ToJSONString() string {
-	codeBytes, _ := json.Marshal(r)
-	return string(codeBytes)
-}
-
-func (r *EmailCodeContent) FromJSONString(data string) error {
-	return json.Unmarshal([]byte(data), &r)
 }
 
 type UserChangeEmailVerifyReq struct {
@@ -439,4 +431,10 @@ type UserRankingSimpleInfo struct {
 	DisplayName string `json:"display_name"`
 	// avatar
 	Avatar string `json:"avatar"`
+}
+
+// UserUnsubscribeEmailNotificationReq user unsubscribe email notification request
+type UserUnsubscribeEmailNotificationReq struct {
+	Code    string `validate:"required,gt=0,lte=500" json:"code"`
+	Content string `json:"-"`
 }

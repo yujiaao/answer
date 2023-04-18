@@ -1,5 +1,5 @@
 import { memo, FC, useEffect, useRef } from 'react';
-import { Row, Col, Button } from 'react-bootstrap';
+import { Button, Alert, Badge } from 'react-bootstrap';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router-dom';
 
@@ -12,7 +12,7 @@ import {
   FormatTime,
   htmlRender,
 } from '@/components';
-import { scrollTop } from '@/utils';
+import { scrollToElementTop, bgFadeOut } from '@/utils';
 import { AnswerItem } from '@/common/interface';
 import { acceptanceAnswer } from '@/services';
 
@@ -20,8 +20,7 @@ interface Props {
   data: AnswerItem;
   /** router answer id */
   aid?: string;
-  /** is author */
-  isAuthor: boolean;
+  canAccept: boolean;
   questionTitle: string;
   slugTitle: string;
   isLogged: boolean;
@@ -30,11 +29,11 @@ interface Props {
 const Index: FC<Props> = ({
   aid,
   data,
-  isAuthor,
   isLogged,
   questionTitle = '',
   slugTitle,
   callback,
+  canAccept = false,
 }) => {
   const { t } = useTranslation('translation', {
     keyPrefix: 'question_detail',
@@ -54,25 +53,44 @@ const Index: FC<Props> = ({
     if (!answerRef?.current) {
       return;
     }
+
+    htmlRender(answerRef.current.querySelector('.fmt'));
+
     if (aid === data.id) {
       setTimeout(() => {
         const element = answerRef.current;
-        scrollTop(element);
+        scrollToElementTop(element);
+        if (!searchParams.get('commentId')) {
+          bgFadeOut(answerRef.current);
+        }
       }, 100);
     }
-    htmlRender(answerRef.current.querySelector('.fmt'));
   }, [data.id, answerRef.current]);
   if (!data?.id) {
     return null;
   }
   return (
     <div id={data.id} ref={answerRef} className="answer-item py-4">
+      {data.status === 10 && (
+        <Alert variant="danger" className="mb-4">
+          {t('post_deleted', { keyPrefix: 'messages' })}
+        </Alert>
+      )}
+      {data?.accepted === 2 && (
+        <div className="mb-3 lh-1">
+          <Badge bg="success" pill>
+            <Icon name="check-circle-fill me-1" />
+            Best answer
+          </Badge>
+        </div>
+      )}
       <article
+        className="fmt text-break text-wrap"
         dangerouslySetInnerHTML={{ __html: data?.html }}
-        className="fmt"
       />
       <div className="d-flex align-items-center mt-4">
         <Actions
+          source="answer"
           data={{
             id: data?.id,
             isHate: data?.vote_status === 'vote_down',
@@ -85,30 +103,23 @@ const Index: FC<Props> = ({
           }}
         />
 
-        {data?.accepted === 2 && (
+        {canAccept && (
           <Button
-            disabled={!isAuthor}
-            variant="outline-success"
-            className="ms-3 active opacity-100 bg-success text-white"
-            onClick={acceptAnswer}>
-            <Icon name="check-circle-fill" className="me-2" />
-            <span>{t('answers.btn_accepted')}</span>
-          </Button>
-        )}
-
-        {isAuthor && data.accepted === 1 && (
-          <Button
-            variant="outline-success"
+            variant={data.accepted === 2 ? 'success' : 'outline-success'}
             className="ms-3"
             onClick={acceptAnswer}>
             <Icon name="check-circle-fill" className="me-2" />
-            <span>{t('answers.btn_accept')}</span>
+            <span>
+              {data.accepted === 2
+                ? t('answers.btn_accepted')
+                : t('answers.btn_accept')}
+            </span>
           </Button>
         )}
       </div>
 
-      <Row className="mt-4 mb-3">
-        <Col className="mb-3 mb-md-0">
+      <div className="d-block d-md-flex flex-wrap mt-4 mb-3">
+        <div className="mb-3 mb-md-0 me-4 flex-grow-1">
           <Operate
             qid={data.question_id}
             aid={data.id}
@@ -119,8 +130,8 @@ const Index: FC<Props> = ({
             slugTitle={slugTitle}
             callback={callback}
           />
-        </Col>
-        <Col lg={3} className="mb-3 mb-md-0">
+        </div>
+        <div className="mb-3 mb-md-0 me-4" style={{ minWidth: '196px' }}>
           {data.update_user_info &&
           data.update_user_info?.username !== data.user_info?.username ? (
             <UserCard
@@ -145,8 +156,8 @@ const Index: FC<Props> = ({
               className="text-secondary fs-14"
             />
           )}
-        </Col>
-        <Col lg={4}>
+        </div>
+        <div style={{ minWidth: '196px' }}>
           <UserCard
             data={data?.user_info}
             time={Number(data.create_time)}
@@ -154,8 +165,8 @@ const Index: FC<Props> = ({
             isLogged={isLogged}
             timelinePath={`/posts/${data.question_id}/${data.id}/timeline`}
           />
-        </Col>
-      </Row>
+        </div>
+      </div>
 
       <Comment
         objectId={data.id}

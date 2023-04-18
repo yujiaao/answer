@@ -9,6 +9,8 @@ import brandingStore from './branding';
 import pageTagStore from './pageTags';
 import customizeStore from './customize';
 import themeSettingStore from './themeSetting';
+import loginToContinueStore from './loginToContinue';
+import errorCodeStore from './errorCode';
 
 export {
   toastStore,
@@ -21,4 +23,6 @@ export {
   customizeStore,
   themeSettingStore,
   seoSettingStore,
+  loginToContinueStore,
+  errorCodeStore,
 };

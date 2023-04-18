@@ -3,26 +3,32 @@ package schema
 import (
 	"context"
 	"fmt"
+	"net/mail"
 	"net/url"
 
 	"github.com/answerdev/answer/internal/base/handler"
+	"github.com/answerdev/answer/internal/base/reason"
 	"github.com/answerdev/answer/internal/base/translator"
+	"github.com/answerdev/answer/internal/base/validator"
+	"github.com/segmentfault/pacman/errors"
 )
 
-const PermaLinkQuestionIDAndTitle = 1
-const PermaLinkQuestionID = 2
+const PermaLinkQuestionIDAndTitle = 1          // /questions/10010000000000001/post-title
+const PermaLinkQuestionID = 2                  // /questions/10010000000000001
+const PermaLinkQuestionIDAndTitleByShortID = 3 // /questions/11/post-title
+const PermaLinkQuestionIDByShortID = 4         // /questions/11
 
 // SiteGeneralReq site general request
 type SiteGeneralReq struct {
-	Name             string `validate:"required,gt=1,lte=128" form:"name" json:"name"`
-	ShortDescription string `validate:"omitempty,gt=3,lte=255" form:"short_description" json:"short_description"`
-	Description      string `validate:"omitempty,gt=3,lte=2000" form:"description" json:"description"`
-	SiteUrl          string `validate:"required,gt=1,lte=512,url" form:"site_url" json:"site_url"`
-	ContactEmail     string `validate:"required,gt=1,lte=512,email" form:"contact_email" json:"contact_email"`
+	Name             string `validate:"required,sanitizer,gt=1,lte=128" form:"name" json:"name"`
+	ShortDescription string `validate:"omitempty,sanitizer,gt=3,lte=255" form:"short_description" json:"short_description"`
+	Description      string `validate:"omitempty,sanitizer,gt=3,lte=2000" form:"description" json:"description"`
+	SiteUrl          string `validate:"required,sanitizer,gt=1,lte=512,url" form:"site_url" json:"site_url"`
+	ContactEmail     string `validate:"required,sanitizer,gt=1,lte=512,email" form:"contact_email" json:"contact_email"`
 }
 
 type SiteSeoReq struct {
-	PermaLink int    `validate:"required,lte=3,gte=0" form:"permalink" json:"permalink"`
+	PermaLink int    `validate:"required,lte=4,gte=0" form:"permalink" json:"permalink"`
 	Robots    string `validate:"required" form:"robots" json:"robots"`
 }
 
@@ -36,15 +42,16 @@ func (r *SiteGeneralReq) FormatSiteUrl() {
 
 // SiteInterfaceReq site interface request
 type SiteInterfaceReq struct {
-	Language string `validate:"required,gt=1,lte=128" form:"language" json:"language"`
-	TimeZone string `validate:"required,gt=1,lte=128" form:"time_zone" json:"time_zone"`
+	Language      string `validate:"required,gt=1,lte=128" form:"language" json:"language"`
+	TimeZone      string `validate:"required,gt=1,lte=128" form:"time_zone" json:"time_zone"`
+	DefaultAvatar string `validate:"required,oneof=system gravatar" form:"default_avatar" json:"default_avatar"`
 }
 
 // SiteBrandingReq site branding request
 type SiteBrandingReq struct {
-	Logo       string `validate:"required,gt=0,lte=512" form:"logo" json:"logo"`
+	Logo       string `validate:"omitempty,gt=0,lte=512" form:"logo" json:"logo"`
 	MobileLogo string `validate:"omitempty,gt=0,lte=512" form:"mobile_logo" json:"mobile_logo"`
-	SquareIcon string `validate:"required,gt=0,lte=512" form:"square_icon" json:"square_icon"`
+	SquareIcon string `validate:"omitempty,gt=0,lte=512" form:"square_icon" json:"square_icon"`
 	Favicon    string `validate:"omitempty,gt=0,lte=512" form:"favicon" json:"favicon"`
 }
 
@@ -130,7 +137,7 @@ type SiteThemeResp struct {
 func (s *SiteThemeResp) TrTheme(ctx context.Context) {
 	la := handler.GetLangByCtx(ctx)
 	for _, option := range s.ThemeOptions {
-		tr := translator.GlobalTrans.Tr(la, option.Value)
+		tr := translator.Tr(la, option.Value)
 		// if tr is equal the option value means not found translation, so use the original label
 		if tr != option.Value {
 			option.Label = tr
@@ -162,6 +169,8 @@ type SiteInfoResp struct {
 	Theme         *SiteThemeResp         `json:"theme"`
 	CustomCssHtml *SiteCustomCssHTMLResp `json:"custom_css_html"`
 	SiteSeo       *SiteSeoReq            `json:"site_seo"`
+	Version       string                 `json:"version"`
+	Revision      string                 `json:"revision"`
 }
 type TemplateSiteInfoResp struct {
 	General       *SiteGeneralResp       `json:"general"`
@@ -190,6 +199,17 @@ type UpdateSMTPConfigReq struct {
 	TestEmailRecipient string `validate:"omitempty,email" json:"test_email_recipient"`
 }
 
+func (r *UpdateSMTPConfigReq) Check() (errField []*validator.FormErrorField, err error) {
+	_, err = mail.ParseAddress(r.FromName)
+	if err == nil {
+		return append(errField, &validator.FormErrorField{
+			ErrorField: "from_name",
+			ErrorMsg:   reason.SMTPConfigFromNameCannotBeEmail,
+		}), errors.BadRequest(reason.SMTPConfigFromNameCannotBeEmail)
+	}
+	return nil, nil
+}
+
 // GetSMTPConfigResp get smtp config response
 type GetSMTPConfigResp struct {
 	FromEmail          string `json:"from_email"`
@@ -206,6 +226,7 @@ type GetSMTPConfigResp struct {
 type GetManifestJsonResp struct {
 	ManifestVersion int               `json:"manifest_version"`
 	Version         string            `json:"version"`
+	Revision        string            `json:"revision"`
 	ShortName       string            `json:"short_name"`
 	Name            string            `json:"name"`
 	Icons           map[string]string `json:"icons"`

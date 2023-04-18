@@ -18,10 +18,6 @@
   }
 }
 
-:root {
-  overflow-y: scroll;
-}
-
 html,
 body {
   padding: 0;
@@ -124,6 +120,14 @@ a {
   cursor: pointer;
 }
 
+.cursor-zoom-out {
+  cursor: zoom-out !important;
+}
+
+img:not(a img, img.broken) {
+  cursor: zoom-in;
+}
+
 .resize-none {
   resize: none;
 }
@@ -214,6 +218,9 @@ a {
   img {
     max-width: 100%;
   }
+  video {
+    max-width: 100%;
+  }
   p {
     > code {
       background-color: #e9ecef;
@@ -237,6 +244,12 @@ a {
     }
     > p:last-child {
       margin-bottom: 0;
+    }
+  }
+  table {
+    td,
+    th {
+      word-break: initial;
     }
   }
 }
@@ -282,4 +295,23 @@ a {
 
 .pre-line {
   white-space: pre-wrap;
+}
+
+.reset-p {
+  p {
+    margin-bottom: 0;
+  }
+}
+
+@keyframes bg-fade-out {
+  0%,
+  25% {
+    background-color: var(--bs-highlight-bg);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+.bg-fade-out {
+  animation: bg-fade-out 2s ease 0.3s;
 }

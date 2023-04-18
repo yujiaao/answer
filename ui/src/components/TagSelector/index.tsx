@@ -155,6 +155,7 @@ const TagSelector: FC<IProps> = ({
   };
   const handleKeyDown = (e) => {
     e.stopPropagation();
+
     if (!tags) {
       return;
     }
@@ -166,13 +167,20 @@ const TagSelector: FC<IProps> = ({
     if (keyCode === 40 && currentIndex < tags.length - 1) {
       setCurrentIndex(currentIndex + 1);
     }
-    if (
-      keyCode === 13 &&
-      currentIndex > -1 &&
-      currentIndex <= tags.length - 1
-    ) {
+
+    if (keyCode === 13 && currentIndex > -1) {
       e.preventDefault();
-      handleClick(tags[currentIndex]);
+
+      if (tags.length === 0) {
+        tagModal.onShow(tag);
+        return;
+      }
+      if (currentIndex <= tags.length - 1) {
+        handleClick(tags[currentIndex]);
+        if (currentIndex === tags.length - 1 && currentIndex > 0) {
+          setCurrentIndex(currentIndex - 1);
+        }
+      }
     }
   };
   return (
@@ -188,13 +196,13 @@ const TagSelector: FC<IProps> = ({
               key={item.slug_name}
               className={classNames(
                 'm-1 text-nowrap d-flex align-items-center',
-                index === repeatIndex && 'warning',
+                index === repeatIndex && 'bg-fade-out',
               )}
               variant={`outline-${
                 item.reserved ? 'danger' : item.recommend ? 'dark' : 'secondary'
               }`}
               size="sm">
-              {item.slug_name}
+              {item.display_name}
               <span className="ms-1" onMouseUp={() => handleRemove(item)}>
                 ×
               </span>
@@ -239,7 +247,7 @@ const TagSelector: FC<IProps> = ({
                     eventKey={index}
                     active={index === currentIndex}
                     onClick={() => handleClick(item)}>
-                    {item.slug_name}
+                    {item.display_name}
                   </Dropdown.Item>
                 );
               })}
@@ -253,7 +261,7 @@ const TagSelector: FC<IProps> = ({
                   variant="link"
                   className="px-3 btn-no-border w-100 text-start"
                   onClick={() => {
-                    tagModal.onShow();
+                    tagModal.onShow(tag);
                   }}>
                   + {t('create_btn')}
                 </Button>

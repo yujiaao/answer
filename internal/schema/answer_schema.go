@@ -10,8 +10,9 @@ type RemoveAnswerReq struct {
 	// answer id
 	ID string `validate:"required" json:"id"`
 	// user id
-	UserID  string `json:"-"`
-	IsAdmin bool   `json:"-"`
+	UserID string `json:"-"`
+	// whether user can delete it
+	CanDelete bool `json:"-"`
 }
 
 const (
@@ -20,10 +21,12 @@ const (
 )
 
 type AnswerAddReq struct {
-	QuestionID string `json:"question_id" ` // question_id
-	Content    string `json:"content" `     // content
-	HTML       string `json:"html" `        // html
-	UserID     string `json:"-" `           // user_id
+	QuestionID string `json:"question_id"`
+	Content    string `validate:"required,notblank,gte=6,lte=65535" json:"content"`
+	HTML       string `json:"-"`
+	UserID     string `json:"-"`
+	CanEdit    bool   `json:"-"`
+	CanDelete  bool   `json:"-"`
 }
 
 func (req *AnswerAddReq) Check() (errFields []*validator.FormErrorField, err error) {
@@ -32,13 +35,13 @@ func (req *AnswerAddReq) Check() (errFields []*validator.FormErrorField, err err
 }
 
 type AnswerUpdateReq struct {
-	ID           string `json:"id"`                                // id
-	QuestionID   string `json:"question_id" `                      // question_id
-	UserID       string `json:"-" `                                // user_id
-	Title        string `json:"title" `                            // title
-	Content      string `json:"content"`                           // content
-	HTML         string `json:"html" `                             // html
-	EditSummary  string `validate:"omitempty" json:"edit_summary"` // edit_summary
+	ID           string `json:"id"`
+	QuestionID   string `json:"question_id"`
+	Title        string `json:"title"`
+	Content      string `validate:"required,notblank,gte=6,lte=65535" json:"content"`
+	EditSummary  string `validate:"omitempty" json:"edit_summary"`
+	HTML         string `json:"-"`
+	UserID       string `json:"-"`
 	NoNeedReview bool   `json:"-"`
 	// whether user can edit it
 	CanEdit bool `json:"-"`
@@ -83,6 +86,7 @@ type AnswerInfo struct {
 	VoteStatus     string         `json:"vote_status"`
 	VoteCount      int            `json:"vote_count"`
 	QuestionInfo   *QuestionInfo  `json:"question_info,omitempty"`
+	Status         int            `json:"status"`
 
 	// MemberActions
 	MemberActions []*PermissionMemberAction `json:"member_actions"`

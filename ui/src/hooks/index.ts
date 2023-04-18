@@ -8,6 +8,8 @@ import useChangeUserRoleModal from './useChangeUserRoleModal';
 import useUserModal from './useUserModal';
 import useChangePasswordModal from './useChangePasswordModal';
 import usePageTags from './usePageTags';
+import usePromptWithUnload from './usePrompt';
+import useImgViewer from './useImgViewer';
 
 export {
   useTagModal,
@@ -20,4 +22,6 @@ export {
   useUserModal,
   useChangePasswordModal,
   usePageTags,
+  usePromptWithUnload,
+  useImgViewer,
 };

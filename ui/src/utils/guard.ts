@@ -8,6 +8,7 @@ import {
   customizeStore,
   themeSettingStore,
   seoSettingStore,
+  loginToContinueStore,
 } from '@/stores';
 import { RouteAlias } from '@/router/alias';
 import Storage from '@/utils/storage';
@@ -23,13 +24,22 @@ type TLoginState = {
   isForbidden: boolean;
   isNormal: boolean;
   isAdmin: boolean;
+  isModerator: boolean;
 };
 
 export type TGuardResult = {
   ok: boolean;
   redirect?: string;
+  error?: {
+    code?: number | string;
+    msg?: string;
+  };
 };
-export type TGuardFunc = () => TGuardResult;
+export type TGuardFunc = (args: {
+  loaderData?: any;
+  path?: string;
+  page?: string;
+}) => TGuardResult;
 
 export const deriveLoginState = (): TLoginState => {
   const ls: TLoginState = {
@@ -39,6 +49,7 @@ export const deriveLoginState = (): TLoginState => {
     isForbidden: false,
     isNormal: false,
     isAdmin: false,
+    isModerator: false,
   };
   const { user } = loggedUserInfoStore.getState();
   if (user.access_token) {
@@ -56,13 +67,16 @@ export const deriveLoginState = (): TLoginState => {
   if (ls.isActivated && !ls.isForbidden) {
     ls.isNormal = true;
   }
-  if (ls.isNormal && user.is_admin === true) {
+  if (ls.isNormal && user.role_id === 2) {
     ls.isAdmin = true;
+  }
+  if (ls.isNormal && user.role_id === 3) {
+    ls.isModerator = true;
   }
   return ls;
 };
 
-const isIgnoredPath = (ignoredPath: string | string[]) => {
+export const isIgnoredPath = (ignoredPath: string | string[]) => {
   if (!Array.isArray(ignoredPath)) {
     ignoredPath = [ignoredPath];
   }
@@ -84,6 +98,7 @@ export const pullLoggedUser = async (forceRePull = false) => {
   if (Date.now() - dedupeTimestamp < 1000 * 10) {
     return;
   }
+
   dedupeTimestamp = Date.now();
   const loggedUserInfo = await getLoggedUserInfo().catch((ex) => {
     dedupeTimestamp = 0;
@@ -167,7 +182,38 @@ export const admin = () => {
   const us = deriveLoginState();
   if (gr.ok && !us.isAdmin) {
     gr.ok = false;
-    gr.redirect = RouteAlias.home;
+    gr.error = {
+      code: '403',
+      msg: '',
+    };
+    gr.redirect = '';
+  }
+  return gr;
+};
+
+export const isAdminOrModerator = () => {
+  const gr = logged();
+  const us = deriveLoginState();
+  if (gr.ok && !us.isAdmin && !us.isModerator) {
+    gr.ok = false;
+    gr.error = {
+      code: '403',
+      msg: '',
+    };
+    gr.redirect = '';
+  }
+  return gr;
+};
+
+export const isEditable = (args) => {
+  const loaderData = args?.loaderData || {};
+  const gr: TGuardResult = { ok: true };
+  if (loaderData.code === 400) {
+    gr.ok = false;
+    gr.error = {
+      code: '403',
+      msg: loaderData.msg,
+    };
   }
   return gr;
 };
@@ -225,7 +271,7 @@ export const tryNormalLogged = (canNavigate: boolean = false) => {
   // must assert logged state first and return
   if (!us.isLogged) {
     if (canNavigate) {
-      floppyNavigation.navigateToLogin();
+      loginToContinueStore.getState().update({ show: true });
     }
     return false;
   }
@@ -256,6 +302,9 @@ export const initAppSettingsStore = async () => {
   const appSettings = await getAppSettings();
   if (appSettings) {
     siteInfoStore.getState().update(appSettings.general);
+    siteInfoStore
+      .getState()
+      .updateVersion(appSettings.version, appSettings.revision);
     interfaceStore.getState().update(appSettings.interface);
     brandingStore.getState().update(appSettings.branding);
     loginSettingStore.getState().update(appSettings.login);
@@ -266,7 +315,7 @@ export const initAppSettingsStore = async () => {
 };
 
 export const shouldInitAppFetchData = () => {
-  if (isIgnoredPath('/install')) {
+  if (isIgnoredPath('/install') && window.location.pathname === '/install') {
     return false;
   }
 
@@ -282,7 +331,7 @@ export const setupApp = async () => {
   // TODO: optimize `initAppSettingsStore` by server render
   if (shouldInitAppFetchData()) {
     await Promise.allSettled([pullLoggedUser(), initAppSettingsStore()]);
-    setupAppLanguage();
+    await setupAppLanguage();
     setupAppTimeZone();
   }
 };

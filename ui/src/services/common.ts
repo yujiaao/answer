@@ -19,12 +19,18 @@ export const useQueryQuestionByTitle = (title) => {
 };
 
 export const useQueryTags = (params) => {
-  return useSWR<Type.ListResult>(
+  const { data, error, mutate } = useSWR<Type.ListResult>(
     `/answer/api/v1/tags/page?${qs.stringify(params, {
       skipNulls: true,
     })}`,
     request.instance.get,
   );
+  return {
+    data,
+    isLoading: !data && !error,
+    error,
+    mutate,
+  };
 };
 
 export const useQueryRevisions = (object_id: string | undefined) => {
@@ -165,6 +171,7 @@ export const saveQuestion = (params: Type.QuestionParams) => {
 export const questionDetail = (id: string) => {
   return request.get<Type.QuestionDetailRes>(
     `/answer/api/v1/question/info?id=${id}`,
+    { allow404: true },
   );
 };
 
@@ -256,4 +263,18 @@ export const getAppSettings = () => {
 
 export const reopenQuestion = (params: { question_id: string }) => {
   return request.put('/answer/api/v1/question/reopen', params);
+};
+
+export const unsubscribe = (code: string) => {
+  const apiUrl = '/answer/api/v1/user/email/notification';
+  return request.put(apiUrl, { code });
+};
+
+export const markdownToHtml = (content: string) => {
+  const apiUrl = '/answer/api/v1/post/render';
+  return request.post(apiUrl, { content });
+};
+
+export const saveQuestionWidthAnaser = (params: Type.QuestionWithAnswer) => {
+  return request.post('/answer/api/v1/question/answer', params);
 };

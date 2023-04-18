@@ -1,24 +1,25 @@
 import { Suspense, lazy } from 'react';
-import { RouteObject, createBrowserRouter } from 'react-router-dom';
+import { RouteObject } from 'react-router-dom';
 
 import Layout from '@/pages/Layout';
-import ErrorBoundary from '@/pages/50X';
-import baseRoutes, { RouteNode } from '@/router/routes';
-import RouteGuard from '@/router/RouteGuard';
 
-const routes: RouteObject[] = [];
+import baseRoutes, { RouteNode } from './routes';
+import RouteGuard from './RouteGuard';
+import RouteErrorBoundary from './RouteErrorBoundary';
 
-const routeWrapper = (routeNodes: RouteNode[], root: RouteObject[]) => {
+const routes: RouteNode[] = [];
+
+const routeWrapper = (routeNodes: RouteNode[], root: RouteNode[]) => {
   routeNodes.forEach((rn) => {
     if (rn.page === 'pages/Layout') {
       rn.element = rn.guard ? (
-        <RouteGuard onEnter={rn.guard} path={rn.path}>
+        <RouteGuard onEnter={rn.guard} path={rn.path} page={rn.page}>
           <Layout />
         </RouteGuard>
       ) : (
         <Layout />
       );
-      rn.errorElement = <ErrorBoundary />;
+      rn.errorElement = <RouteErrorBoundary />;
     } else {
       /**
        * cannot use a fully dynamic import statement
@@ -29,7 +30,7 @@ const routeWrapper = (routeNodes: RouteNode[], root: RouteObject[]) => {
       rn.element = (
         <Suspense>
           {rn.guard ? (
-            <RouteGuard onEnter={rn.guard} path={rn.path}>
+            <RouteGuard onEnter={rn.guard} path={rn.path} page={rn.page}>
               <Ctrl />
             </RouteGuard>
           ) : (
@@ -37,6 +38,7 @@ const routeWrapper = (routeNodes: RouteNode[], root: RouteObject[]) => {
           )}
         </Suspense>
       );
+      rn.errorElement = <RouteErrorBoundary />;
     }
     root.push(rn);
     const children = Array.isArray(rn.children) ? rn.children : null;
@@ -49,4 +51,4 @@ const routeWrapper = (routeNodes: RouteNode[], root: RouteObject[]) => {
 
 routeWrapper(baseRoutes, routes);
 
-export { routes, createBrowserRouter };
+export default routes as RouteObject[];

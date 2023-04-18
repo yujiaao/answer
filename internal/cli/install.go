@@ -12,8 +12,9 @@ import (
 )
 
 const (
-	DefaultConfigFileName = "config.yaml"
-	DefaultCacheFileName  = "cache.db"
+	DefaultConfigFileName                  = "config.yaml"
+	DefaultCacheFileName                   = "cache.db"
+	DefaultReservedUsernamesConfigFileName = "reserved-usernames.json"
 )
 
 var (

@@ -47,7 +47,9 @@ export const useTagInfo = ({ id = '', name = '' }) => {
     name = encodeURIComponent(name);
     apiUrl = `/answer/api/v1/tag?name=${name}`;
   }
-  const { data, error } = useSWR<Type.TagInfo>(apiUrl, request.instance.get);
+  const { data, error } = useSWR<Type.TagInfo>(apiUrl, (url) =>
+    request.get(url, { allow404: true }),
+  );
   return {
     data,
     isLoading: !data && !error,
@@ -57,4 +59,14 @@ export const useTagInfo = ({ id = '', name = '' }) => {
 
 export const followTags = (params) => {
   return request.put('/answer/api/v1/follow/tags', params);
+};
+
+export const getTagsBySlugName = (slugNames: string) => {
+  const apiUrl = `/answer/api/v1/tags?tags=${encodeURIComponent(slugNames)}`;
+  return request.get<Type.TagInfo[]>(apiUrl);
+};
+
+export const createTag = (params: Type.TagBase) => {
+  const apiUrl = '/answer/api/v1/tag';
+  return request.post<Type.TagInfo>(apiUrl, params);
 };

@@ -8,6 +8,7 @@ import (
 	"github.com/answerdev/answer/internal/service/comment"
 	"github.com/answerdev/answer/internal/service/permission"
 	"github.com/answerdev/answer/internal/service/rank"
+	"github.com/answerdev/answer/pkg/uid"
 	"github.com/gin-gonic/gin"
 	"github.com/segmentfault/pacman/errors"
 )
@@ -40,7 +41,7 @@ func (cc *CommentController) AddComment(ctx *gin.Context) {
 	if handler.BindAndCheck(ctx, req) {
 		return
 	}
-
+	req.ObjectID = uid.DeShortID(req.ObjectID)
 	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
 	canList, err := cc.rankService.CheckOperationPermissions(ctx, req.UserID, []string{
 		permission.CommentAdd,
@@ -111,6 +112,19 @@ func (cc *CommentController) UpdateComment(ctx *gin.Context) {
 	}
 
 	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
+	req.IsAdmin = middleware.GetIsAdminFromContext(ctx)
+	canList, err := cc.rankService.CheckOperationPermissions(ctx, req.UserID, []string{
+		permission.CommentAdd,
+		permission.CommentEdit,
+		permission.CommentDelete,
+	})
+	if err != nil {
+		handler.HandleResponse(ctx, err, nil)
+		return
+	}
+	req.CanAdd = canList[0]
+	req.CanEdit = canList[1]
+	req.CanDelete = canList[2]
 	can, err := cc.rankService.CheckOperationPermission(ctx, req.UserID, permission.CommentEdit, req.CommentID)
 	if err != nil {
 		handler.HandleResponse(ctx, err, nil)
@@ -121,8 +135,8 @@ func (cc *CommentController) UpdateComment(ctx *gin.Context) {
 		return
 	}
 
-	err = cc.commentService.UpdateComment(ctx, req)
-	handler.HandleResponse(ctx, err, nil)
+	resp, err := cc.commentService.UpdateComment(ctx, req)
+	handler.HandleResponse(ctx, err, resp)
 }
 
 // GetCommentWithPage get comment page
@@ -141,7 +155,7 @@ func (cc *CommentController) GetCommentWithPage(ctx *gin.Context) {
 	if handler.BindAndCheck(ctx, req) {
 		return
 	}
-
+	req.ObjectID = uid.DeShortID(req.ObjectID)
 	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
 	canList, err := cc.rankService.CheckOperationPermissions(ctx, req.UserID, []string{
 		permission.CommentEdit,

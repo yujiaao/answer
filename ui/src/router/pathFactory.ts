@@ -6,14 +6,12 @@ const tagLanding = (slugName: string) => {
   if (!slugName) {
     return '/tags';
   }
-  slugName = slugName.toLowerCase();
   return urlcat('/tags/:slugName', { slugName });
 };
 const tagInfo = (slugName: string) => {
   if (!slugName) {
     return '/tags';
   }
-  slugName = slugName.toLowerCase();
   return urlcat('/tags/:slugName/info', { slugName });
 };
 const tagEdit = (tagId: string) => {
@@ -21,7 +19,11 @@ const tagEdit = (tagId: string) => {
 };
 const questionLanding = (questionId: string, slugTitle: string = '') => {
   const { seo } = seoSettingStore.getState();
-  if (seo.permalink === 1 && slugTitle) {
+  if (!questionId) {
+    return slugTitle ? `/questions/null/${slugTitle}` : '/questions/null';
+  }
+  // @ts-ignore
+  if (/[13]/.test(seo.permalink) && slugTitle) {
     return urlcat('/questions/:questionId/:slugPermalink', {
       questionId,
       slugPermalink: slugTitle,

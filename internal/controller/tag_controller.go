@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"strings"
+
 	"github.com/answerdev/answer/internal/base/handler"
 	"github.com/answerdev/answer/internal/base/middleware"
 	"github.com/answerdev/answer/internal/base/reason"
@@ -48,6 +50,25 @@ func (tc *TagController) SearchTagLike(ctx *gin.Context) {
 	handler.HandleResponse(ctx, err, resp)
 }
 
+// GetTagsBySlugName
+// @Summary get tags list
+// @Description get tags list
+// @Tags Tag
+// @Produce json
+// @Param tags query []string false "string collection" collectionFormat(csv)
+// @Success 200 {object} handler.RespBody{}
+// @Router /answer/api/v1/tags [get]
+func (tc *TagController) GetTagsBySlugName(ctx *gin.Context) {
+	req := &schema.SearchTagsBySlugName{}
+	if handler.BindAndCheck(ctx, req) {
+		return
+	}
+	req.TagList = strings.Split(req.Tags, ",")
+	// req.IsAdmin = middleware.GetIsAdminFromContext(ctx)
+	resp, err := tc.tagService.GetTagsBySlugName(ctx, req.TagList)
+	handler.HandleResponse(ctx, err, resp)
+}
+
 // RemoveTag delete tag
 // @Summary delete tag
 // @Description delete tag
@@ -73,9 +94,40 @@ func (tc *TagController) RemoveTag(ctx *gin.Context) {
 		handler.HandleResponse(ctx, errors.Forbidden(reason.RankFailToMeetTheCondition), nil)
 		return
 	}
-
 	err = tc.tagService.RemoveTag(ctx, req)
 	handler.HandleResponse(ctx, err, nil)
+}
+
+// AddTag add tag
+// @Summary add tag
+// @Description add tag
+// @Tags Tag
+// @Accept json
+// @Produce json
+// @Param data body schema.AddTagReq true "tag"
+// @Success 200 {object} handler.RespBody
+// @Router /answer/api/v1/tag [post]
+func (tc *TagController) AddTag(ctx *gin.Context) {
+	req := &schema.AddTagReq{}
+	if handler.BindAndCheck(ctx, req) {
+		return
+	}
+
+	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
+	canList, err := tc.rankService.CheckOperationPermissions(ctx, req.UserID, []string{
+		permission.TagAdd,
+	})
+	if err != nil {
+		handler.HandleResponse(ctx, err, nil)
+		return
+	}
+	if !canList[0] {
+		handler.HandleResponse(ctx, errors.Forbidden(reason.RankFailToMeetTheCondition), nil)
+		return
+	}
+
+	resp, err := tc.tagCommonService.AddTag(ctx, req)
+	handler.HandleResponse(ctx, err, resp)
 }
 
 // UpdateTag update tag

@@ -1,6 +1,8 @@
 package schema
 
 import (
+	"time"
+
 	"github.com/answerdev/answer/internal/base/validator"
 	"github.com/answerdev/answer/pkg/converter"
 )
@@ -39,11 +41,11 @@ type ReopenQuestionReq struct {
 
 type QuestionAdd struct {
 	// question title
-	Title string `validate:"required,gte=6,lte=150" json:"title"`
+	Title string `validate:"required,notblank,gte=6,lte=150" json:"title"`
 	// content
-	Content string `validate:"required,gte=6,lte=65535" json:"content"`
+	Content string `validate:"required,notblank,gte=6,lte=65535" json:"content"`
 	// html
-	HTML string `validate:"required,gte=6,lte=65535" json:"html"`
+	HTML string `json:"-"`
 	// tags
 	Tags []*TagItem `validate:"required,dive" json:"tags"`
 	// user id
@@ -53,6 +55,33 @@ type QuestionAdd struct {
 
 func (req *QuestionAdd) Check() (errFields []*validator.FormErrorField, err error) {
 	req.HTML = converter.Markdown2HTML(req.Content)
+	for _, tag := range req.Tags {
+		if len(tag.OriginalText) > 0 {
+			tag.ParsedText = converter.Markdown2HTML(tag.OriginalText)
+		}
+	}
+	return nil, nil
+}
+
+type QuestionAddByAnswer struct {
+	// question title
+	Title string `validate:"required,notblank,gte=6,lte=150" json:"title"`
+	// content
+	Content string `validate:"required,notblank,gte=6,lte=65535" json:"content"`
+	// html
+	HTML          string `json:"-"`
+	AnswerContent string `validate:"required,notblank,gte=6,lte=65535" json:"answer_content"`
+	AnswerHTML    string `json:"-"`
+	// tags
+	Tags []*TagItem `validate:"required,dive" json:"tags"`
+	// user id
+	UserID string `json:"-"`
+	QuestionPermission
+}
+
+func (req *QuestionAddByAnswer) Check() (errFields []*validator.FormErrorField, err error) {
+	req.HTML = converter.Markdown2HTML(req.Content)
+	req.AnswerHTML = converter.Markdown2HTML(req.AnswerContent)
 	for _, tag := range req.Tags {
 		if len(tag.OriginalText) > 0 {
 			tag.ParsedText = converter.Markdown2HTML(tag.OriginalText)
@@ -88,11 +117,11 @@ type QuestionUpdate struct {
 	// question id
 	ID string `validate:"required" json:"id"`
 	// question title
-	Title string `validate:"required,gte=6,lte=150" json:"title"`
+	Title string `validate:"required,notblank,gte=6,lte=150" json:"title"`
 	// content
-	Content string `validate:"required,gte=6,lte=65535" json:"content"`
+	Content string `validate:"required,notblank,gte=6,lte=65535" json:"content"`
 	// html
-	HTML string `validate:"required,gte=6,lte=65535" json:"html"`
+	HTML string `json:"-"`
 	// tags
 	Tags []*TagItem `validate:"required,dive" json:"tags"`
 	// edit summary
@@ -174,11 +203,20 @@ type AdminQuestionInfo struct {
 	UserInfo         *UserBasicInfo `json:"user_info"`
 }
 
+type OperationLevel string
+
+const (
+	OperationLevelInfo    OperationLevel = "info"
+	OperationLevelDanger  OperationLevel = "danger"
+	OperationLevelWarning OperationLevel = "warning"
+)
+
 type Operation struct {
-	OperationType        string `json:"operation_type"`
-	OperationDescription string `json:"operation_description"`
-	OperationMsg         string `json:"operation_msg"`
-	OperationTime        int64  `json:"operation_time"`
+	Type        string         `json:"type"`
+	Description string         `json:"description"`
+	Msg         string         `json:"msg"`
+	Time        int64          `json:"time"`
+	Level       OperationLevel `json:"level"`
 }
 
 type GetCloseTypeResp struct {
@@ -204,33 +242,87 @@ type UserAnswerInfo struct {
 	CreateTime   int    `json:"create_time"`
 	UpdateTime   int    `json:"update_time"`
 	QuestionInfo struct {
-		Title string        `json:"title"`
-		Tags  []interface{} `json:"tags"`
+		Title    string        `json:"title"`
+		UrlTitle string        `json:"url_title"`
+		Tags     []interface{} `json:"tags"`
 	} `json:"question_info"`
 }
 
 type UserQuestionInfo struct {
 	ID               string        `json:"question_id"`
 	Title            string        `json:"title"`
+	UrlTitle         string        `json:"url_title"`
 	VoteCount        int           `json:"vote_count"`
 	Tags             []interface{} `json:"tags"`
 	ViewCount        int           `json:"view_count"`
 	AnswerCount      int           `json:"answer_count"`
 	CollectionCount  int           `json:"collection_count"`
-	CreateTime       int           `json:"create_time"`
+	CreatedAt        int64         `json:"created_at"`
 	AcceptedAnswerID string        `json:"accepted_answer_id"`
 	Status           string        `json:"status"`
 }
 
-type QuestionSearch struct {
-	Page     int    `json:"page" form:"page"`           // Query number of pages
-	PageSize int    `json:"page_size" form:"page_size"` // Search page size
-	Order    string `json:"order" form:"order"`         // Search order by
-	// Tags     []string `json:"tags" form:"tags"`           // Search tag
-	Tag      string   `json:"tag" form:"tag"`           //Search tag
-	TagIDs   []string `json:"-" form:"-"`               // Search tag
-	UserName string   `json:"username" form:"username"` // Search username
-	UserID   string   `json:"-" form:"-"`
+const (
+	QuestionOrderCondNewest     = "newest"
+	QuestionOrderCondActive     = "active"
+	QuestionOrderCondFrequent   = "frequent"
+	QuestionOrderCondScore      = "score"
+	QuestionOrderCondUnanswered = "unanswered"
+)
+
+// QuestionPageReq query questions page
+type QuestionPageReq struct {
+	Page      int    `validate:"omitempty,min=1" form:"page"`
+	PageSize  int    `validate:"omitempty,min=1" form:"page_size"`
+	OrderCond string `validate:"omitempty,oneof=newest active frequent score unanswered" form:"order"`
+	Tag       string `validate:"omitempty,gt=0,lte=100" form:"tag"`
+	Username  string `validate:"omitempty,gt=0,lte=100" form:"username"`
+
+	LoginUserID      string `json:"-"`
+	UserIDBeSearched string `json:"-"`
+	TagID            string `json:"-"`
+}
+
+const (
+	QuestionPageRespOperationTypeAsked    = "asked"
+	QuestionPageRespOperationTypeAnswered = "answered"
+	QuestionPageRespOperationTypeModified = "modified"
+)
+
+type QuestionPageResp struct {
+	ID          string     `json:"id" `
+	CreatedAt   int64      `json:"created_at"`
+	Title       string     `json:"title"`
+	UrlTitle    string     `json:"url_title"`
+	Description string     `json:"description"`
+	Status      int        `json:"status"`
+	Tags        []*TagResp `json:"tags"`
+
+	// question statistical information
+	ViewCount       int `json:"view_count"`
+	UniqueViewCount int `json:"unique_view_count"`
+	VoteCount       int `json:"vote_count"`
+	AnswerCount     int `json:"answer_count"`
+	CollectionCount int `json:"collection_count"`
+	FollowCount     int `json:"follow_count"`
+
+	// answer information
+	AcceptedAnswerID   string    `json:"accepted_answer_id"`
+	LastAnswerID       string    `json:"last_answer_id"`
+	LastAnsweredUserID string    `json:"-"`
+	LastAnsweredAt     time.Time `json:"-"`
+
+	// operator information
+	OperatedAt    int64                     `json:"operated_at"`
+	Operator      *QuestionPageRespOperator `json:"operator"`
+	OperationType string                    `json:"operation_type"`
+}
+
+type QuestionPageRespOperator struct {
+	ID          string `json:"id"`
+	Username    string `json:"username"`
+	Rank        int    `json:"rank"`
+	DisplayName string `json:"display_name"`
 }
 
 type AdminQuestionSearch struct {

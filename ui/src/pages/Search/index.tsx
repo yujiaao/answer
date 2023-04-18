@@ -7,14 +7,21 @@ import { usePageTags } from '@/hooks';
 import { Pagination } from '@/components';
 import { useSearch } from '@/services';
 
-import { Head, SearchHead, SearchItem, Tips, Empty } from './components';
+import {
+  Head,
+  SearchHead,
+  SearchItem,
+  Tips,
+  Empty,
+  ListLoader,
+} from './components';
 
 const Index = () => {
   const { t } = useTranslation('translation');
   const [searchParams] = useSearchParams();
   const page = searchParams.get('page') || 1;
   const q = searchParams.get('q') || '';
-  const order = searchParams.get('order') || 'relevance';
+  const order = searchParams.get('order') || 'active';
 
   const { data, isLoading } = useSearch({
     q,
@@ -38,9 +45,13 @@ const Index = () => {
           <Head data={extra} />
           <SearchHead sort={order} count={count} />
           <ListGroup className="rounded-0 mb-5">
-            {list?.map((item) => {
-              return <SearchItem key={item.object.id} data={item} />;
-            })}
+            {isLoading ? (
+              <ListLoader />
+            ) : (
+              list?.map((item) => {
+                return <SearchItem key={item.object.id} data={item} />;
+              })
+            )}
           </ListGroup>
 
           {!isLoading && !list?.length && <Empty />}

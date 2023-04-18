@@ -106,6 +106,7 @@ func (a *AnswerAPIRouter) RegisterMustUnAuthAnswerAPIRouter(r *gin.RouterGroup) 
 	r.POST("/user/password/reset", a.userController.RetrievePassWord)
 	r.POST("/user/password/replacement", a.userController.UseRePassWord)
 	r.GET("/user/info", a.userController.GetUserInfoByUserID)
+	r.PUT("/user/email/notification", a.userController.UserUnsubscribeEmailNotification)
 }
 
 func (a *AnswerAPIRouter) RegisterUnAuthAnswerAPIRouter(r *gin.RouterGroup) {
@@ -123,8 +124,7 @@ func (a *AnswerAPIRouter) RegisterUnAuthAnswerAPIRouter(r *gin.RouterGroup) {
 
 	//question
 	r.GET("/question/info", a.questionController.GetQuestion)
-	r.POST("/question/search", a.questionController.SearchList)
-	r.GET("/question/page", a.questionController.Index)
+	r.GET("/question/page", a.questionController.QuestionPage)
 	r.GET("/question/similar/tag", a.questionController.SimilarQuestion)
 	r.GET("/personal/qa/top", a.questionController.UserTop)
 	r.GET("/personal/question/page", a.questionController.UserList)
@@ -141,8 +141,8 @@ func (a *AnswerAPIRouter) RegisterUnAuthAnswerAPIRouter(r *gin.RouterGroup) {
 	r.GET("/tags/page", a.tagController.GetTagWithPage)
 	r.GET("/tags/following", a.tagController.GetFollowingTags)
 	r.GET("/tag", a.tagController.GetTagInfo)
+	r.GET("/tags", a.tagController.GetTagsBySlugName)
 	r.GET("/tag/synonyms", a.tagController.GetTagSynonyms)
-	r.GET("/question/index", a.questionController.Index)
 
 	//search
 	r.GET("/search", a.searchController.Search)
@@ -175,6 +175,7 @@ func (a *AnswerAPIRouter) RegisterAnswerAPIRouter(r *gin.RouterGroup) {
 
 	// tag
 	r.GET("/question/tags", a.tagController.SearchTagLike)
+	r.POST("/tag", a.tagController.AddTag)
 	r.PUT("/tag", a.tagController.UpdateTag)
 	r.DELETE("/tag", a.tagController.RemoveTag)
 	r.PUT("/tag/synonym", a.tagController.UpdateTagSynonym)
@@ -185,6 +186,7 @@ func (a *AnswerAPIRouter) RegisterAnswerAPIRouter(r *gin.RouterGroup) {
 
 	// question
 	r.POST("/question", a.questionController.AddQuestion)
+	r.POST("/question/answer", a.questionController.AddQuestionByAnswer)
 	r.PUT("/question", a.questionController.UpdateQuestion)
 	r.DELETE("/question", a.questionController.RemoveQuestion)
 	r.PUT("/question/status", a.questionController.CloseQuestion)
@@ -218,6 +220,7 @@ func (a *AnswerAPIRouter) RegisterAnswerAPIRouter(r *gin.RouterGroup) {
 
 	// upload file
 	r.POST("/file", a.uploadController.UploadFile)
+	r.POST("/post/render", a.uploadController.PostRender)
 
 	// activity
 	r.GET("/activity/timeline", a.activityController.GetObjectTimeline)

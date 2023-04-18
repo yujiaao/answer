@@ -1,10 +1,9 @@
 package controller
 
 import (
-	"context"
-
 	"github.com/answerdev/answer/internal/base/handler"
 	"github.com/answerdev/answer/internal/base/middleware"
+	"github.com/answerdev/answer/internal/base/pager"
 	"github.com/answerdev/answer/internal/base/reason"
 	"github.com/answerdev/answer/internal/base/validator"
 	"github.com/answerdev/answer/internal/entity"
@@ -13,25 +12,36 @@ import (
 	"github.com/answerdev/answer/internal/service/permission"
 	"github.com/answerdev/answer/internal/service/rank"
 	"github.com/answerdev/answer/pkg/converter"
+	"github.com/answerdev/answer/pkg/uid"
 	"github.com/gin-gonic/gin"
+	"github.com/jinzhu/copier"
 	"github.com/segmentfault/pacman/errors"
 )
 
 // QuestionController question controller
 type QuestionController struct {
 	questionService *service.QuestionService
+	answerService   *service.AnswerService
 	rankService     *rank.RankService
 }
 
 // NewQuestionController new controller
-func NewQuestionController(questionService *service.QuestionService, rankService *rank.RankService) *QuestionController {
-	return &QuestionController{questionService: questionService, rankService: rankService}
+func NewQuestionController(
+	questionService *service.QuestionService,
+	answerService *service.AnswerService,
+	rankService *rank.RankService,
+) *QuestionController {
+	return &QuestionController{
+		questionService: questionService,
+		answerService:   answerService,
+		rankService:     rankService,
+	}
 }
 
 // RemoveQuestion delete question
 // @Summary delete question
 // @Description delete question
-// @Tags api-question
+// @Tags Question
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -43,6 +53,7 @@ func (qc *QuestionController) RemoveQuestion(ctx *gin.Context) {
 	if handler.BindAndCheck(ctx, req) {
 		return
 	}
+	req.ID = uid.DeShortID(req.ID)
 	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
 	req.IsAdmin = middleware.GetIsAdminFromContext(ctx)
 	can, err := qc.rankService.CheckOperationPermission(ctx, req.UserID, permission.QuestionDelete, req.ID)
@@ -62,7 +73,7 @@ func (qc *QuestionController) RemoveQuestion(ctx *gin.Context) {
 // CloseQuestion Close question
 // @Summary Close question
 // @Description Close question
-// @Tags api-question
+// @Tags Question
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -74,6 +85,7 @@ func (qc *QuestionController) CloseQuestion(ctx *gin.Context) {
 	if handler.BindAndCheck(ctx, req) {
 		return
 	}
+	req.ID = uid.DeShortID(req.ID)
 	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
 	can, err := qc.rankService.CheckOperationPermission(ctx, req.UserID, permission.QuestionClose, "")
 	if err != nil {
@@ -92,7 +104,7 @@ func (qc *QuestionController) CloseQuestion(ctx *gin.Context) {
 // ReopenQuestion reopen question
 // @Summary reopen question
 // @Description reopen question
-// @Tags api-question
+// @Tags Question
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -104,6 +116,7 @@ func (qc *QuestionController) ReopenQuestion(ctx *gin.Context) {
 	if handler.BindAndCheck(ctx, req) {
 		return
 	}
+	req.QuestionID = uid.DeShortID(req.QuestionID)
 	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
 	can, err := qc.rankService.CheckOperationPermission(ctx, req.UserID, permission.QuestionReopen, "")
 	if err != nil {
@@ -119,10 +132,10 @@ func (qc *QuestionController) ReopenQuestion(ctx *gin.Context) {
 	handler.HandleResponse(ctx, err, nil)
 }
 
-// GetQuestion godoc
-// @Summary GetQuestion Question
-// @Description GetQuestion Question
-// @Tags api-question
+// GetQuestion get question details
+// @Summary get question details
+// @Description get question details
+// @Tags Question
 // @Security ApiKeyAuth
 // @Accept  json
 // @Produce  json
@@ -131,6 +144,7 @@ func (qc *QuestionController) ReopenQuestion(ctx *gin.Context) {
 // @Router /answer/api/v1/question/info [get]
 func (qc *QuestionController) GetQuestion(ctx *gin.Context) {
 	id := ctx.Query("id")
+	id = uid.DeShortID(id)
 	userID := middleware.GetLoginUserIDFromContext(ctx)
 	req := schema.QuestionPermission{}
 	canList, err := qc.rankService.CheckOperationPermissions(ctx, userID, []string{
@@ -155,13 +169,14 @@ func (qc *QuestionController) GetQuestion(ctx *gin.Context) {
 		handler.HandleResponse(ctx, err, nil)
 		return
 	}
+	info.ID = uid.EnShortID(info.ID)
 	handler.HandleResponse(ctx, nil, info)
 }
 
 // SimilarQuestion godoc
 // @Summary Search Similar Question
 // @Description Search Similar Question
-// @Tags api-question
+// @Tags Question
 // @Accept  json
 // @Produce  json
 // @Param question_id query string true "question_id"  default()
@@ -169,6 +184,7 @@ func (qc *QuestionController) GetQuestion(ctx *gin.Context) {
 // @Router /answer/api/v1/question/similar/tag [get]
 func (qc *QuestionController) SimilarQuestion(ctx *gin.Context) {
 	questionID := ctx.Query("question_id")
+	questionID = uid.DeShortID(questionID)
 	userID := middleware.GetLoginUserIDFromContext(ctx)
 	list, count, err := qc.questionService.SimilarQuestion(ctx, questionID, userID)
 	if err != nil {
@@ -181,65 +197,34 @@ func (qc *QuestionController) SimilarQuestion(ctx *gin.Context) {
 	})
 }
 
-// Index godoc
-// @Summary SearchQuestionList
-// @Description SearchQuestionList <br>  "order"  Enums(newest, active,frequent,score,unanswered)
-// @Tags api-question
+// QuestionPage get questions by page
+// @Summary get questions by page
+// @Description get questions by page
+// @Tags Question
 // @Accept  json
 // @Produce  json
-// @Param data body schema.QuestionSearch  true "QuestionSearch"
-// @Success 200 {string} string ""
+// @Param data body schema.QuestionPageReq  true "QuestionPageReq"
+// @Success 200 {object} handler.RespBody{data=pager.PageModel{list=[]schema.QuestionPageResp}}
 // @Router /answer/api/v1/question/page [get]
-func (qc *QuestionController) Index(ctx *gin.Context) {
-	req := &schema.QuestionSearch{}
+func (qc *QuestionController) QuestionPage(ctx *gin.Context) {
+	req := &schema.QuestionPageReq{}
 	if handler.BindAndCheck(ctx, req) {
 		return
 	}
-	userID := middleware.GetLoginUserIDFromContext(ctx)
-	list, count, err := qc.questionService.SearchList(ctx, req, userID)
+	req.LoginUserID = middleware.GetLoginUserIDFromContext(ctx)
+
+	questions, total, err := qc.questionService.GetQuestionPage(ctx, req)
 	if err != nil {
 		handler.HandleResponse(ctx, err, nil)
 		return
 	}
-	handler.HandleResponse(ctx, nil, gin.H{
-		"list":  list,
-		"count": count,
-	})
-}
-
-// SearchList godoc
-// @Summary SearchQuestionList
-// @Description SearchQuestionList
-// @Tags api-question
-// @Accept  json
-// @Produce  json
-// @Param data body schema.QuestionSearch  true "QuestionSearch"
-// @Router  /answer/api/v1/question/search [post]
-// @Success 200 {string} string ""
-func (qc *QuestionController) SearchList(c *gin.Context) {
-	Request := new(schema.QuestionSearch)
-	err := c.BindJSON(Request)
-	if err != nil {
-		handler.HandleResponse(c, err, nil)
-		return
-	}
-	ctx := context.Background()
-	userID := middleware.GetLoginUserIDFromContext(c)
-	list, count, err := qc.questionService.SearchList(ctx, Request, userID)
-	if err != nil {
-		handler.HandleResponse(c, err, nil)
-		return
-	}
-	handler.HandleResponse(c, nil, gin.H{
-		"list":  list,
-		"count": count,
-	})
+	handler.HandleResponse(ctx, nil, pager.NewPageModel(total, questions))
 }
 
 // AddQuestion add question
 // @Summary add question
 // @Description add question
-// @Tags api-question
+// @Tags Question
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -306,10 +291,113 @@ func (qc *QuestionController) AddQuestion(ctx *gin.Context) {
 	handler.HandleResponse(ctx, err, resp)
 }
 
+// AddQuestionByAnswer add question
+// @Summary add question and answer
+// @Description add question and answer
+// @Tags Question
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param data body schema.QuestionAddByAnswer true "question"
+// @Success 200 {object} handler.RespBody
+// @Router /answer/api/v1/question/answer [post]
+func (qc *QuestionController) AddQuestionByAnswer(ctx *gin.Context) {
+	req := &schema.QuestionAddByAnswer{}
+	errFields := handler.BindAndCheckReturnErr(ctx, req)
+	if ctx.IsAborted() {
+		return
+	}
+	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
+
+	canList, err := qc.rankService.CheckOperationPermissions(ctx, req.UserID, []string{
+		permission.QuestionAdd,
+		permission.QuestionEdit,
+		permission.QuestionDelete,
+		permission.QuestionClose,
+		permission.QuestionReopen,
+		permission.TagUseReservedTag,
+	})
+	if err != nil {
+		handler.HandleResponse(ctx, err, nil)
+		return
+	}
+	req.CanAdd = canList[0]
+	req.CanEdit = canList[1]
+	req.CanDelete = canList[2]
+	req.CanClose = canList[3]
+	req.CanReopen = canList[4]
+	req.CanUseReservedTag = canList[5]
+	if !req.CanAdd {
+		handler.HandleResponse(ctx, errors.Forbidden(reason.RankFailToMeetTheCondition), nil)
+		return
+	}
+	questionReq := new(schema.QuestionAdd)
+	err = copier.Copy(questionReq, req)
+	if err != nil {
+		handler.HandleResponse(ctx, errors.Forbidden(reason.RequestFormatError), nil)
+		return
+	}
+	errList, err := qc.questionService.CheckAddQuestion(ctx, questionReq)
+	if err != nil {
+		errlist, ok := errList.([]*validator.FormErrorField)
+		if ok {
+			errFields = append(errFields, errlist...)
+		}
+	}
+
+	if len(errFields) > 0 {
+		handler.HandleResponse(ctx, errors.BadRequest(reason.RequestFormatError), errFields)
+		return
+	}
+
+	resp, err := qc.questionService.AddQuestion(ctx, questionReq)
+	if err != nil {
+		errlist, ok := resp.([]*validator.FormErrorField)
+		if ok {
+			errFields = append(errFields, errlist...)
+		}
+	}
+
+	if len(errFields) > 0 {
+		handler.HandleResponse(ctx, errors.BadRequest(reason.RequestFormatError), errFields)
+		return
+	}
+	//add the question id to the answer
+	questionInfo, ok := resp.(*schema.QuestionInfo)
+	if ok {
+		answerReq := &schema.AnswerAddReq{}
+		answerReq.QuestionID = uid.DeShortID(questionInfo.ID)
+		answerReq.UserID = middleware.GetLoginUserIDFromContext(ctx)
+		answerReq.Content = req.AnswerContent
+		answerReq.HTML = req.AnswerHTML
+		answerID, err := qc.answerService.Insert(ctx, answerReq)
+		if err != nil {
+			handler.HandleResponse(ctx, err, nil)
+			return
+		}
+		info, questionInfo, has, err := qc.answerService.Get(ctx, answerID, req.UserID)
+		if err != nil {
+			handler.HandleResponse(ctx, err, nil)
+			return
+		}
+		if !has {
+			handler.HandleResponse(ctx, nil, nil)
+			return
+		}
+		handler.HandleResponse(ctx, err, gin.H{
+			"info":     info,
+			"question": questionInfo,
+		})
+		return
+	}
+
+	handler.HandleResponse(ctx, err, resp)
+}
+
 // UpdateQuestion update question
 // @Summary update question
 // @Description update question
-// @Tags api-question
+// @Tags Question
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -322,6 +410,7 @@ func (qc *QuestionController) UpdateQuestion(ctx *gin.Context) {
 	if ctx.IsAborted() {
 		return
 	}
+	req.ID = uid.DeShortID(req.ID)
 	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
 
 	canList, err := qc.rankService.CheckOperationPermissions(ctx, req.UserID, []string{
@@ -366,7 +455,7 @@ func (qc *QuestionController) UpdateQuestion(ctx *gin.Context) {
 // CloseMsgList close question msg list
 // @Summary close question msg list
 // @Description close question msg list
-// @Tags api-question
+// @Tags Question
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -380,7 +469,7 @@ func (qc *QuestionController) CloseMsgList(ctx *gin.Context) {
 // SearchByTitleLike add question title like
 // @Summary add question title like
 // @Description add question title like
-// @Tags api-question
+// @Tags Question
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -397,7 +486,7 @@ func (qc *QuestionController) SearchByTitleLike(ctx *gin.Context) {
 // UserTop godoc
 // @Summary UserTop
 // @Description UserTop
-// @Tags api-question
+// @Tags Question
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -417,7 +506,7 @@ func (qc *QuestionController) UserTop(ctx *gin.Context) {
 // UserList godoc
 // @Summary UserList
 // @Description UserList
-// @Tags api-question
+// @Tags Question
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -539,6 +628,7 @@ func (qc *QuestionController) AdminSearchAnswerList(ctx *gin.Context) {
 	if handler.BindAndCheck(ctx, req) {
 		return
 	}
+	req.QuestionID = uid.DeShortID(req.QuestionID)
 	userID := middleware.GetLoginUserIDFromContext(ctx)
 	questionList, count, err := qc.questionService.AdminSearchAnswerList(ctx, req, userID)
 	handler.HandleResponse(ctx, err, gin.H{
@@ -562,6 +652,7 @@ func (qc *QuestionController) AdminSetQuestionStatus(ctx *gin.Context) {
 	if handler.BindAndCheck(ctx, req) {
 		return
 	}
+	req.QuestionID = uid.DeShortID(req.QuestionID)
 	err := qc.questionService.AdminSetQuestionStatus(ctx, req.QuestionID, req.StatusStr)
 	handler.HandleResponse(ctx, err, gin.H{})
 }

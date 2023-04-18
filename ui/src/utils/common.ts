@@ -21,7 +21,7 @@ function formatCount($num: number): string {
   return res;
 }
 
-function scrollTop(element) {
+function scrollToElementTop(element) {
   if (!element) {
     return;
   }
@@ -35,6 +35,24 @@ function scrollTop(element) {
     top: offsetPosition,
   });
 }
+
+const scrollToDocTop = () => {
+  setTimeout(() => {
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth',
+    });
+  });
+};
+
+const bgFadeOut = (el) => {
+  if (el && !el.classList.contains('bg-fade-out')) {
+    el.classList.add('bg-fade-out');
+    setTimeout(() => {
+      el.classList.remove('bg-fade-out');
+    }, 3200);
+  }
+};
 
 /**
  * Extract user info from markdown
@@ -81,20 +99,13 @@ function formatUptime(value) {
   return `< 1 ${t('dates.hour')}`;
 }
 
-function escapeRemove(str) {
+function escapeRemove(str: string) {
   if (!str || typeof str !== 'string') return str;
-  const arrEntities = {
-    lt: '<',
-    gt: '>',
-    nbsp: ' ',
-    amp: '&',
-    quot: '"',
-    '#39': "'",
-  };
-
-  return str.replace(/&(lt|gt|nbsp|amp|quot|#39);/gi, function (all, t) {
-    return arrEntities[t];
-  });
+  let temp: HTMLDivElement | null = document.createElement('div');
+  temp.innerHTML = str;
+  const output = temp?.innerText || temp.textContent;
+  temp = null;
+  return output;
 }
 function mixColor(color_1, color_2, weight) {
   function d2h(d) {
@@ -155,30 +166,47 @@ function labelStyle(color, hover) {
 function handleFormError(
   error: { list: Array<{ error_field: string; error_msg: string }> },
   data: any,
+  keymap?: Array<{ from: string; to: string }>,
 ) {
   if (error.list?.length > 0) {
     error.list.forEach((item) => {
-      data[item.error_field].isInvalid = true;
-      data[item.error_field].errorMsg = item.error_msg;
+      if (keymap?.length) {
+        const key = keymap.find((k) => k.from === item.error_field);
+        if (key) {
+          item.error_field = key.to;
+        }
+      }
+      const errorFieldObject = data[item.error_field];
+      if (errorFieldObject) {
+        errorFieldObject.isInvalid = true;
+        errorFieldObject.errorMsg = item.error_msg;
+      }
     });
   }
   return data;
 }
 
-function diffText(newText: string, oldText: string): string {
+function escapeHtml(str: string) {
+  const tagsToReplace = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+    '`': '&#96;',
+  };
+  return str.replace(/[&<>"'`]/g, (tag) => tagsToReplace[tag] || tag);
+}
+
+function diffText(newText: string, oldText?: string): string {
   if (!newText) {
     return '';
   }
 
   if (typeof oldText !== 'string') {
-    return newText
-      ?.replace(/\n/gi, '<br>')
-      ?.replace(/<kbd/gi, '&lt;kbd')
-      ?.replace(/<\/kbd>/gi, '&lt;/kbd&gt;')
-      ?.replace(/<iframe/gi, '&lt;iframe')
-      ?.replace(/<input/gi, '&lt;input');
+    return escapeHtml(newText);
   }
-  const diff = Diff.diffChars(oldText, newText);
+  const diff = Diff.diffChars(escapeHtml(oldText), escapeHtml(newText));
   const result = diff.map((part) => {
     if (part.added) {
       if (part.value.replace(/\n/g, '').length <= 0) {
@@ -202,18 +230,15 @@ function diffText(newText: string, oldText: string): string {
     return part.value;
   });
 
-  return result
-    .join('')
-    ?.replace(/<iframe/gi, '&lt;iframe')
-    ?.replace(/<kbd/gi, '&lt;kbd')
-    ?.replace(/<\/kbd>/gi, '&lt;/kbd&gt;')
-    ?.replace(/<input/gi, '&lt;input');
+  return result.join('');
 }
 
 export {
   thousandthDivision,
   formatCount,
-  scrollTop,
+  scrollToElementTop,
+  scrollToDocTop,
+  bgFadeOut,
   matchedUsers,
   parseUserInfo,
   formatUptime,

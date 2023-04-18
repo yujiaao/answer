@@ -80,6 +80,15 @@ export function createEditorUtils(
 
 export function htmlRender(el: HTMLElement | null) {
   if (!el) return;
+  // Replace all br tags with newlines
+  // Fixed an issue where the BR tag in the editor block formula HTML caused rendering errors.
+  el.querySelectorAll('p').forEach((p) => {
+    if (p.innerHTML.startsWith('$$') && p.innerHTML.endsWith('$$')) {
+      const str = p.innerHTML.replace(/<br>/g, '\n');
+      p.innerHTML = str;
+    }
+  });
+
   import('mermaid').then(({ default: mermaid }) => {
     mermaid.initialize({ startOnLoad: false });
 
@@ -99,6 +108,7 @@ export function htmlRender(el: HTMLElement | null) {
       render(el, {
         delimiters: [
           { left: '$$', right: '$$', display: true },
+          { left: '$$<br>', right: '<br>$$', display: true },
           {
             left: '\\begin{equation}',
             right: '\\end{equation}',
@@ -113,4 +123,32 @@ export function htmlRender(el: HTMLElement | null) {
       });
     },
   );
+
+  // change table style
+
+  el.querySelectorAll('table').forEach((table) => {
+    if (
+      (table.parentNode as HTMLDivElement)?.classList.contains(
+        'table-responsive',
+      )
+    ) {
+      return;
+    }
+
+    table.classList.add('table', 'table-bordered');
+    const div = document.createElement('div');
+    div.className = 'table-responsive';
+    table.parentNode?.replaceChild(div, table);
+    div.appendChild(table);
+  });
+
+  // add rel nofollow for link not inlcludes domain
+  el.querySelectorAll('a').forEach((a) => {
+    const base = window.location.origin;
+    const targetUrl = new URL(a.href, base);
+
+    if (targetUrl.origin !== base) {
+      a.rel = 'nofollow';
+    }
+  });
 }

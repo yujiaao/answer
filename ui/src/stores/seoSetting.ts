@@ -7,7 +7,7 @@ interface IProps {
   update: (params: AdminSettingsSeo) => void;
 }
 
-const siteInfo = create<IProps>((set) => ({
+const Index = create<IProps>((set) => ({
   seo: {
     robots: '',
     permalink: 1,
@@ -15,7 +15,8 @@ const siteInfo = create<IProps>((set) => ({
   update: (params) =>
     set((state) => {
       const o = { ...state.seo, ...params };
-      if (o.permalink !== 1 && o.permalink !== 2) {
+      // @ts-ignore
+      if (!/[1234]/.test(o.permalink)) {
         o.permalink = 1;
       }
       return {
@@ -24,4 +25,4 @@ const siteInfo = create<IProps>((set) => ({
     }),
 }));
 
-export default siteInfo;
+export default Index;

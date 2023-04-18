@@ -14,9 +14,9 @@ type AddCommentReq struct {
 	// reply comment id
 	ReplyCommentID string `validate:"omitempty" json:"reply_comment_id"`
 	// original comment content
-	OriginalText string `validate:"required" json:"original_text"`
+	OriginalText string `validate:"required,notblank,gte=2,lte=600" json:"original_text"`
 	// parsed comment content
-	ParsedText string `validate:"required" json:"parsed_text"`
+	ParsedText string `json:"-"`
 	// @ user id list
 	MentionUsernameList []string `validate:"omitempty" json:"mention_username_list"`
 	// user id
@@ -47,11 +47,18 @@ type UpdateCommentReq struct {
 	// comment id
 	CommentID string `validate:"required" json:"comment_id"`
 	// original comment content
-	OriginalText string `validate:"omitempty" json:"original_text"`
+	OriginalText string `validate:"required,notblank,gte=2,lte=600" json:"original_text"`
 	// parsed comment content
-	ParsedText string `validate:"omitempty" json:"parsed_text"`
+	ParsedText string `json:"-"`
 	// user id
-	UserID string `json:"-"`
+	UserID  string `json:"-"`
+	IsAdmin bool   `json:"-"`
+
+	CanAdd bool `json:"-"`
+	// whether user can edit it
+	CanEdit bool `json:"-"`
+	// whether user can delete it
+	CanDelete bool `json:"-"`
 }
 
 func (req *UpdateCommentReq) Check() (errFields []*validator.FormErrorField, err error) {
@@ -191,6 +198,8 @@ type GetCommentPersonalWithPageResp struct {
 	ObjectType string `json:"object_type" enums:"question,answer,tag,comment"`
 	// title
 	Title string `json:"title"`
+	// url title
+	UrlTitle string `json:"url_title"`
 	// content
 	Content string `json:"content"`
 }
