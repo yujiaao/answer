@@ -2,7 +2,7 @@
   "name": "answer-static",
   "version": "0.1.0",
   "private": true,
-  "homepage": "/",
+  "homepage": "https://answer.bixuebihui.com/",
   "scripts": {
     "start": "react-app-rewired start",
     "build": "react-app-rewired build",
@@ -30,6 +30,7 @@
     "md5": "^2.3.0",
     "mermaid": "^9.1.7",
     "next-share": "^0.18.1",
+    "pnpm": "^7.14.1",
     "qs": "^6.11.0",
     "react": "^18.2.0",
     "react-bootstrap": "^2.5.0",

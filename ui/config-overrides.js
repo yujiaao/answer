@@ -1,6 +1,6 @@
 const {
   addWebpackModuleRule,
-  addWebpackAlias
+  addWebpackAlias,
 } = require("customize-cra");
 
 const path = require("path");
@@ -17,6 +17,8 @@ module.exports = {
       test: /\.ya?ml$/,
       use: "yaml-loader"
     })(config);
+
+   config.resolve.alias = Object.assign({}, config.resolve.alias,{util: false}	)  
 
     // add i18n dir to ModuleScopePlugin allowedPaths
     const moduleScopePlugin = config.resolve.plugins.find(_ => _.constructor.name === "ModuleScopePlugin");
