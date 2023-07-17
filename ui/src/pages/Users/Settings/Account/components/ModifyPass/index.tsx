@@ -2,15 +2,20 @@ import React, { FC, FormEvent, useState } from 'react';
 import { Form, Button } from 'react-bootstrap';
 import { useTranslation } from 'react-i18next';
 
+import classname from 'classnames';
+
 import { useToast } from '@/hooks';
-import type { FormDataType } from '@/common/interface';
-import { modifyPassword } from '@/services';
+import type { FormDataType, ImgCodeRes } from '@/common/interface';
+import { modifyPassword, checkImgCode } from '@/services';
 import { handleFormError } from '@/utils';
+import { loggedUserInfoStore } from '@/stores';
+import { PicAuthCodeModal } from '@/components';
 
 const Index: FC = () => {
   const { t } = useTranslation('translation', {
     keyPrefix: 'settings.account',
   });
+  const { user } = loggedUserInfoStore();
   const [showForm, setFormState] = useState(false);
   const toast = useToast();
   const [formData, setFormData] = useState<FormDataType>({
@@ -30,6 +35,20 @@ const Index: FC = () => {
       errorMsg: '',
     },
   });
+  const [showModal, setModalState] = useState(false);
+  const [imgCode, setImgCode] = useState<ImgCodeRes>({
+    captcha_id: '',
+    captcha_img: '',
+    verify: false,
+  });
+
+  const getImgCode = () => {
+    checkImgCode({
+      action: 'modify_pass',
+    }).then((res) => {
+      setImgCode(res);
+    });
+  };
 
   const handleFormState = () => {
     setFormState((pre) => !pre);
@@ -42,8 +61,7 @@ const Index: FC = () => {
   const checkValidated = (): boolean => {
     let bol = true;
     const { old_pass, pass, pass2 } = formData;
-
-    if (!old_pass.value) {
+    if (!old_pass.value && user.have_password) {
       bol = false;
       formData.old_pass = {
         value: '',
@@ -101,17 +119,22 @@ const Index: FC = () => {
     return bol;
   };
 
-  const handleSubmit = (event: FormEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (!checkValidated()) {
-      return;
+  const postModifyPass = (event?: any) => {
+    if (event) {
+      event.preventDefault();
     }
-    modifyPassword({
+    const params: any = {
       old_pass: formData.old_pass.value,
       pass: formData.pass.value,
-    })
+    };
+
+    if (imgCode.verify) {
+      params.captcha_code = formData.captcha_code.value;
+      params.captcha_id = imgCode.captcha_id;
+    }
+    modifyPassword(params)
       .then(() => {
+        setModalState(false);
         toast.onShow({
           msg: t('update_password', { keyPrefix: 'toast' }),
           variant: 'success',
@@ -121,23 +144,44 @@ const Index: FC = () => {
       .catch((err) => {
         if (err.isError) {
           const data = handleFormError(err, formData);
+          if (!err.list.find((v) => v.error_field.indexOf('captcha') >= 0)) {
+            setModalState(false);
+          }
           setFormData({ ...data });
         }
+      })
+      .finally(() => {
+        getImgCode();
       });
+  };
+
+  const handleSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!checkValidated()) {
+      return;
+    }
+
+    if (imgCode.verify) {
+      setModalState(true);
+      return;
+    }
+    postModifyPass();
   };
 
   return (
     <div className="mt-5">
       {showForm ? (
         <Form noValidate onSubmit={handleSubmit}>
-          <Form.Group controlId="oldPass" className="mb-3">
+          <Form.Group
+            controlId="oldPass"
+            className={classname('mb-3', user.have_password ? '' : 'd-none')}>
             <Form.Label>{t('current_pass.label')}</Form.Label>
             <Form.Control
               autoComplete="off"
               required
               type="password"
               placeholder=""
-              // value={formData.password.value}
               isInvalid={formData.old_pass.isInvalid}
               onChange={(e) =>
                 handleChange({
@@ -161,7 +205,6 @@ const Index: FC = () => {
               required
               type="password"
               maxLength={32}
-              // value={formData.password.value}
               isInvalid={formData.pass.isInvalid}
               onChange={(e) =>
                 handleChange({
@@ -185,7 +228,6 @@ const Index: FC = () => {
               required
               type="password"
               maxLength={32}
-              // value={formData.password.value}
               isInvalid={formData.pass2.isInvalid}
               onChange={(e) =>
                 handleChange({
@@ -218,11 +260,26 @@ const Index: FC = () => {
           <Button
             variant="outline-secondary"
             type="submit"
-            onClick={handleFormState}>
+            onClick={() => {
+              handleFormState();
+              getImgCode();
+            }}>
             {t('change_pass_btn')}
           </Button>
         </>
       )}
+
+      <PicAuthCodeModal
+        visible={showModal}
+        data={{
+          captcha: formData.captcha_code,
+          imgCode,
+        }}
+        handleCaptcha={handleChange}
+        clickSubmit={postModifyPass}
+        refreshImgCode={getImgCode}
+        onClose={() => setModalState(false)}
+      />
     </div>
   );
 };

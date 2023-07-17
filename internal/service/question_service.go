@@ -3,13 +3,13 @@ package service
 import (
 	"encoding/json"
 	"fmt"
-	"math"
 	"strings"
 	"time"
 
 	"github.com/answerdev/answer/internal/base/constant"
 	"github.com/answerdev/answer/internal/base/data"
 	"github.com/answerdev/answer/internal/base/handler"
+	"github.com/answerdev/answer/internal/base/pager"
 	"github.com/answerdev/answer/internal/base/reason"
 	"github.com/answerdev/answer/internal/base/translator"
 	"github.com/answerdev/answer/internal/base/validator"
@@ -18,6 +18,7 @@ import (
 	"github.com/answerdev/answer/internal/service/activity"
 	"github.com/answerdev/answer/internal/service/activity_queue"
 	collectioncommon "github.com/answerdev/answer/internal/service/collection_common"
+	"github.com/answerdev/answer/internal/service/export"
 	"github.com/answerdev/answer/internal/service/meta"
 	"github.com/answerdev/answer/internal/service/notice_queue"
 	"github.com/answerdev/answer/internal/service/permission"
@@ -25,6 +26,8 @@ import (
 	"github.com/answerdev/answer/internal/service/revision_common"
 	tagcommon "github.com/answerdev/answer/internal/service/tag_common"
 	usercommon "github.com/answerdev/answer/internal/service/user_common"
+	"github.com/answerdev/answer/pkg/converter"
+	"github.com/answerdev/answer/pkg/encryption"
 	"github.com/answerdev/answer/pkg/htmltext"
 	"github.com/answerdev/answer/pkg/uid"
 	"github.com/jinzhu/copier"
@@ -42,11 +45,13 @@ type QuestionService struct {
 	tagCommon             *tagcommon.TagCommonService
 	questioncommon        *questioncommon.QuestionCommon
 	userCommon            *usercommon.UserCommon
+	userRepo              usercommon.UserRepo
 	revisionService       *revision_common.RevisionService
 	metaService           *meta.MetaService
 	collectionCommon      *collectioncommon.CollectionCommon
 	answerActivityService *activity.AnswerActivityService
 	data                  *data.Data
+	emailService          *export.EmailService
 }
 
 func NewQuestionService(
@@ -54,23 +59,26 @@ func NewQuestionService(
 	tagCommon *tagcommon.TagCommonService,
 	questioncommon *questioncommon.QuestionCommon,
 	userCommon *usercommon.UserCommon,
+	userRepo usercommon.UserRepo,
 	revisionService *revision_common.RevisionService,
 	metaService *meta.MetaService,
 	collectionCommon *collectioncommon.CollectionCommon,
 	answerActivityService *activity.AnswerActivityService,
 	data *data.Data,
-
+	emailService *export.EmailService,
 ) *QuestionService {
 	return &QuestionService{
 		questionRepo:          questionRepo,
 		tagCommon:             tagCommon,
 		questioncommon:        questioncommon,
 		userCommon:            userCommon,
+		userRepo:              userRepo,
 		revisionService:       revisionService,
 		metaService:           metaService,
 		collectionCommon:      collectionCommon,
 		answerActivityService: answerActivityService,
 		data:                  data,
+		emailService:          emailService,
 	}
 }
 
@@ -129,22 +137,6 @@ func (qs *QuestionService) ReopenQuestion(ctx context.Context, req *schema.Reope
 		ActivityTypeKey:  constant.ActQuestionReopened,
 	})
 	return nil
-}
-
-// CloseMsgList list close question condition
-func (qs *QuestionService) CloseMsgList(ctx context.Context, lang i18n.Language) (
-	resp []*schema.GetCloseTypeResp, err error,
-) {
-	resp = make([]*schema.GetCloseTypeResp, 0)
-	err = json.Unmarshal([]byte(constant.QuestionCloseJSON), &resp)
-	if err != nil {
-		return nil, errors.InternalServer(reason.UnknownError).WithError(err).WithStack()
-	}
-	for _, t := range resp {
-		t.Name = translator.Tr(lang, t.Name)
-		t.Description = translator.Tr(lang, t.Description)
-	}
-	return resp, err
 }
 
 func (qs *QuestionService) AddQuestionCheckTags(ctx context.Context, Tags []*entity.Tag) ([]string, error) {
@@ -206,6 +198,11 @@ func (qs *QuestionService) CheckAddQuestion(ctx context.Context, req *schema.Que
 		}
 	}
 	return nil, nil
+}
+
+// HasNewTag
+func (qs *QuestionService) HasNewTag(ctx context.Context, tags []*schema.TagItem) (bool, error) {
+	return qs.tagCommon.HasNewTag(ctx, tags)
 }
 
 // AddQuestion add question
@@ -270,6 +267,7 @@ func (qs *QuestionService) AddQuestion(ctx context.Context, req *schema.Question
 	question.Status = entity.QuestionStatusAvailable
 	question.RevisionID = "0"
 	question.CreatedAt = now
+	question.PostUpdateTime = now
 	question.Pin = entity.QuestionUnPin
 	question.Show = entity.QuestionShow
 	//question.UpdatedAt = nil
@@ -304,9 +302,14 @@ func (qs *QuestionService) AddQuestion(ctx context.Context, req *schema.Question
 	}
 
 	// user add question count
-	err = qs.userCommon.UpdateQuestionCount(ctx, question.UserID, 1)
+	userQuestionCount, err := qs.questioncommon.GetUserQuestionCount(ctx, question.UserID)
 	if err != nil {
-		log.Error("user IncreaseQuestionCount error", err.Error())
+		log.Errorf("get user question count error %v", err)
+	} else {
+		err = qs.userCommon.UpdateQuestionCount(ctx, question.UserID, userQuestionCount)
+		if err != nil {
+			log.Errorf("update user question count error %v", err)
+		}
 	}
 
 	activity_queue.AddActivity(&schema.ActivityMsg{
@@ -342,8 +345,24 @@ func (qs *QuestionService) OperationQuestion(ctx context.Context, req *schema.Op
 	switch req.Operation {
 	case schema.QuestionOperationHide:
 		questionInfo.Show = entity.QuestionHide
+		err = qs.tagCommon.HideTagRelListByObjectID(ctx, req.ID)
+		if err != nil {
+			return err
+		}
+		err = qs.tagCommon.RefreshTagCountByQuestionID(ctx, req.ID)
+		if err != nil {
+			return err
+		}
 	case schema.QuestionOperationShow:
 		questionInfo.Show = entity.QuestionShow
+		err = qs.tagCommon.ShowTagRelListByObjectID(ctx, req.ID)
+		if err != nil {
+			return err
+		}
+		err = qs.tagCommon.RefreshTagCountByQuestionID(ctx, req.ID)
+		if err != nil {
+			return err
+		}
 	case schema.QuestionOperationPin:
 		questionInfo.Pin = entity.QuestionPin
 	case schema.QuestionOperationUnPin:
@@ -419,16 +438,41 @@ func (qs *QuestionService) RemoveQuestion(ctx context.Context, req *schema.Remov
 		return err
 	}
 
-	// user add question count
-	err = qs.userCommon.UpdateQuestionCount(ctx, questionInfo.UserID, -1)
+	userQuestionCount, err := qs.questioncommon.GetUserQuestionCount(ctx, questionInfo.UserID)
 	if err != nil {
-		log.Error("user IncreaseQuestionCount error", err.Error())
+		log.Error("user GetUserQuestionCount error", err.Error())
+	} else {
+		err = qs.userCommon.UpdateQuestionCount(ctx, questionInfo.UserID, userQuestionCount)
+		if err != nil {
+			log.Error("user IncreaseQuestionCount error", err.Error())
+		}
 	}
 
-	err = qs.answerActivityService.DeleteQuestion(ctx, questionInfo.ID, questionInfo.CreatedAt, questionInfo.VoteCount)
-	if err != nil {
-		log.Errorf("user DeleteQuestion rank rollback error %s", err.Error())
+	//tag count
+	tagIDs := make([]string, 0)
+	Tags, tagerr := qs.tagCommon.GetObjectEntityTag(ctx, req.ID)
+	if tagerr != nil {
+		log.Error("GetObjectEntityTag error", tagerr)
+		return nil
 	}
+	for _, v := range Tags {
+		tagIDs = append(tagIDs, v.ID)
+	}
+	err = qs.tagCommon.RemoveTagRelListByObjectID(ctx, req.ID)
+	if err != nil {
+		log.Error("RemoveTagRelListByObjectID error", err.Error())
+	}
+	err = qs.tagCommon.RefreshTagQuestionCount(ctx, tagIDs)
+	if err != nil {
+		log.Error("efreshTagQuestionCount error", err.Error())
+	}
+
+	// #2372 In order to simplify the process and complexity, as well as to consider if it is in-house,
+	// facing the problem of recovery.
+	// err = qs.answerActivityService.DeleteQuestion(ctx, questionInfo.ID, questionInfo.CreatedAt, questionInfo.VoteCount)
+	// if err != nil {
+	// 	 log.Errorf("user DeleteQuestion rank rollback error %s", err.Error())
+	// }
 	activity_queue.AddActivity(&schema.ActivityMsg{
 		UserID:           req.UserID,
 		ObjectID:         questionInfo.ID,
@@ -502,6 +546,128 @@ func (qs *QuestionService) UpdateQuestionCheckTags(ctx context.Context, req *sch
 		}
 	}
 	return nil, nil
+}
+
+func (qs *QuestionService) UpdateQuestionInviteUser(ctx context.Context, req *schema.QuestionUpdateInviteUser) (err error) {
+	originQuestion, exist, err := qs.questionRepo.GetQuestion(ctx, req.ID)
+	if err != nil {
+		return err
+	}
+	if !exist {
+		return errors.NotFound(reason.ObjectNotFound)
+	}
+
+	//verify invite user
+	inviteUserInfoList, err := qs.userCommon.BatchGetUserBasicInfoByUserNames(ctx, req.InviteUser)
+	if err != nil {
+		log.Error("BatchGetUserBasicInfoByUserNames error", err.Error())
+	}
+	inviteUserIDs := make([]string, 0)
+	for _, item := range req.InviteUser {
+		_, ok := inviteUserInfoList[item]
+		if ok {
+			inviteUserIDs = append(inviteUserIDs, inviteUserInfoList[item].ID)
+		}
+	}
+	inviteUserStr := ""
+	inviteUserByte, err := json.Marshal(inviteUserIDs)
+	if err != nil {
+		log.Error("json.Marshal error", err.Error())
+		inviteUserStr = "[]"
+	} else {
+		inviteUserStr = string(inviteUserByte)
+	}
+	question := &entity.Question{}
+	question.ID = uid.DeShortID(req.ID)
+	question.InviteUserID = inviteUserStr
+
+	saveerr := qs.questionRepo.UpdateQuestion(ctx, question, []string{"invite_user_id"})
+	if saveerr != nil {
+		return saveerr
+	}
+	//send notification
+	oldInviteUserIDsStr := originQuestion.InviteUserID
+	oldInviteUserIDs := make([]string, 0)
+	needSendNotificationUserIDs := make([]string, 0)
+	if oldInviteUserIDsStr != "" {
+		err = json.Unmarshal([]byte(oldInviteUserIDsStr), &oldInviteUserIDs)
+		if err == nil {
+			needSendNotificationUserIDs = converter.ArrayNotInArray(oldInviteUserIDs, inviteUserIDs)
+		}
+	} else {
+		needSendNotificationUserIDs = inviteUserIDs
+	}
+	go qs.notificationInviteUser(ctx, needSendNotificationUserIDs, originQuestion.ID, originQuestion.Title, req.UserID)
+
+	return nil
+}
+
+func (qs *QuestionService) notificationInviteUser(
+	ctx context.Context, invitedUserIDs []string, questionID, questionTitle, questionUserID string) {
+	inviter, exist, err := qs.userCommon.GetUserBasicInfoByID(ctx, questionUserID)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	if !exist {
+		log.Warnf("user %s not found", questionUserID)
+		return
+	}
+
+	users, err := qs.userRepo.BatchGetByID(ctx, invitedUserIDs)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	invitee := make(map[string]*entity.User, len(users))
+	for _, user := range users {
+		invitee[user.ID] = user
+	}
+	for _, userID := range invitedUserIDs {
+		msg := &schema.NotificationMsg{
+			ReceiverUserID: userID,
+			TriggerUserID:  questionUserID,
+			Type:           schema.NotificationTypeInbox,
+			ObjectID:       questionID,
+		}
+		msg.ObjectType = constant.QuestionObjectType
+		msg.NotificationAction = constant.NotificationInvitedYouToAnswer
+		notice_queue.AddNotification(msg)
+
+		userInfo, ok := invitee[userID]
+		if !ok {
+			log.Warnf("user %s not found", userID)
+			return
+		}
+		if userInfo.NoticeStatus == schema.NoticeStatusOff || len(userInfo.EMail) == 0 {
+			return
+		}
+
+		rawData := &schema.NewInviteAnswerTemplateRawData{
+			InviterDisplayName: inviter.DisplayName,
+			QuestionTitle:      questionTitle,
+			QuestionID:         questionID,
+			UnsubscribeCode:    encryption.MD5(userInfo.Pass),
+		}
+		codeContent := &schema.EmailCodeContent{
+			SourceType: schema.UnsubscribeSourceType,
+			Email:      userInfo.EMail,
+			UserID:     userInfo.ID,
+		}
+
+		// If receiver has set language, use it to send email.
+		if len(userInfo.Language) > 0 {
+			ctx = context.WithValue(ctx, constant.AcceptLanguageFlag, i18n.Language(userInfo.Language))
+		}
+		title, body, err := qs.emailService.NewInviteAnswerTemplate(ctx, rawData)
+		if err != nil {
+			log.Error(err)
+			return
+		}
+
+		go qs.emailService.SendAndSaveCodeWithTime(
+			ctx, userInfo.EMail, title, body, rawData.UnsubscribeCode, codeContent.ToJSONString(), 7*24*time.Hour)
+	}
 }
 
 // UpdateQuestion update question
@@ -711,6 +877,7 @@ func (qs *QuestionService) GetQuestion(ctx context.Context, questionID, userID s
 	question.Description = htmltext.FetchExcerpt(question.HTML, "...", 240)
 	question.MemberActions = permission.GetQuestionPermission(ctx, userID, question.UserID,
 		per.CanEdit, per.CanDelete, per.CanClose, per.CanReopen, per.CanPin, per.CanHide, per.CanUnPin, per.CanShow)
+	question.ExtendsActions = permission.GetQuestionExtendsPermission(ctx, userID, question.UserID, per.CanInviteOtherToAnswer)
 	return question, nil
 }
 
@@ -725,6 +892,10 @@ func (qs *QuestionService) GetQuestionAndAddPV(ctx context.Context, questionID, 
 	return qs.GetQuestion(ctx, questionID, loginUserID, per)
 }
 
+func (qs *QuestionService) InviteUserInfo(ctx context.Context, questionID string) (inviteList []*schema.UserBasicInfo, err error) {
+	return qs.questioncommon.InviteUserInfo(ctx, questionID)
+}
+
 func (qs *QuestionService) ChangeTag(ctx context.Context, objectTagData *schema.TagChange) error {
 	return qs.tagCommon.ObjectChangeTag(ctx, objectTagData)
 }
@@ -733,114 +904,117 @@ func (qs *QuestionService) CheckChangeReservedTag(ctx context.Context, oldobject
 	return qs.tagCommon.CheckChangeReservedTag(ctx, oldobjectTagData, objectTagData)
 }
 
-func (qs *QuestionService) SearchUserList(ctx context.Context, userName, order string, page, pageSize int, loginUserID string) ([]*schema.UserQuestionInfo, int64, error) {
-	userlist := make([]*schema.UserQuestionInfo, 0)
+// PersonalQuestionPage get question list by user
+func (qs *QuestionService) PersonalQuestionPage(ctx context.Context, req *schema.PersonalQuestionPageReq) (
+	pageModel *pager.PageModel, err error) {
 
-	userinfo, Exist, err := qs.userCommon.GetUserBasicInfoByUserName(ctx, userName)
+	userinfo, exist, err := qs.userCommon.GetUserBasicInfoByUserName(ctx, req.Username)
 	if err != nil {
-		return userlist, 0, err
+		return nil, err
 	}
-	if !Exist {
-		return userlist, 0, nil
+	if !exist {
+		return nil, errors.BadRequest(reason.UserNotFound)
 	}
 	search := &schema.QuestionPageReq{}
-	search.OrderCond = order
-	search.Page = page
-	search.PageSize = pageSize
+	search.OrderCond = req.OrderCond
+	search.Page = req.Page
+	search.PageSize = req.PageSize
 	search.UserIDBeSearched = userinfo.ID
-	search.LoginUserID = loginUserID
-	questionlist, count, err := qs.GetQuestionPage(ctx, search)
+	search.LoginUserID = req.LoginUserID
+	questionList, total, err := qs.GetQuestionPage(ctx, search)
 	if err != nil {
-		return userlist, 0, err
+		return nil, err
 	}
-	for _, item := range questionlist {
+	userQuestionInfoList := make([]*schema.UserQuestionInfo, 0)
+	for _, item := range questionList {
 		info := &schema.UserQuestionInfo{}
 		_ = copier.Copy(info, item)
 		status, ok := entity.AdminQuestionSearchStatusIntToString[item.Status]
 		if ok {
 			info.Status = status
 		}
-		userlist = append(userlist, info)
+		userQuestionInfoList = append(userQuestionInfoList, info)
 	}
-	return userlist, count, nil
+	return pager.NewPageModel(total, userQuestionInfoList), nil
 }
 
-func (qs *QuestionService) SearchUserAnswerList(ctx context.Context, userName, order string, page, pageSize int, loginUserID string) ([]*schema.UserAnswerInfo, int64, error) {
-	answerlist := make([]*schema.AnswerInfo, 0)
-	userAnswerlist := make([]*schema.UserAnswerInfo, 0)
-	userinfo, Exist, err := qs.userCommon.GetUserBasicInfoByUserName(ctx, userName)
+func (qs *QuestionService) PersonalAnswerPage(ctx context.Context, req *schema.PersonalAnswerPageReq) (
+	pageModel *pager.PageModel, err error) {
+	userinfo, exist, err := qs.userCommon.GetUserBasicInfoByUserName(ctx, req.Username)
 	if err != nil {
-		return userAnswerlist, 0, err
+		return nil, err
 	}
-	if !Exist {
-		return userAnswerlist, 0, nil
+	if !exist {
+		return nil, errors.BadRequest(reason.UserNotFound)
 	}
 	answersearch := &entity.AnswerSearch{}
 	answersearch.UserID = userinfo.ID
-	answersearch.PageSize = pageSize
-	answersearch.Page = page
-	if order == "newest" {
+	answersearch.PageSize = req.PageSize
+	answersearch.Page = req.Page
+	if req.OrderCond == "newest" {
 		answersearch.Order = entity.AnswerSearchOrderByTime
 	} else {
 		answersearch.Order = entity.AnswerSearchOrderByDefault
 	}
 	questionIDs := make([]string, 0)
-	answerList, count, err := qs.questioncommon.AnswerCommon.Search(ctx, answersearch)
+	answerList, total, err := qs.questioncommon.AnswerCommon.Search(ctx, answersearch)
 	if err != nil {
-		return userAnswerlist, count, err
+		return nil, err
 	}
+
+	answerlist := make([]*schema.AnswerInfo, 0)
+	userAnswerlist := make([]*schema.UserAnswerInfo, 0)
 	for _, item := range answerList {
 		answerinfo := qs.questioncommon.AnswerCommon.ShowFormat(ctx, item)
 		answerlist = append(answerlist, answerinfo)
 		questionIDs = append(questionIDs, uid.DeShortID(item.QuestionID))
 	}
-	questionMaps, err := qs.questioncommon.FindInfoByID(ctx, questionIDs, loginUserID)
+	questionMaps, err := qs.questioncommon.FindInfoByID(ctx, questionIDs, req.LoginUserID)
 	if err != nil {
-		return userAnswerlist, count, err
+		return nil, err
 	}
 
 	for _, item := range answerlist {
 		_, ok := questionMaps[item.QuestionID]
 		if ok {
 			item.QuestionInfo = questionMaps[item.QuestionID]
+		} else {
+			continue
 		}
 		info := &schema.UserAnswerInfo{}
 		_ = copier.Copy(info, item)
 		info.AnswerID = item.ID
 		info.QuestionID = item.QuestionID
-		if item.QuestionInfo.Status != entity.QuestionStatusDeleted {
-			userAnswerlist = append(userAnswerlist, info)
+		if item.QuestionInfo.Status == entity.QuestionStatusDeleted {
+			info.QuestionInfo.Title = "Deleted question"
+
 		}
+		userAnswerlist = append(userAnswerlist, info)
 	}
 
-	return userAnswerlist, count, nil
+	return pager.NewPageModel(total, userAnswerlist), nil
 }
 
-func (qs *QuestionService) SearchUserCollectionList(ctx context.Context, page, pageSize int, loginUserID string) ([]*schema.QuestionInfo, int64, error) {
+// PersonalCollectionPage get collection list by user
+func (qs *QuestionService) PersonalCollectionPage(ctx context.Context, req *schema.PersonalCollectionPageReq) (
+	pageModel *pager.PageModel, err error) {
 	list := make([]*schema.QuestionInfo, 0)
-	userinfo, Exist, err := qs.userCommon.GetUserBasicInfoByID(ctx, loginUserID)
-	if err != nil {
-		return list, 0, err
-	}
-	if !Exist {
-		return list, 0, nil
-	}
 	collectionSearch := &entity.CollectionSearch{}
-	collectionSearch.UserID = userinfo.ID
-	collectionSearch.Page = page
-	collectionSearch.PageSize = pageSize
-	collectionlist, count, err := qs.collectionCommon.SearchList(ctx, collectionSearch)
+	collectionSearch.UserID = req.UserID
+	collectionSearch.Page = req.Page
+	collectionSearch.PageSize = req.PageSize
+	collectionList, total, err := qs.collectionCommon.SearchList(ctx, collectionSearch)
 	if err != nil {
-		return list, 0, err
+		return nil, err
 	}
 	questionIDs := make([]string, 0)
-	for _, item := range collectionlist {
+	for _, item := range collectionList {
 		questionIDs = append(questionIDs, item.ObjectID)
 	}
 
-	questionMaps, err := qs.questioncommon.FindInfoByID(ctx, questionIDs, loginUserID)
+	questionMaps, err := qs.questioncommon.FindInfoByID(ctx, questionIDs, req.UserID)
 	if err != nil {
-		return list, count, err
+		return nil, err
 	}
 	for _, id := range questionIDs {
 		_, ok := questionMaps[uid.EnShortID(id)]
@@ -849,11 +1023,14 @@ func (qs *QuestionService) SearchUserCollectionList(ctx context.Context, page, p
 			questionMaps[uid.EnShortID(id)].UpdateUserInfo = nil
 			questionMaps[uid.EnShortID(id)].Content = ""
 			questionMaps[uid.EnShortID(id)].HTML = ""
+			if questionMaps[uid.EnShortID(id)].Status == entity.QuestionStatusDeleted {
+				questionMaps[uid.EnShortID(id)].Title = "Deleted question"
+			}
 			list = append(list, questionMaps[uid.EnShortID(id)])
 		}
 	}
 
-	return list, count, nil
+	return pager.NewPageModel(total, list), nil
 }
 
 func (qs *QuestionService) SearchUserTopList(ctx context.Context, userName string, loginUserID string) ([]*schema.UserQuestionInfo, []*schema.UserAnswerInfo, error) {
@@ -1001,7 +1178,7 @@ func (qs *QuestionService) GetQuestionPage(ctx context.Context, req *schema.Ques
 	}
 
 	questionList, total, err := qs.questionRepo.GetQuestionPage(ctx, req.Page, req.PageSize,
-		req.UserIDBeSearched, req.TagID, req.OrderCond)
+		req.UserIDBeSearched, req.TagID, req.OrderCond, req.InDays)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -1030,10 +1207,12 @@ func (qs *QuestionService) AdminSetQuestionStatus(ctx context.Context, questionI
 	}
 
 	if setStatus == entity.QuestionStatusDeleted {
-		err = qs.answerActivityService.DeleteQuestion(ctx, questionInfo.ID, questionInfo.CreatedAt, questionInfo.VoteCount)
-		if err != nil {
-			log.Errorf("admin delete question then rank rollback error %s", err.Error())
-		}
+		// #2372 In order to simplify the process and complexity, as well as to consider if it is in-house,
+		// facing the problem of recovery.
+		//err = qs.answerActivityService.DeleteQuestion(ctx, questionInfo.ID, questionInfo.CreatedAt, questionInfo.VoteCount)
+		//if err != nil {
+		//	log.Errorf("admin delete question then rank rollback error %s", err.Error())
+		//}
 		activity_queue.AddActivity(&schema.ActivityMsg{
 			UserID:           questionInfo.UserID,
 			ObjectID:         questionInfo.ID,
@@ -1063,7 +1242,7 @@ func (qs *QuestionService) AdminSetQuestionStatus(ctx context.Context, questionI
 	msg.ReceiverUserID = questionInfo.UserID
 	msg.TriggerUserID = questionInfo.UserID
 	msg.ObjectType = constant.QuestionObjectType
-	msg.NotificationAction = constant.YourQuestionWasDeleted
+	msg.NotificationAction = constant.NotificationYourQuestionWasDeleted
 	notice_queue.AddNotification(msg)
 	return nil
 }
@@ -1167,52 +1346,5 @@ func (qs *QuestionService) changeQuestionToRevision(ctx context.Context, questio
 }
 
 func (qs *QuestionService) SitemapCron(ctx context.Context) {
-	data := &schema.SiteMapList{}
-	questionNum, err := qs.questionRepo.GetQuestionCount(ctx)
-	if err != nil {
-		log.Error("GetQuestionCount error", err)
-		return
-	}
-	if questionNum <= schema.SitemapMaxSize {
-		questionIDList, err := qs.questionRepo.GetQuestionIDsPage(ctx, 0, int(questionNum))
-		if err != nil {
-			log.Error("GetQuestionIDsPage error", err)
-			return
-		}
-		data.QuestionIDs = questionIDList
-
-	} else {
-		nums := make([]int, 0)
-		totalpages := int(math.Ceil(float64(questionNum) / float64(schema.SitemapMaxSize)))
-		for i := 1; i <= totalpages; i++ {
-			siteMapPagedata := &schema.SiteMapPageList{}
-			nums = append(nums, i)
-			questionIDList, err := qs.questionRepo.GetQuestionIDsPage(ctx, i, int(schema.SitemapMaxSize))
-			if err != nil {
-				log.Error("GetQuestionIDsPage error", err)
-				return
-			}
-			siteMapPagedata.PageData = questionIDList
-			if setCacheErr := qs.SetCache(ctx, fmt.Sprintf(schema.SitemapPageCachekey, i), siteMapPagedata); setCacheErr != nil {
-				log.Errorf("set sitemap cron SetCache failed: %s", setCacheErr)
-			}
-		}
-		data.MaxPageNum = nums
-	}
-	if setCacheErr := qs.SetCache(ctx, schema.SitemapCachekey, data); setCacheErr != nil {
-		log.Errorf("set sitemap cron SetCache failed: %s", setCacheErr)
-	}
-}
-
-func (qs *QuestionService) SetCache(ctx context.Context, cachekey string, info interface{}) error {
-	infoStr, err := json.Marshal(info)
-	if err != nil {
-		return errors.InternalServer(reason.UnknownError).WithError(err).WithStack()
-	}
-
-	err = qs.data.Cache.SetString(ctx, cachekey, string(infoStr), schema.DashBoardCacheTime)
-	if err != nil {
-		return errors.InternalServer(reason.UnknownError).WithError(err).WithStack()
-	}
-	return nil
+	qs.questioncommon.SitemapCron(ctx)
 }

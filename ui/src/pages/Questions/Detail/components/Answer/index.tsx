@@ -11,6 +11,7 @@ import {
   Comment,
   FormatTime,
   htmlRender,
+  ImgViewer,
 } from '@/components';
 import { scrollToElementTop, bgFadeOut } from '@/utils';
 import { AnswerItem } from '@/common/interface';
@@ -84,10 +85,12 @@ const Index: FC<Props> = ({
           </Badge>
         </div>
       )}
-      <article
-        className="fmt text-break text-wrap"
-        dangerouslySetInnerHTML={{ __html: data?.html }}
-      />
+      <ImgViewer>
+        <article
+          className="fmt text-break text-wrap"
+          dangerouslySetInnerHTML={{ __html: data?.html }}
+        />
+      </ImgViewer>
       <div className="d-flex align-items-center mt-4">
         <Actions
           source="answer"
@@ -146,14 +149,14 @@ const Index: FC<Props> = ({
               <FormatTime
                 time={Number(data.update_time)}
                 preFix={t('edit')}
-                className="link-secondary fs-14"
+                className="link-secondary small"
               />
             </Link>
           ) : (
             <FormatTime
               time={Number(data.update_time)}
               preFix={t('edit')}
-              className="text-secondary fs-14"
+              className="text-secondary small"
             />
           )}
         </div>

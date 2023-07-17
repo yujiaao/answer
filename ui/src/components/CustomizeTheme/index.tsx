@@ -1,4 +1,4 @@
-import { FC } from 'react';
+import { FC, useLayoutEffect } from 'react';
 import { Helmet } from 'react-helmet-async';
 
 import Color from 'color';
@@ -12,6 +12,16 @@ const Index: FC = () => {
   if (theme_config?.[theme]?.primary_color) {
     primaryColor = Color(theme_config[theme].primary_color);
   }
+  const setThemeColor = () => {
+    const themeMetaNode = document.querySelector('meta[name="theme-color"]');
+    if (themeMetaNode) {
+      const themeColor = primaryColor ? primaryColor.hex() : '#0033ff';
+      themeMetaNode.setAttribute('content', themeColor);
+    }
+  };
+  useLayoutEffect(() => {
+    setThemeColor();
+  }, [primaryColor]);
 
   return (
     <Helmet>
@@ -55,9 +65,12 @@ const Index: FC = () => {
                 --bs-pagination-active-border-color: ${primaryColor.hex()};
               }
               .form-select:focus,
-              .form-control:focus {
-                box-shadow: 0 0 0 0.25rem ${primaryColor.fade(0.75).string()};
-                border-color: ${tintColor(primaryColor, 0.5)};
+              .form-control:focus,
+               .form-control.focus{
+                box-shadow: 0 0 0 0.25rem ${primaryColor
+                  .fade(0.75)
+                  .string()} !important;
+                border-color: ${tintColor(primaryColor, 0.5)} !important;
               }
               .form-check-input:checked {
                 background-color: ${primaryColor.hex()};
@@ -80,7 +93,7 @@ const Index: FC = () => {
                 color: ${primaryColor.hex()}!important;
               }
               .link-primary:hover, .link-primary:focus {
-                color: ${shadeColor(primaryColor, 0.8).hex()}!important
+                color: ${shadeColor(primaryColor, 0.8).hex()}!important;
               }
             `}
         </style>

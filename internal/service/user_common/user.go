@@ -2,22 +2,27 @@ package usercommon
 
 import (
 	"context"
-	"encoding/hex"
-	"math/rand"
 	"strings"
 
 	"github.com/Chain-Zhang/pinyin"
 	"github.com/answerdev/answer/internal/base/reason"
 	"github.com/answerdev/answer/internal/entity"
 	"github.com/answerdev/answer/internal/schema"
+	"github.com/answerdev/answer/internal/service/auth"
+	"github.com/answerdev/answer/internal/service/role"
+	"github.com/answerdev/answer/internal/service/siteinfo_common"
 	"github.com/answerdev/answer/pkg/checker"
+	"github.com/answerdev/answer/pkg/random"
 	"github.com/segmentfault/pacman/errors"
+	"github.com/segmentfault/pacman/log"
 )
 
 type UserRepo interface {
 	AddUser(ctx context.Context, user *entity.User) (err error)
 	IncreaseAnswerCount(ctx context.Context, userID string, amount int) (err error)
 	IncreaseQuestionCount(ctx context.Context, userID string, amount int) (err error)
+	UpdateQuestionCount(ctx context.Context, userID string, count int64) (err error)
+	UpdateAnswerCount(ctx context.Context, userID string, count int) (err error)
 	UpdateLastLoginDate(ctx context.Context, userID string) (err error)
 	UpdateEmailStatus(ctx context.Context, userID string, emailStatus int) error
 	UpdateNoticeStatus(ctx context.Context, userID string, noticeStatus int) error
@@ -28,18 +33,31 @@ type UserRepo interface {
 	GetByUserID(ctx context.Context, userID string) (userInfo *entity.User, exist bool, err error)
 	BatchGetByID(ctx context.Context, ids []string) ([]*entity.User, error)
 	GetByUsername(ctx context.Context, username string) (userInfo *entity.User, exist bool, err error)
+	GetByUsernames(ctx context.Context, usernames []string) ([]*entity.User, error)
 	GetByEmail(ctx context.Context, email string) (userInfo *entity.User, exist bool, err error)
 	GetUserCount(ctx context.Context) (count int64, err error)
+	SearchUserListByName(ctx context.Context, name string) (userList []*entity.User, err error)
 }
 
 // UserCommon user service
 type UserCommon struct {
-	userRepo UserRepo
+	userRepo              UserRepo
+	userRoleService       *role.UserRoleRelService
+	authService           *auth.AuthService
+	siteInfoCommonService *siteinfo_common.SiteInfoCommonService
 }
 
-func NewUserCommon(userRepo UserRepo) *UserCommon {
+func NewUserCommon(
+	userRepo UserRepo,
+	userRoleService *role.UserRoleRelService,
+	authService *auth.AuthService,
+	siteInfoCommonService *siteinfo_common.SiteInfoCommonService,
+) *UserCommon {
 	return &UserCommon{
-		userRepo: userRepo,
+		userRepo:              userRepo,
+		userRoleService:       userRoleService,
+		authService:           authService,
+		siteInfoCommonService: siteInfoCommonService,
 	}
 }
 
@@ -50,6 +68,7 @@ func (us *UserCommon) GetUserBasicInfoByID(ctx context.Context, ID string) (
 		return nil, exist, err
 	}
 	info := us.FormatUserBasicInfo(ctx, userInfo)
+	info.Avatar = us.siteInfoCommonService.FormatAvatar(ctx, userInfo.Avatar, userInfo.EMail).GetURL()
 	return info, exist, nil
 }
 
@@ -59,26 +78,44 @@ func (us *UserCommon) GetUserBasicInfoByUserName(ctx context.Context, username s
 		return nil, exist, err
 	}
 	info := us.FormatUserBasicInfo(ctx, userInfo)
+	info.Avatar = us.siteInfoCommonService.FormatAvatar(ctx, userInfo.Avatar, userInfo.EMail).GetURL()
 	return info, exist, nil
 }
 
-func (us *UserCommon) UpdateAnswerCount(ctx context.Context, userID string, num int) error {
-	return us.userRepo.IncreaseAnswerCount(ctx, userID, num)
+func (us *UserCommon) BatchGetUserBasicInfoByUserNames(ctx context.Context, usernames []string) (map[string]*schema.UserBasicInfo, error) {
+	infomap := make(map[string]*schema.UserBasicInfo)
+	list, err := us.userRepo.GetByUsernames(ctx, usernames)
+	if err != nil {
+		return infomap, err
+	}
+	avatarMapping := us.siteInfoCommonService.FormatListAvatar(ctx, list)
+	for _, user := range list {
+		info := us.FormatUserBasicInfo(ctx, user)
+		info.Avatar = avatarMapping[user.ID].GetURL()
+		infomap[user.Username] = info
+	}
+	return infomap, nil
 }
 
-func (us *UserCommon) UpdateQuestionCount(ctx context.Context, userID string, num int) error {
-	return us.userRepo.IncreaseQuestionCount(ctx, userID, num)
+func (us *UserCommon) UpdateAnswerCount(ctx context.Context, userID string, num int) error {
+	return us.userRepo.UpdateAnswerCount(ctx, userID, num)
+}
+
+func (us *UserCommon) UpdateQuestionCount(ctx context.Context, userID string, num int64) error {
+	return us.userRepo.UpdateQuestionCount(ctx, userID, num)
 }
 
 func (us *UserCommon) BatchUserBasicInfoByID(ctx context.Context, IDs []string) (map[string]*schema.UserBasicInfo, error) {
 	userMap := make(map[string]*schema.UserBasicInfo)
-	dbInfo, err := us.userRepo.BatchGetByID(ctx, IDs)
+	userList, err := us.userRepo.BatchGetByID(ctx, IDs)
 	if err != nil {
 		return userMap, err
 	}
-	for _, item := range dbInfo {
-		info := us.FormatUserBasicInfo(ctx, item)
-		userMap[item.ID] = info
+	avatarMapping := us.siteInfoCommonService.FormatListAvatar(ctx, userList)
+	for _, user := range userList {
+		info := us.FormatUserBasicInfo(ctx, user)
+		info.Avatar = avatarMapping[user.ID].GetURL()
+		userMap[user.ID] = info
 	}
 	return userMap, nil
 }
@@ -90,7 +127,6 @@ func (us *UserCommon) FormatUserBasicInfo(ctx context.Context, userInfo *entity.
 	userBasicInfo.Username = userInfo.Username
 	userBasicInfo.Rank = userInfo.Rank
 	userBasicInfo.DisplayName = userInfo.DisplayName
-	userBasicInfo.Avatar = schema.FormatAvatarInfo(userInfo.Avatar, userInfo.EMail)
 	userBasicInfo.Website = userInfo.Website
 	userBasicInfo.Location = userInfo.Location
 	userBasicInfo.IPInfo = userInfo.IPInfo
@@ -135,9 +171,34 @@ func (us *UserCommon) MakeUsername(ctx context.Context, displayName string) (use
 		if !has {
 			break
 		}
-		bytes := make([]byte, 2)
-		_, _ = rand.Read(bytes)
-		suffix = hex.EncodeToString(bytes)
+		suffix = random.UsernameSuffix()
 	}
 	return username + suffix, nil
+}
+
+func (us *UserCommon) CacheLoginUserInfo(ctx context.Context, userID string, userStatus, emailStatus int, externalID string) (
+	accessToken string, userCacheInfo *entity.UserCacheInfo, err error) {
+	roleID, err := us.userRoleService.GetUserRole(ctx, userID)
+	if err != nil {
+		log.Error(err)
+	}
+
+	userCacheInfo = &entity.UserCacheInfo{
+		UserID:      userID,
+		EmailStatus: emailStatus,
+		UserStatus:  userStatus,
+		RoleID:      roleID,
+		ExternalID:  externalID,
+	}
+
+	accessToken, err = us.authService.SetUserCacheInfo(ctx, userCacheInfo)
+	if err != nil {
+		return "", nil, err
+	}
+	if userCacheInfo.RoleID == role.RoleAdminID {
+		if err = us.authService.SetAdminUserCacheInfo(ctx, accessToken, &entity.UserCacheInfo{UserID: userID}); err != nil {
+			return "", nil, err
+		}
+	}
+	return accessToken, userCacheInfo, nil
 }

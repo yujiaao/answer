@@ -26,6 +26,10 @@ const routes: RouteNode[] = [
   {
     path: '/',
     page: 'pages/Layout',
+    loader: async () => {
+      await guard.setupApp();
+      return null;
+    },
     guard: () => {
       const gr = guard.shouldLoginRequired();
       if (!gr.ok) {
@@ -36,127 +40,160 @@ const routes: RouteNode[] = [
     children: [
       // question and answer
       {
-        index: true,
-        page: 'pages/Questions',
-      },
-      {
-        path: 'questions',
-        page: 'pages/Questions',
-      },
-      {
-        path: 'questions/ask',
-        page: 'pages/Questions/Ask',
-        guard: () => {
-          return guard.activated();
-        },
-      },
-      {
-        path: 'questions/:qid',
-        page: 'pages/Questions/Detail',
-      },
-      {
-        path: 'questions/:qid/:slugPermalink',
-        page: 'pages/Questions/Detail',
-      },
-      {
-        path: 'questions/:qid/:slugPermalink/:aid',
-        page: 'pages/Questions/Detail',
-      },
-      {
-        path: 'posts/:qid/edit',
-        page: 'pages/Questions/Ask',
-        guard: () => {
-          return guard.activated();
-        },
-      },
-      {
-        path: 'posts/:qid/:aid/edit',
-        page: 'pages/Questions/EditAnswer',
-        loader: async ({ params }) => {
-          const ret = await editCheck(params.aid as string, true);
-          return ret;
-        },
-        guard: (args) => {
-          return isEditable(args);
-        },
-      },
-      {
-        path: '/search',
-        page: 'pages/Search',
-      },
-      // tags
-      {
-        path: 'tags',
-        page: 'pages/Tags',
-      },
-      {
-        path: 'tags/create',
-        page: 'pages/Tags/Create',
-        guard: () => {
-          return guard.isAdminOrModerator();
-        },
-      },
-      {
-        path: 'tags/:tagName',
-        page: 'pages/Tags/Detail',
-      },
-      {
-        path: 'tags/:tagName/info',
-        page: 'pages/Tags/Info',
-      },
-      {
-        path: 'tags/:tagId/edit',
-        page: 'pages/Tags/Edit',
-        guard: () => {
-          return guard.activated();
-        },
-      },
-      // for users
-      {
-        path: 'users',
-        page: 'pages/Users',
-      },
-      {
-        path: 'users/:username',
-        page: 'pages/Users/Personal',
-      },
-      {
-        path: 'users/:username/:tabName',
-        page: 'pages/Users/Personal',
-      },
-      {
-        path: 'users/settings',
-        page: 'pages/Users/Settings',
-        guard: () => {
-          return guard.logged();
-        },
+        // side nav layout
+        page: 'pages/SideNavLayout',
         children: [
           {
             index: true,
-            page: 'pages/Users/Settings/Profile',
+            page: 'pages/Questions',
           },
           {
-            path: 'profile',
-            page: 'pages/Users/Settings/Profile',
+            path: 'questions',
+            page: 'pages/Questions',
           },
           {
-            path: 'notify',
-            page: 'pages/Users/Settings/Notification',
+            path: 'questions/ask',
+            page: 'pages/Questions/Ask',
+            guard: () => {
+              return guard.activated();
+            },
           },
           {
-            path: 'account',
-            page: 'pages/Users/Settings/Account',
+            path: 'posts/:qid/edit',
+            page: 'pages/Questions/Ask',
+            guard: () => {
+              return guard.activated();
+            },
           },
           {
-            path: 'interface',
-            page: 'pages/Users/Settings/Interface',
+            path: 'posts/:qid/:aid/edit',
+            page: 'pages/Questions/EditAnswer',
+            loader: async ({ params }) => {
+              const ret = await editCheck(params.aid as string, true);
+              return ret;
+            },
+            guard: (args) => {
+              return isEditable(args);
+            },
+          },
+          {
+            path: 'questions/:qid',
+            page: 'pages/Questions/Detail',
+          },
+          {
+            path: 'questions/:qid/:slugPermalink',
+            page: 'pages/Questions/Detail',
+          },
+          {
+            path: 'questions/:qid/:slugPermalink/:aid',
+            page: 'pages/Questions/Detail',
+          },
+          {
+            path: '/search',
+            page: 'pages/Search',
+          },
+          // tags
+          {
+            path: 'tags',
+            page: 'pages/Tags',
+          },
+          {
+            path: 'tags/create',
+            page: 'pages/Tags/Create',
+            guard: () => {
+              return guard.isAdminOrModerator();
+            },
+          },
+          {
+            path: 'tags/:tagName',
+            page: 'pages/Tags/Detail',
+          },
+          {
+            path: 'tags/:tagName/info',
+            page: 'pages/Tags/Info',
+          },
+          {
+            path: 'tags/:tagId/edit',
+            page: 'pages/Tags/Edit',
+            guard: () => {
+              return guard.activated();
+            },
+          },
+          // for users
+          {
+            path: 'users',
+            page: 'pages/Users',
+          },
+          {
+            path: 'users/:username',
+            page: 'pages/Users/Personal',
+          },
+          {
+            path: 'users/:username/:tabName',
+            page: 'pages/Users/Personal',
+          },
+          {
+            path: 'users/settings',
+            page: 'pages/Users/Settings',
+            guard: () => {
+              return guard.logged();
+            },
+            children: [
+              {
+                index: true,
+                page: 'pages/Users/Settings/Profile',
+              },
+              {
+                path: 'profile',
+                page: 'pages/Users/Settings/Profile',
+              },
+              {
+                path: 'notify',
+                page: 'pages/Users/Settings/Notification',
+              },
+              {
+                path: 'account',
+                page: 'pages/Users/Settings/Account',
+              },
+              {
+                path: 'interface',
+                page: 'pages/Users/Settings/Interface',
+              },
+            ],
+          },
+          {
+            path: 'users/notifications/:type/:subType?',
+            page: 'pages/Users/Notifications',
+          },
+          {
+            path: '/posts/:qid/timeline',
+            page: 'pages/Timeline',
+            guard: () => {
+              return guard.logged();
+            },
+          },
+          {
+            path: '/posts/:qid/:aid/timeline',
+            page: 'pages/Timeline',
+            guard: () => {
+              return guard.logged();
+            },
+          },
+          {
+            path: '/tags/:tid/timeline',
+            page: 'pages/Timeline',
+            guard: () => {
+              return guard.logged();
+            },
+          },
+          // for review
+          {
+            path: 'review',
+            page: 'pages/Review',
           },
         ],
       },
-      {
-        path: 'users/notifications/:type',
-        page: 'pages/Users/Notifications',
-      },
+
       {
         path: 'users/login',
         page: 'pages/Users/Login',
@@ -165,6 +202,7 @@ const routes: RouteNode[] = [
           if (notLogged.ok) {
             return notLogged;
           }
+
           return guard.notActivated();
         },
       },
@@ -176,7 +214,14 @@ const routes: RouteNode[] = [
           if (!allowNew.ok) {
             return allowNew;
           }
-          return guard.notLogged();
+          const notLogged = guard.notLogged();
+          if (notLogged.ok) {
+            const sa = guard.singUpAgent();
+            if (!sa.ok) {
+              return sa;
+            }
+          }
+          return notLogged;
         },
       },
       {
@@ -224,32 +269,19 @@ const routes: RouteNode[] = [
         },
       },
       {
-        path: '/posts/:qid/timeline',
-        page: 'pages/Timeline',
-        guard: () => {
-          return guard.logged();
-        },
+        path: '/users/confirm-email',
+        page: 'pages/Users/OauthBindEmail',
       },
       {
-        path: '/posts/:qid/:aid/timeline',
-        page: 'pages/Timeline',
-        guard: () => {
-          return guard.logged();
-        },
-      },
-      {
-        path: '/tags/:tid/timeline',
-        page: 'pages/Timeline',
-        guard: () => {
-          return guard.logged();
-        },
+        path: '/users/auth-landing',
+        page: 'pages/Users/AuthCallback',
       },
       // for admin
       {
         path: 'admin',
         page: 'pages/Admin',
         loader: async () => {
-          await guard.pullLoggedUser(true);
+          await guard.pullLoggedUser();
           return null;
         },
         guard: () => {
@@ -324,12 +356,35 @@ const routes: RouteNode[] = [
             path: 'login',
             page: 'pages/Admin/Login',
           },
+          {
+            path: 'settings-users',
+            page: 'pages/Admin/SettingsUsers',
+          },
+          {
+            path: 'privileges',
+            page: 'pages/Admin/Privileges',
+          },
+          {
+            path: 'installed-plugins',
+            page: 'pages/Admin/Plugins/Installed',
+          },
+          {
+            path: ':slug_name',
+            page: 'pages/Admin/Plugins/Config',
+          },
         ],
       },
-      // for review
       {
-        path: 'review',
-        page: 'pages/Review',
+        path: '/user-center/auth',
+        page: 'pages/UserCenter/Auth',
+        guard: () => {
+          const notLogged = guard.notLogged();
+          return notLogged;
+        },
+      },
+      {
+        path: '/user-center/auth-failed',
+        page: 'pages/UserCenter/AuthFailed',
       },
       {
         path: '*',
@@ -344,17 +399,26 @@ const routes: RouteNode[] = [
   {
     path: '/',
     page: 'pages/Layout',
+    loader: async () => {
+      await guard.setupApp();
+      return null;
+    },
     children: [
       {
-        page: 'pages/Legal',
+        page: 'pages/SideNavLayout',
         children: [
           {
-            path: 'tos',
-            page: 'pages/Legal/Tos',
-          },
-          {
-            path: 'privacy',
-            page: 'pages/Legal/Privacy',
+            page: 'pages/Legal',
+            children: [
+              {
+                path: 'tos',
+                page: 'pages/Legal/Tos',
+              },
+              {
+                path: 'privacy',
+                page: 'pages/Legal/Privacy',
+              },
+            ],
           },
         ],
       },

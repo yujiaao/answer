@@ -9,6 +9,7 @@ import (
 	collectioncommon "github.com/answerdev/answer/internal/service/collection_common"
 	"github.com/answerdev/answer/internal/service/comment"
 	"github.com/answerdev/answer/internal/service/comment_common"
+	"github.com/answerdev/answer/internal/service/config"
 	"github.com/answerdev/answer/internal/service/dashboard"
 	"github.com/answerdev/answer/internal/service/export"
 	"github.com/answerdev/answer/internal/service/follow"
@@ -16,6 +17,7 @@ import (
 	"github.com/answerdev/answer/internal/service/notification"
 	notficationcommon "github.com/answerdev/answer/internal/service/notification_common"
 	"github.com/answerdev/answer/internal/service/object_info"
+	"github.com/answerdev/answer/internal/service/plugin_common"
 	questioncommon "github.com/answerdev/answer/internal/service/question_common"
 	"github.com/answerdev/answer/internal/service/rank"
 	"github.com/answerdev/answer/internal/service/reason"
@@ -32,6 +34,7 @@ import (
 	"github.com/answerdev/answer/internal/service/uploader"
 	"github.com/answerdev/answer/internal/service/user_admin"
 	usercommon "github.com/answerdev/answer/internal/service/user_common"
+	"github.com/answerdev/answer/internal/service/user_external_login"
 	"github.com/google/wire"
 )
 
@@ -79,4 +82,8 @@ var ProviderSetService = wire.NewSet(
 	role.NewRoleService,
 	role.NewUserRoleRelService,
 	role.NewRolePowerRelService,
+	user_external_login.NewUserExternalLoginService,
+	user_external_login.NewUserCenterLoginService,
+	plugin_common.NewPluginCommonService,
+	config.NewConfigService,
 )

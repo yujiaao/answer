@@ -3,7 +3,10 @@ package service
 import (
 	"context"
 
+	"github.com/answerdev/answer/internal/base/constant"
+	"github.com/answerdev/answer/internal/base/handler"
 	"github.com/answerdev/answer/internal/base/pager"
+	"github.com/answerdev/answer/internal/base/translator"
 	"github.com/answerdev/answer/internal/entity"
 	"github.com/answerdev/answer/internal/service/activity_type"
 	"github.com/answerdev/answer/internal/service/comment_common"
@@ -35,7 +38,7 @@ type VoteRepo interface {
 type VoteService struct {
 	voteRepo          VoteRepo
 	UniqueIDRepo      unique.UniqueIDRepo
-	configRepo        config.ConfigRepo
+	configService     *config.ConfigService
 	questionRepo      questioncommon.QuestionRepo
 	answerRepo        answercommon.AnswerRepo
 	commentCommonRepo comment_common.CommentCommonRepo
@@ -45,7 +48,7 @@ type VoteService struct {
 func NewVoteService(
 	VoteRepo VoteRepo,
 	uniqueIDRepo unique.UniqueIDRepo,
-	configRepo config.ConfigRepo,
+	configService *config.ConfigService,
 	questionRepo questioncommon.QuestionRepo,
 	answerRepo answercommon.AnswerRepo,
 	commentCommonRepo comment_common.CommentCommonRepo,
@@ -54,7 +57,7 @@ func NewVoteService(
 	return &VoteService{
 		voteRepo:          VoteRepo,
 		UniqueIDRepo:      uniqueIDRepo,
-		configRepo:        configRepo,
+		configService:     configService,
 		questionRepo:      questionRepo,
 		answerRepo:        answerRepo,
 		commentCommonRepo: commentCommonRepo,
@@ -63,12 +66,12 @@ func NewVoteService(
 }
 
 // VoteUp vote up
-func (as *VoteService) VoteUp(ctx context.Context, dto *schema.VoteDTO) (voteResp *schema.VoteResp, err error) {
+func (vs *VoteService) VoteUp(ctx context.Context, dto *schema.VoteDTO) (voteResp *schema.VoteResp, err error) {
 	voteResp = &schema.VoteResp{}
 
 	var objectUserID string
 
-	objectUserID, err = as.GetObjectUserID(ctx, dto.ObjectID)
+	objectUserID, err = vs.GetObjectUserID(ctx, dto.ObjectID)
 	if err != nil {
 		return
 	}
@@ -80,19 +83,19 @@ func (as *VoteService) VoteUp(ctx context.Context, dto *schema.VoteDTO) (voteRes
 	}
 
 	if dto.IsCancel {
-		return as.voteRepo.VoteUpCancel(ctx, dto.ObjectID, dto.UserID, objectUserID)
+		return vs.voteRepo.VoteUpCancel(ctx, dto.ObjectID, dto.UserID, objectUserID)
 	} else {
-		return as.voteRepo.VoteUp(ctx, dto.ObjectID, dto.UserID, objectUserID)
+		return vs.voteRepo.VoteUp(ctx, dto.ObjectID, dto.UserID, objectUserID)
 	}
 }
 
 // VoteDown vote down
-func (as *VoteService) VoteDown(ctx context.Context, dto *schema.VoteDTO) (voteResp *schema.VoteResp, err error) {
+func (vs *VoteService) VoteDown(ctx context.Context, dto *schema.VoteDTO) (voteResp *schema.VoteResp, err error) {
 	voteResp = &schema.VoteResp{}
 
 	var objectUserID string
 
-	objectUserID, err = as.GetObjectUserID(ctx, dto.ObjectID)
+	objectUserID, err = vs.GetObjectUserID(ctx, dto.ObjectID)
 	if err != nil {
 		return
 	}
@@ -104,9 +107,9 @@ func (as *VoteService) VoteDown(ctx context.Context, dto *schema.VoteDTO) (voteR
 	}
 
 	if dto.IsCancel {
-		return as.voteRepo.VoteDownCancel(ctx, dto.ObjectID, dto.UserID, objectUserID)
+		return vs.voteRepo.VoteDownCancel(ctx, dto.ObjectID, dto.UserID, objectUserID)
 	} else {
-		return as.voteRepo.VoteDown(ctx, dto.ObjectID, dto.UserID, objectUserID)
+		return vs.voteRepo.VoteDown(ctx, dto.ObjectID, dto.UserID, objectUserID)
 	}
 }
 
@@ -151,24 +154,22 @@ func (vs *VoteService) GetObjectUserID(ctx context.Context, objectID string) (us
 
 // ListUserVotes list user's votes
 func (vs *VoteService) ListUserVotes(ctx context.Context, req schema.GetVoteWithPageReq) (model *pager.PageModel, err error) {
-	var (
-		resp     []schema.GetVoteWithPageResp
-		typeKeys = []string{
-			"question.vote_up",
-			"question.vote_down",
-			"answer.vote_up",
-			"answer.vote_down",
-		}
-		activityTypes []int
-	)
+	typeKeys := []string{
+		activity_type.QuestionVoteUp,
+		activity_type.QuestionVoteDown,
+		activity_type.AnswerVoteUp,
+		activity_type.AnswerVoteDown,
+	}
+	activityTypes := make([]int, 0)
+	activityTypeMapping := make(map[int]string, 0)
 
 	for _, typeKey := range typeKeys {
-		var t int
-		t, err = vs.configRepo.GetConfigType(typeKey)
+		cfg, err := vs.configService.GetConfigByKey(ctx, typeKey)
 		if err != nil {
 			continue
 		}
-		activityTypes = append(activityTypes, t)
+		activityTypes = append(activityTypes, cfg.ID)
+		activityTypeMapping[cfg.ID] = typeKey
 	}
 
 	voteList, total, err := vs.voteRepo.ListUserVotes(ctx, req.UserID, req, activityTypes)
@@ -176,15 +177,17 @@ func (vs *VoteService) ListUserVotes(ctx context.Context, req schema.GetVoteWith
 		return
 	}
 
+	lang := handler.GetLangByCtx(ctx)
+
+	resp := make([]*schema.GetVoteWithPageResp, 0)
 	for _, voteInfo := range voteList {
-		var objInfo *schema.SimpleObjectInfo
-		objInfo, err = vs.objectService.GetInfo(ctx, voteInfo.ObjectID)
+		objInfo, err := vs.objectService.GetInfo(ctx, voteInfo.ObjectID)
 		if err != nil {
 			log.Error(err)
 			continue
 		}
 
-		item := schema.GetVoteWithPageResp{
+		item := &schema.GetVoteWithPageResp{
 			CreatedAt:  voteInfo.CreatedAt.Unix(),
 			ObjectID:   objInfo.ObjectID,
 			QuestionID: objInfo.QuestionID,
@@ -193,10 +196,13 @@ func (vs *VoteService) ListUserVotes(ctx context.Context, req schema.GetVoteWith
 			Title:      objInfo.Title,
 			UrlTitle:   htmltext.UrlTitle(objInfo.Title),
 			Content:    objInfo.Content,
-			VoteType:   activity_type.Format(voteInfo.ActivityType),
+		}
+		item.VoteType = translator.Tr(lang,
+			activity_type.ActivityTypeFlagMapping[activityTypeMapping[voteInfo.ActivityType]])
+		if objInfo.QuestionStatus == entity.QuestionStatusDeleted {
+			item.Title = translator.Tr(lang, constant.DeletedQuestionTitleTrKey)
 		}
 		resp = append(resp, item)
 	}
-
 	return pager.NewPageModel(total, resp), err
 }

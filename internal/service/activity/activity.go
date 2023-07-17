@@ -3,14 +3,15 @@ package activity
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/answerdev/answer/internal/base/constant"
 	"github.com/answerdev/answer/internal/entity"
-	"github.com/answerdev/answer/internal/repo/config"
 	"github.com/answerdev/answer/internal/schema"
 	"github.com/answerdev/answer/internal/service/activity_common"
 	"github.com/answerdev/answer/internal/service/comment_common"
+	"github.com/answerdev/answer/internal/service/config"
 	"github.com/answerdev/answer/internal/service/meta"
 	"github.com/answerdev/answer/internal/service/object_info"
 	"github.com/answerdev/answer/internal/service/revision_common"
@@ -37,6 +38,7 @@ type ActivityService struct {
 	commentCommonService  *comment_common.CommentCommonService
 	revisionService       *revision_common.RevisionService
 	metaService           *meta.MetaService
+	configService         *config.ConfigService
 }
 
 // NewActivityService new activity service
@@ -49,6 +51,7 @@ func NewActivityService(
 	commentCommonService *comment_common.CommentCommonService,
 	revisionService *revision_common.RevisionService,
 	metaService *meta.MetaService,
+	configService *config.ConfigService,
 ) *ActivityService {
 	return &ActivityService{
 		objectInfoService:     objectInfoService,
@@ -59,6 +62,7 @@ func NewActivityService(
 		commentCommonService:  commentCommonService,
 		revisionService:       revisionService,
 		metaService:           metaService,
+		configService:         configService,
 	}
 }
 
@@ -96,14 +100,19 @@ func (as *ActivityService) GetObjectTimeline(ctx context.Context, req *schema.Ge
 			item.ObjectID = uid.EnShortID(act.ObjectID)
 		}
 
-		// database save activity type is number, change to activity type string is like "question.asked".
-		// so we need to cut the front part of '.'
-		_, item.ActivityType, _ = strings.Cut(config.ID2KeyMapping[act.ActivityType], ".")
-		// format activity type string to show
-		if isHidden, formattedActivityType := formatActivity(item.ActivityType); isHidden {
-			continue
+		cfg, err := as.configService.GetConfigByID(ctx, act.ActivityType)
+		if err != nil {
+			log.Errorf("fail to get config by id: %d, err: %v, act id is: %s", act.ActivityType, err, act.ID)
 		} else {
-			item.ActivityType = formattedActivityType
+			// database save activity type is number, change to activity type string is like "question.asked".
+			// so we need to cut the front part of '.', only need string like 'asked'
+			_, item.ActivityType, _ = strings.Cut(cfg.Key, ".")
+			// format activity type string to show
+			if isHidden, formattedActivityType := formatActivity(item.ActivityType); isHidden {
+				continue
+			} else {
+				item.ActivityType = formattedActivityType
+			}
 		}
 
 		// if activity is down vote, only admin can see who does it.
@@ -111,7 +120,11 @@ func (as *ActivityService) GetObjectTimeline(ctx context.Context, req *schema.Ge
 			item.Username = "N/A"
 			item.UserDisplayName = "N/A"
 		} else {
-			item.UserID = act.UserID
+			if act.TriggerUserID > 0 {
+				item.UserID = fmt.Sprintf("%d", act.TriggerUserID)
+			} else {
+				item.UserID = act.UserID
+			}
 		}
 
 		item.Comment = as.getTimelineActivityComment(ctx, item.ObjectID, item.ObjectType, item.ActivityType, item.RevisionID)

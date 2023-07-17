@@ -5,13 +5,13 @@ import (
 	"github.com/answerdev/answer/internal/base/middleware"
 	"github.com/answerdev/answer/internal/base/pager"
 	"github.com/answerdev/answer/internal/base/reason"
+	"github.com/answerdev/answer/internal/base/translator"
 	"github.com/answerdev/answer/internal/base/validator"
 	"github.com/answerdev/answer/internal/entity"
 	"github.com/answerdev/answer/internal/schema"
 	"github.com/answerdev/answer/internal/service"
 	"github.com/answerdev/answer/internal/service/permission"
 	"github.com/answerdev/answer/internal/service/rank"
-	"github.com/answerdev/answer/pkg/converter"
 	"github.com/answerdev/answer/pkg/uid"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
@@ -197,6 +197,7 @@ func (qc *QuestionController) GetQuestion(ctx *gin.Context) {
 		permission.QuestionUnPin,
 		permission.QuestionHide,
 		permission.QuestionShow,
+		permission.AnswerInviteSomeoneToAnswer,
 	})
 	if err != nil {
 		handler.HandleResponse(ctx, err, nil)
@@ -212,6 +213,7 @@ func (qc *QuestionController) GetQuestion(ctx *gin.Context) {
 	req.CanUnPin = canList[5]
 	req.CanHide = canList[6]
 	req.CanShow = canList[7]
+	req.CanInviteOtherToAnswer = canList[8]
 
 	info, err := qc.questionService.GetQuestionAndAddPV(ctx, id, userID, req)
 	if err != nil {
@@ -220,6 +222,23 @@ func (qc *QuestionController) GetQuestion(ctx *gin.Context) {
 	}
 	info.ID = uid.EnShortID(info.ID)
 	handler.HandleResponse(ctx, nil, info)
+}
+
+// GetQuestionInviteUserInfo get question invite user info
+// @Summary get question invite user info
+// @Description get question invite user info
+// @Tags Question
+// @Security ApiKeyAuth
+// @Accept  json
+// @Produce  json
+// @Param id query string true "Question ID"  default(1)
+// @Success 200 {string} string ""
+// @Router /answer/api/v1/question/invite [get]
+func (qc *QuestionController) GetQuestionInviteUserInfo(ctx *gin.Context) {
+	questionID := uid.DeShortID(ctx.Query("id"))
+	resp, err := qc.questionService.InviteUserInfo(ctx, questionID)
+	handler.HandleResponse(ctx, err, resp)
+
 }
 
 // SimilarQuestion godoc
@@ -288,13 +307,14 @@ func (qc *QuestionController) AddQuestion(ctx *gin.Context) {
 	}
 	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
 
-	canList, err := qc.rankService.CheckOperationPermissions(ctx, req.UserID, []string{
+	canList, requireRanks, err := qc.rankService.CheckOperationPermissionsForRanks(ctx, req.UserID, []string{
 		permission.QuestionAdd,
 		permission.QuestionEdit,
 		permission.QuestionDelete,
 		permission.QuestionClose,
 		permission.QuestionReopen,
 		permission.TagUseReservedTag,
+		permission.TagAdd,
 	})
 	if err != nil {
 		handler.HandleResponse(ctx, err, nil)
@@ -306,8 +326,22 @@ func (qc *QuestionController) AddQuestion(ctx *gin.Context) {
 	req.CanClose = canList[3]
 	req.CanReopen = canList[4]
 	req.CanUseReservedTag = canList[5]
+	req.CanAddTag = canList[6]
 	if !req.CanAdd {
 		handler.HandleResponse(ctx, errors.Forbidden(reason.RankFailToMeetTheCondition), nil)
+		return
+	}
+
+	// can add tag
+	hasNewTag, err := qc.questionService.HasNewTag(ctx, req.Tags)
+	if err != nil {
+		handler.HandleResponse(ctx, err, nil)
+		return
+	}
+	if !req.CanAddTag && hasNewTag {
+		lang := handler.GetLang(ctx)
+		msg := translator.TrWithData(lang, reason.NoEnoughRankToOperate, &schema.PermissionTrTplData{Rank: requireRanks[6]})
+		handler.HandleResponse(ctx, errors.Forbidden(reason.NoEnoughRankToOperate).WithMsg(msg), nil)
 		return
 	}
 
@@ -462,11 +496,12 @@ func (qc *QuestionController) UpdateQuestion(ctx *gin.Context) {
 	req.ID = uid.DeShortID(req.ID)
 	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
 
-	canList, err := qc.rankService.CheckOperationPermissions(ctx, req.UserID, []string{
+	canList, requireRanks, err := qc.rankService.CheckOperationPermissionsForRanks(ctx, req.UserID, []string{
 		permission.QuestionEdit,
 		permission.QuestionDelete,
 		permission.QuestionEditWithoutReview,
 		permission.TagUseReservedTag,
+		permission.TagAdd,
 	})
 	if err != nil {
 		handler.HandleResponse(ctx, err, nil)
@@ -478,6 +513,7 @@ func (qc *QuestionController) UpdateQuestion(ctx *gin.Context) {
 	req.CanDelete = canList[1]
 	req.NoNeedReview = canList[2] || objectOwner
 	req.CanUseReservedTag = canList[3]
+	req.CanAddTag = canList[4]
 	if !req.CanEdit {
 		handler.HandleResponse(ctx, errors.Forbidden(reason.RankFailToMeetTheCondition), nil)
 		return
@@ -493,6 +529,19 @@ func (qc *QuestionController) UpdateQuestion(ctx *gin.Context) {
 		return
 	}
 
+	// can add tag
+	hasNewTag, err := qc.questionService.HasNewTag(ctx, req.Tags)
+	if err != nil {
+		handler.HandleResponse(ctx, err, nil)
+		return
+	}
+	if !req.CanAddTag && hasNewTag {
+		lang := handler.GetLang(ctx)
+		msg := translator.TrWithData(lang, reason.NoEnoughRankToOperate, &schema.PermissionTrTplData{Rank: requireRanks[4]})
+		handler.HandleResponse(ctx, errors.Forbidden(reason.NoEnoughRankToOperate).WithMsg(msg), nil)
+		return
+	}
+
 	resp, err := qc.questionService.UpdateQuestion(ctx, req)
 	if err != nil {
 		handler.HandleResponse(ctx, err, resp)
@@ -501,18 +550,49 @@ func (qc *QuestionController) UpdateQuestion(ctx *gin.Context) {
 	handler.HandleResponse(ctx, nil, &schema.UpdateQuestionResp{WaitForReview: !req.NoNeedReview})
 }
 
-// CloseMsgList close question msg list
-// @Summary close question msg list
-// @Description close question msg list
+// UpdateQuestionInviteUser update question invite user
+// @Summary update question invite user
+// @Description update question invite user
 // @Tags Question
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
+// @Param data body schema.QuestionUpdateInviteUser true "question"
 // @Success 200 {object} handler.RespBody
-// @Router /answer/api/v1/question/closemsglist [get]
-func (qc *QuestionController) CloseMsgList(ctx *gin.Context) {
-	resp, err := qc.questionService.CloseMsgList(ctx, handler.GetLang(ctx))
-	handler.HandleResponse(ctx, err, resp)
+// @Router /answer/api/v1/question/invite [put]
+func (qc *QuestionController) UpdateQuestionInviteUser(ctx *gin.Context) {
+	req := &schema.QuestionUpdateInviteUser{}
+	errFields := handler.BindAndCheckReturnErr(ctx, req)
+	if ctx.IsAborted() {
+		return
+	}
+	req.ID = uid.DeShortID(req.ID)
+	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
+
+	canList, err := qc.rankService.CheckOperationPermissions(ctx, req.UserID, []string{
+		permission.AnswerInviteSomeoneToAnswer,
+	})
+	if err != nil {
+		handler.HandleResponse(ctx, err, nil)
+		return
+	}
+
+	objectOwner := qc.rankService.CheckOperationObjectOwner(ctx, req.UserID, req.ID)
+	req.CanEdit = canList[0] || objectOwner
+	if !req.CanEdit {
+		handler.HandleResponse(ctx, errors.Forbidden(reason.RankFailToMeetTheCondition), nil)
+		return
+	}
+	if len(errFields) > 0 {
+		handler.HandleResponse(ctx, errors.BadRequest(reason.RequestFormatError), errFields)
+		return
+	}
+	err = qc.questionService.UpdateQuestionInviteUser(ctx, req)
+	if err != nil {
+		handler.HandleResponse(ctx, err, nil)
+		return
+	}
+	handler.HandleResponse(ctx, nil, nil)
 }
 
 // SearchByTitleLike add question title like
@@ -552,84 +632,75 @@ func (qc *QuestionController) UserTop(ctx *gin.Context) {
 	})
 }
 
-// UserList godoc
-// @Summary UserList
-// @Description UserList
-// @Tags Question
+// PersonalQuestionPage list personal questions
+// @Summary list personal questions
+// @Description list personal questions
+// @Tags Personal
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param username query string true "username"  default(string)
 // @Param order query string true "order"  Enums(newest,score)
 // @Param page query string true "page"  default(0)
-// @Param pagesize query string true "pagesize"  default(20)
+// @Param page_size query string true "page_size" default(20)
 // @Success 200 {object} handler.RespBody
 // @Router /personal/question/page [get]
-func (qc *QuestionController) UserList(ctx *gin.Context) {
-	userName := ctx.Query("username")
-	order := ctx.Query("order")
-	pageStr := ctx.Query("page")
-	pageSizeStr := ctx.Query("pagesize")
-	page := converter.StringToInt(pageStr)
-	pageSize := converter.StringToInt(pageSizeStr)
-	userID := middleware.GetLoginUserIDFromContext(ctx)
-	questionList, count, err := qc.questionService.SearchUserList(ctx, userName, order, page, pageSize, userID)
-	handler.HandleResponse(ctx, err, gin.H{
-		"list":  questionList,
-		"count": count,
-	})
+func (qc *QuestionController) PersonalQuestionPage(ctx *gin.Context) {
+	req := &schema.PersonalQuestionPageReq{}
+	if handler.BindAndCheck(ctx, req) {
+		return
+	}
+
+	req.LoginUserID = middleware.GetLoginUserIDFromContext(ctx)
+	resp, err := qc.questionService.PersonalQuestionPage(ctx, req)
+	handler.HandleResponse(ctx, err, resp)
 }
 
-// UserAnswerList godoc
-// @Summary UserAnswerList
-// @Description UserAnswerList
-// @Tags api-answer
+// PersonalAnswerPage list personal answers
+// @Summary list personal answers
+// @Description list personal answers
+// @Tags Personal
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param username query string true "username"  default(string)
 // @Param order query string true "order"  Enums(newest,score)
 // @Param page query string true "page"  default(0)
-// @Param pagesize query string true "pagesize"  default(20)
+// @Param page_size query string true "page_size"  default(20)
 // @Success 200 {object} handler.RespBody
 // @Router /answer/api/v1/personal/answer/page [get]
-func (qc *QuestionController) UserAnswerList(ctx *gin.Context) {
-	userName := ctx.Query("username")
-	order := ctx.Query("order")
-	pageStr := ctx.Query("page")
-	pageSizeStr := ctx.Query("pagesize")
-	page := converter.StringToInt(pageStr)
-	pageSize := converter.StringToInt(pageSizeStr)
-	userID := middleware.GetLoginUserIDFromContext(ctx)
-	questionList, count, err := qc.questionService.SearchUserAnswerList(ctx, userName, order, page, pageSize, userID)
-	handler.HandleResponse(ctx, err, gin.H{
-		"list":  questionList,
-		"count": count,
-	})
+func (qc *QuestionController) PersonalAnswerPage(ctx *gin.Context) {
+	req := &schema.PersonalAnswerPageReq{}
+	if handler.BindAndCheck(ctx, req) {
+		return
+	}
+
+	req.LoginUserID = middleware.GetLoginUserIDFromContext(ctx)
+	resp, err := qc.questionService.PersonalAnswerPage(ctx, req)
+	handler.HandleResponse(ctx, err, resp)
 }
 
-// UserCollectionList godoc
-// @Summary UserCollectionList
-// @Description UserCollectionList
+// PersonalCollectionPage list personal collections
+// @Summary list personal collections
+// @Description list personal collections
 // @Tags Collection
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param page query string true "page"  default(0)
-// @Param pagesize query string true "pagesize"  default(20)
+// @Param page_size query string true "page_size"  default(20)
 // @Success 200 {object} handler.RespBody
 // @Router /answer/api/v1/personal/collection/page [get]
-func (qc *QuestionController) UserCollectionList(ctx *gin.Context) {
-	pageStr := ctx.Query("page")
-	pageSizeStr := ctx.Query("pagesize")
-	page := converter.StringToInt(pageStr)
-	pageSize := converter.StringToInt(pageSizeStr)
-	userID := middleware.GetLoginUserIDFromContext(ctx)
-	questionList, count, err := qc.questionService.SearchUserCollectionList(ctx, page, pageSize, userID)
-	handler.HandleResponse(ctx, err, gin.H{
-		"list":  questionList,
-		"count": count,
-	})
+func (qc *QuestionController) PersonalCollectionPage(ctx *gin.Context) {
+	req := &schema.PersonalCollectionPageReq{}
+	if handler.BindAndCheck(ctx, req) {
+		return
+	}
+
+	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
+
+	resp, err := qc.questionService.PersonalCollectionPage(ctx, req)
+	handler.HandleResponse(ctx, err, resp)
 }
 
 // AdminSearchList godoc
@@ -678,6 +749,9 @@ func (qc *QuestionController) AdminSearchAnswerList(ctx *gin.Context) {
 		return
 	}
 	req.QuestionID = uid.DeShortID(req.QuestionID)
+	if req.QuestionID == "0" {
+		req.QuestionID = ""
+	}
 	userID := middleware.GetLoginUserIDFromContext(ctx)
 	questionList, count, err := qc.questionService.AdminSearchAnswerList(ctx, req, userID)
 	handler.HandleResponse(ctx, err, gin.H{

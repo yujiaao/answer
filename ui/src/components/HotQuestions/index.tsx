@@ -1,4 +1,4 @@
-import { FC, useEffect, useState } from 'react';
+import { FC } from 'react';
 import { Card, ListGroup, ListGroupItem } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -9,23 +9,17 @@ import { useHotQuestions } from '@/services';
 
 const HotQuestions: FC = () => {
   const { t } = useTranslation('translation', { keyPrefix: 'question' });
-  const [questions, setQuestions] = useState<any>([]);
   const { data: questionRes } = useHotQuestions();
-
-  useEffect(() => {
-    const questionResp = questionRes?.list;
-    if (Array.isArray(questionResp)) {
-      setQuestions(questionResp);
-    }
-  }, [questionRes]);
-
+  if (!questionRes?.list?.length) {
+    return null;
+  }
   return (
     <Card>
       <Card.Header className="text-nowrap text-capitalize">
         {t('hot_questions')}
       </Card.Header>
       <ListGroup variant="flush">
-        {questions.map((li) => {
+        {questionRes?.list?.map((li) => {
           return (
             <ListGroupItem
               key={li.id}
@@ -35,7 +29,7 @@ const HotQuestions: FC = () => {
               <div className="link-dark">{li.title}</div>
               {li.answer_count > 0 ? (
                 <div
-                  className={`d-flex align-items-center fs-14 mt-1 ${
+                  className={`d-flex align-items-center small mt-1 ${
                     li.accepted_answer_id > 0
                       ? 'link-success'
                       : 'link-secondary'

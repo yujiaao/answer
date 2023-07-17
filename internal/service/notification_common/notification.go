@@ -15,6 +15,7 @@ import (
 	"github.com/answerdev/answer/internal/service/object_info"
 	usercommon "github.com/answerdev/answer/internal/service/user_common"
 	"github.com/answerdev/answer/pkg/uid"
+	"github.com/answerdev/answer/plugin"
 	"github.com/goccy/go-json"
 	"github.com/jinzhu/copier"
 	"github.com/segmentfault/pacman/errors"
@@ -82,7 +83,9 @@ func (ns *NotificationCommon) HandleNotification() {
 // ObjectInfo.ObjectID
 // ObjectInfo.ObjectType
 func (ns *NotificationCommon) AddNotification(ctx context.Context, msg *schema.NotificationMsg) error {
-
+	if msg.Type == schema.NotificationTypeAchievement && plugin.RankAgentEnabled() {
+		return nil
+	}
 	req := &schema.NotificationContent{
 		TriggerUserID:  msg.TriggerUserID,
 		ReceiverUserID: msg.ReceiverUserID,
@@ -111,11 +114,11 @@ func (ns *NotificationCommon) AddNotification(ctx context.Context, msg *schema.N
 	if msg.Type == schema.NotificationTypeAchievement {
 		notificationInfo, exist, err := ns.notificationRepo.GetByUserIdObjectIdTypeId(ctx, req.ReceiverUserID, req.ObjectInfo.ObjectID, req.Type)
 		if err != nil {
-			return errors.InternalServer(reason.UnknownError).WithError(err).WithStack()
+			return fmt.Errorf("get by user id object id type id error: %w", err)
 		}
 		rank, err := ns.activityRepo.GetUserIDObjectIDActivitySum(ctx, req.ReceiverUserID, req.ObjectInfo.ObjectID)
 		if err != nil {
-			return errors.InternalServer(reason.UnknownError).WithError(err).WithStack()
+			return fmt.Errorf("get user id object id activity sum error: %w", err)
 		}
 		req.Rank = rank
 		if exist {
@@ -123,17 +126,14 @@ func (ns *NotificationCommon) AddNotification(ctx context.Context, msg *schema.N
 			updateContent := &schema.NotificationContent{}
 			err := json.Unmarshal([]byte(notificationInfo.Content), updateContent)
 			if err != nil {
-				return errors.InternalServer(reason.UnknownError).WithError(err).WithStack()
+				return fmt.Errorf("unmarshal notification content error: %w", err)
 			}
 			updateContent.Rank = rank
-			content, err := json.Marshal(updateContent)
-			if err != nil {
-				return errors.InternalServer(reason.UnknownError).WithError(err).WithStack()
-			}
+			content, _ := json.Marshal(updateContent)
 			notificationInfo.Content = string(content)
 			err = ns.notificationRepo.UpdateNotificationContent(ctx, notificationInfo)
 			if err != nil {
-				return errors.InternalServer(reason.UnknownError).WithError(err).WithStack()
+				return fmt.Errorf("update notification content error: %w", err)
 			}
 			return nil
 		}
@@ -151,20 +151,21 @@ func (ns *NotificationCommon) AddNotification(ctx context.Context, msg *schema.N
 
 	userBasicInfo, exist, err := ns.userCommon.GetUserBasicInfoByID(ctx, req.TriggerUserID)
 	if err != nil {
-		return errors.InternalServer(reason.UnknownError).WithError(err).WithStack()
+		return fmt.Errorf("get user basic info error: %w", err)
 	}
 	if !exist {
-		return errors.InternalServer(reason.UserNotFound).WithError(err).WithStack()
+		return fmt.Errorf("user not exist: %s", req.TriggerUserID)
 	}
 	req.UserInfo = userBasicInfo
-	content, err := json.Marshal(req)
-	if err != nil {
-		return errors.InternalServer(reason.UnknownError).WithError(err).WithStack()
+	content, _ := json.Marshal(req)
+	_, ok := constant.NotificationMsgTypeMapping[req.NotificationAction]
+	if ok {
+		info.MsgType = constant.NotificationMsgTypeMapping[req.NotificationAction]
 	}
 	info.Content = string(content)
 	err = ns.notificationRepo.AddNotification(ctx, info)
 	if err != nil {
-		return errors.InternalServer(reason.UnknownError).WithError(err).WithStack()
+		return fmt.Errorf("add notification error: %w", err)
 	}
 	err = ns.addRedDot(ctx, info.UserID, info.Type)
 	if err != nil {
@@ -190,10 +191,10 @@ func (ns *NotificationCommon) SendNotificationToAllFollower(ctx context.Context,
 	if msg.NoNeedPushAllFollow {
 		return
 	}
-	if msg.NotificationAction != constant.UpdateQuestion &&
-		msg.NotificationAction != constant.AnswerTheQuestion &&
-		msg.NotificationAction != constant.UpdateAnswer &&
-		msg.NotificationAction != constant.AcceptAnswer {
+	if msg.NotificationAction != constant.NotificationUpdateQuestion &&
+		msg.NotificationAction != constant.NotificationAnswerTheQuestion &&
+		msg.NotificationAction != constant.NotificationUpdateAnswer &&
+		msg.NotificationAction != constant.NotificationAcceptAnswer {
 		return
 	}
 	condObjectID := msg.ObjectID

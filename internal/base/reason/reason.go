@@ -11,6 +11,8 @@ const (
 	UnauthorizedError = "base.unauthorized_error"
 	// DatabaseError database error
 	DatabaseError = "base.database_error"
+	// ForbiddenError forbidden error
+	ForbiddenError = "base.forbidden_error"
 )
 
 const (
@@ -40,6 +42,7 @@ const (
 	EmailDuplicate                   = "error.email.duplicate"
 	EmailVerifyURLExpired            = "error.email.verify_url_expired"
 	EmailNeedToBeVerified            = "error.email.need_to_be_verified"
+	EmailIllegalDomainError          = "error.email.illegal_email_domain_error"
 	UserSuspended                    = "error.user.suspended"
 	ObjectNotFound                   = "error.object.not_found"
 	TagNotFound                      = "error.tag.not_found"
@@ -49,6 +52,7 @@ const (
 	TagAlreadyExist                  = "error.tag.already_exist"
 	RankFailToMeetTheCondition       = "error.rank.fail_to_meet_the_condition"
 	VoteRankFailToMeetTheCondition   = "error.rank.vote_fail_to_meet_the_condition"
+	NoEnoughRankToOperate            = "error.rank.no_enough_rank_to_operate"
 	ThemeNotFound                    = "error.theme.not_found"
 	LangNotFound                     = "error.lang.not_found"
 	ReportHandleFailed               = "error.report.handle_failed"
@@ -57,7 +61,7 @@ const (
 	DatabaseConnectionFailed         = "error.database.connection_failed"
 	InstallCreateTableFailed         = "error.database.create_table_failed"
 	InstallConfigFailed              = "error.install.create_config_failed"
-	SiteInfoNotFound                 = "error.site_info.not_found"
+	SiteInfoConfigNotFound           = "error.site_info.config_not_found"
 	UploadFileSourceUnsupported      = "error.upload.source_unsupported"
 	UploadFileUnsupportedFileFormat  = "error.upload.unsupported_file_format"
 	RecommendTagNotExist             = "error.tag.recommend_tag_not_found"
@@ -70,4 +74,12 @@ const (
 	SMTPConfigFromNameCannotBeEmail  = "error.smtp.config_from_name_cannot_be_email"
 	AdminCannotUpdateTheirPassword   = "error.admin.cannot_update_their_password"
 	AdminCannotModifySelfStatus      = "error.admin.cannot_modify_self_status"
+	UserAccessDenied                 = "error.user.access_denied"
+	UserPageAccessDenied             = "error.user.page_access_denied"
+)
+
+// user external login reasons
+const (
+	UserExternalLoginUnbindingForbidden = "error.user.external_login_unbinding_forbidden"
+	UserExternalLoginMissingUserID      = "error.user.external_login_missing_user_id"
 )

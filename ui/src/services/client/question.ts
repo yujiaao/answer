@@ -22,6 +22,7 @@ export const useHotQuestions = (
     page: 1,
     page_size: 6,
     order: 'frequent',
+    in_days: 7,
   },
 ) => {
   const apiUrl = `/answer/api/v1/question/page?${qs.stringify(params)}`;
@@ -51,4 +52,19 @@ export const useSimilarQuestion = (params: {
     isLoading: !data && !error,
     error,
   };
+};
+
+export const getInviteUser = (questionId: string) => {
+  const apiUrl = '/answer/api/v1/question/invite';
+  return request.get<Type.UserInfoBase[]>(apiUrl, {
+    params: { id: questionId },
+  });
+};
+
+export const putInviteUser = (questionId: string, users: string[]) => {
+  const apiUrl = '/answer/api/v1/question/invite';
+  return request.put(apiUrl, {
+    id: questionId,
+    invite_user: users,
+  });
 };

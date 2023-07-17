@@ -73,7 +73,7 @@ const Flags: FC = () => {
           {flagTypeKeys.map((li) => {
             return (
               <option value={li} key={li}>
-                {li}
+                {t(li, { keyPrefix: 'btns' })}
               </option>
             );
           })}
@@ -96,11 +96,13 @@ const Flags: FC = () => {
                 <td>
                   <Stack>
                     <small className="text-secondary">
-                      Flagged {li.object_type}
+                      {t('flagged_type', {
+                        type: t(li.object_type, { keyPrefix: 'btns' }),
+                      })}
                     </small>
                     <BaseUserCard
                       data={li.reported_user}
-                      className="mt-2 fs-14"
+                      className="mt-2 small"
                     />
                     <a
                       href={pathFactory.questionLanding(
@@ -121,11 +123,11 @@ const Flags: FC = () => {
                   <Stack>
                     <FormatTime
                       time={li.created_at}
-                      className="fs-14 text-secondary"
+                      className="small text-secondary"
                     />
                     <BaseUserCard
                       data={li.report_user}
-                      className="mt-2 mb-2 fs-14"
+                      className="mt-2 mb-2 small"
                     />
                     {li.flagged_reason ? (
                       <small>{li.flagged_content}</small>

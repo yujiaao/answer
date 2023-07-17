@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/answerdev/answer/internal/base/constant"
 	"github.com/answerdev/answer/pkg/converter"
 
 	"github.com/answerdev/answer/internal/base/pager"
@@ -29,30 +30,30 @@ import (
 
 // VoteRepo activity repository
 type VoteRepo struct {
-	data         *data.Data
-	uniqueIDRepo unique.UniqueIDRepo
-	configRepo   config.ConfigRepo
-	activityRepo activity_common.ActivityRepo
-	userRankRepo rank.UserRankRepo
-	voteCommon   activity_common.VoteRepo
+	data          *data.Data
+	uniqueIDRepo  unique.UniqueIDRepo
+	configService *config.ConfigService
+	activityRepo  activity_common.ActivityRepo
+	userRankRepo  rank.UserRankRepo
+	voteCommon    activity_common.VoteRepo
 }
 
 // NewVoteRepo new repository
 func NewVoteRepo(
 	data *data.Data,
 	uniqueIDRepo unique.UniqueIDRepo,
-	configRepo config.ConfigRepo,
+	configService *config.ConfigService,
 	activityRepo activity_common.ActivityRepo,
 	userRankRepo rank.UserRankRepo,
 	voteCommon activity_common.VoteRepo,
 ) service.VoteRepo {
 	return &VoteRepo{
-		data:         data,
-		uniqueIDRepo: uniqueIDRepo,
-		configRepo:   configRepo,
-		activityRepo: activityRepo,
-		userRankRepo: userRankRepo,
-		voteCommon:   voteCommon,
+		data:          data,
+		uniqueIDRepo:  uniqueIDRepo,
+		configService: configService,
+		activityRepo:  activityRepo,
+		userRankRepo:  userRankRepo,
+		voteCommon:    voteCommon,
 	}
 }
 
@@ -70,8 +71,11 @@ var LimitDownActions = map[string][]string{
 
 func (vr *VoteRepo) vote(ctx context.Context, objectID string, userID, objectUserID string, actions []string) (resp *schema.VoteResp, err error) {
 	resp = &schema.VoteResp{}
-	notificationUserIDs := make([]string, 0)
+	achievementNotificationUserIDs := make([]string, 0)
+	sendInboxNotification := false
+	upVote := false
 	_, err = vr.data.DB.Transaction(func(session *xorm.Session) (result any, err error) {
+		session = session.Context(ctx)
 		result = nil
 		for _, action := range actions {
 			var (
@@ -127,7 +131,7 @@ func (vr *VoteRepo) vote(ctx context.Context, objectID string, userID, objectUse
 				if isReachStandard {
 					insertActivity.Rank = 0
 				}
-				notificationUserIDs = append(notificationUserIDs, activityUserID)
+				achievementNotificationUserIDs = append(achievementNotificationUserIDs, activityUserID)
 			}
 
 			if has {
@@ -142,13 +146,17 @@ func (vr *VoteRepo) vote(ctx context.Context, objectID string, userID, objectUse
 				if err != nil {
 					return nil, err
 				}
+				sendInboxNotification = true
 			}
 
 			// update votes
-			if action == "vote_down" || action == "vote_up" {
+			if action == constant.ActVoteDown || action == constant.ActVoteUp {
 				votes := 1
-				if action == "vote_down" {
+				if action == constant.ActVoteDown {
+					upVote = false
 					votes = -1
+				} else {
+					upVote = true
 				}
 				err = vr.updateVotes(ctx, session, objectID, votes)
 				if err != nil {
@@ -165,8 +173,11 @@ func (vr *VoteRepo) vote(ctx context.Context, objectID string, userID, objectUse
 	resp, err = vr.GetVoteResultByObjectId(ctx, objectID)
 	resp.VoteStatus = vr.voteCommon.GetVoteStatus(ctx, objectID, userID)
 
-	for _, activityUserID := range notificationUserIDs {
+	for _, activityUserID := range achievementNotificationUserIDs {
 		vr.sendNotification(ctx, activityUserID, objectUserID, objectID)
+	}
+	if sendInboxNotification {
+		vr.sendVoteInboxNotification(userID, objectUserID, objectID, upVote)
 	}
 	return
 }
@@ -175,6 +186,7 @@ func (vr *VoteRepo) voteCancel(ctx context.Context, objectID string, userID, obj
 	resp = &schema.VoteResp{}
 	notificationUserIDs := make([]string, 0)
 	_, err = vr.data.DB.Transaction(func(session *xorm.Session) (result any, err error) {
+		session = session.Context(ctx)
 		for _, action := range actions {
 			var (
 				existsActivity entity.Activity
@@ -352,7 +364,7 @@ func (vr *VoteRepo) GetVoteResultByObjectId(ctx context.Context, objectID string
 
 		activityType, _, _, _ = vr.activityRepo.GetActivityTypeByObjID(ctx, objectID, action)
 
-		votes, err = vr.data.DB.Where(builder.Eq{"object_id": objectID}).
+		votes, err = vr.data.DB.Context(ctx).Where(builder.Eq{"object_id": objectID}).
 			And(builder.Eq{"activity_type": activityType}).
 			And(builder.Eq{"cancelled": 0}).
 			Count(&activity)
@@ -379,7 +391,7 @@ func (vr *VoteRepo) ListUserVotes(
 	req schema.GetVoteWithPageReq,
 	activityTypes []int,
 ) (voteList []entity.Activity, total int64, err error) {
-	session := vr.data.DB.NewSession()
+	session := vr.data.DB.Context(ctx)
 	cond := builder.
 		And(
 			builder.Eq{"user_id": userID},
@@ -440,4 +452,41 @@ func (vr *VoteRepo) sendNotification(ctx context.Context, activityUserID, object
 		ObjectType:     objectType,
 	}
 	notice_queue.AddNotification(msg)
+}
+
+func (vr *VoteRepo) sendVoteInboxNotification(triggerUserID, receiverUserID, objectID string, upvote bool) {
+	if triggerUserID == receiverUserID {
+		return
+	}
+	objectType, _ := obj.GetObjectTypeStrByObjectID(objectID)
+
+	msg := &schema.NotificationMsg{
+		TriggerUserID:  triggerUserID,
+		ReceiverUserID: receiverUserID,
+		Type:           schema.NotificationTypeInbox,
+		ObjectID:       objectID,
+		ObjectType:     objectType,
+	}
+	if objectType == constant.QuestionObjectType {
+		if upvote {
+			msg.NotificationAction = constant.NotificationUpVotedTheQuestion
+		} else {
+			msg.NotificationAction = constant.NotificationDownVotedTheQuestion
+		}
+	}
+	if objectType == constant.AnswerObjectType {
+		if upvote {
+			msg.NotificationAction = constant.NotificationUpVotedTheAnswer
+		} else {
+			msg.NotificationAction = constant.NotificationDownVotedTheAnswer
+		}
+	}
+	if objectType == constant.CommentObjectType {
+		if upvote {
+			msg.NotificationAction = constant.NotificationUpVotedTheComment
+		}
+	}
+	if len(msg.NotificationAction) > 0 {
+		notice_queue.AddNotification(msg)
+	}
 }

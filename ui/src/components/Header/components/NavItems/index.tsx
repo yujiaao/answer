@@ -6,6 +6,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import type * as Type from '@/common/interface';
 import { Avatar, Icon } from '@/components';
 import { floppyNavigation } from '@/utils';
+import { userCenterStore } from '@/stores';
 
 interface Props {
   redDot: Type.NotificationStatus | undefined;
@@ -15,13 +16,14 @@ interface Props {
 
 const Index: FC<Props> = ({ redDot, userInfo, logOut }) => {
   const { t } = useTranslation();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const navigate = useNavigate();
+  const { agent: ucAgent } = userCenterStore();
   const handleLinkClick = (evt) => {
     if (floppyNavigation.shouldProcessLinkClick(evt)) {
       evt.preventDefault();
-      const { href } = evt.currentTarget;
-      const { pathname } = new URL(href);
-      navigate(pathname);
+      const href = evt.currentTarget.getAttribute('href');
+      navigate(href);
     }
   };
   return (
@@ -62,34 +64,59 @@ const Index: FC<Props> = ({ redDot, userInfo, logOut }) => {
             {t('header.nav.profile')}
           </Dropdown.Item>
           <Dropdown.Item
+            href={`/users/${userInfo.username}/bookmarks`}
+            onClick={handleLinkClick}>
+            {t('header.nav.bookmark')}
+          </Dropdown.Item>
+          <Dropdown.Item
             href="/users/settings/profile"
             onClick={handleLinkClick}>
             {t('header.nav.setting')}
           </Dropdown.Item>
-          {userInfo?.role_id === 2 ? (
-            <Dropdown.Item href="/admin" onClick={handleLinkClick}>
-              {t('header.nav.admin')}
-            </Dropdown.Item>
-          ) : null}
-          {redDot?.can_revision ? (
-            <Dropdown.Item
-              href="/review"
-              className="position-relative"
-              onClick={handleLinkClick}>
-              {t('header.nav.review')}
-              {redDot?.revision > 0 && (
-                <span className="position-absolute top-50 translate-middle-y end-0 me-3 p-2 bg-danger border border-light rounded-circle">
-                  <span className="visually-hidden">New Review</span>
-                </span>
-              )}
-            </Dropdown.Item>
-          ) : null}
           <Dropdown.Divider />
           <Dropdown.Item onClick={logOut}>
             {t('header.nav.logout')}
           </Dropdown.Item>
         </Dropdown.Menu>
       </Dropdown>
+      {/* Dropdown for user center agent info */}
+      {ucAgent?.enabled &&
+      (ucAgent?.agent_info?.url ||
+        ucAgent?.agent_info?.control_center?.length) ? (
+        <Dropdown align="end">
+          <Dropdown.Toggle
+            variant="success"
+            id="dropdown-uca"
+            as="span"
+            className="no-toggle">
+            <Nav>
+              <Icon
+                name="grid-3x3-gap-fill"
+                className="nav-link pointer p-0 fs-4 ms-3"
+              />
+            </Nav>
+          </Dropdown.Toggle>
+
+          <Dropdown.Menu>
+            {ucAgent.agent_info.url ? (
+              <Dropdown.Item href={ucAgent.agent_info.url}>
+                {ucAgent.agent_info.name}
+              </Dropdown.Item>
+            ) : null}
+            {ucAgent.agent_info.url &&
+            ucAgent.agent_info.control_center?.length ? (
+              <Dropdown.Divider />
+            ) : null}
+            {ucAgent.agent_info.control_center?.map((ctrl) => {
+              return (
+                <Dropdown.Item key={ctrl.name} href={ctrl.url}>
+                  {ctrl.label}
+                </Dropdown.Item>
+              );
+            })}
+          </Dropdown.Menu>
+        </Dropdown>
+      ) : null}
     </>
   );
 };

@@ -9,11 +9,11 @@ import (
 	"github.com/answerdev/answer/internal/repo/captcha"
 	"github.com/answerdev/answer/internal/repo/collection"
 	"github.com/answerdev/answer/internal/repo/comment"
-	"github.com/answerdev/answer/internal/repo/common"
 	"github.com/answerdev/answer/internal/repo/config"
 	"github.com/answerdev/answer/internal/repo/export"
 	"github.com/answerdev/answer/internal/repo/meta"
 	"github.com/answerdev/answer/internal/repo/notification"
+	"github.com/answerdev/answer/internal/repo/plugin_config"
 	"github.com/answerdev/answer/internal/repo/question"
 	"github.com/answerdev/answer/internal/repo/rank"
 	"github.com/answerdev/answer/internal/repo/reason"
@@ -26,12 +26,12 @@ import (
 	"github.com/answerdev/answer/internal/repo/tag_common"
 	"github.com/answerdev/answer/internal/repo/unique"
 	"github.com/answerdev/answer/internal/repo/user"
+	"github.com/answerdev/answer/internal/repo/user_external_login"
 	"github.com/google/wire"
 )
 
 // ProviderSetRepo is data providers.
 var ProviderSetRepo = wire.NewSet(
-	common.NewCommonRepo,
 	data.NewData,
 	data.NewDB,
 	data.NewCache,
@@ -72,4 +72,6 @@ var ProviderSetRepo = wire.NewSet(
 	role.NewUserRoleRelRepo,
 	role.NewRolePowerRelRepo,
 	role.NewPowerRepo,
+	user_external_login.NewUserExternalLoginRepo,
+	plugin_config.NewPluginConfigRepo,
 )

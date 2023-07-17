@@ -9,13 +9,17 @@ import {
   DEFAULT_LANG,
   LANG_RESOURCE_STORAGE_KEY,
 } from '@/common/constants';
-import { Storage } from '@/utils';
 import {
   getAdminLanguageOptions,
   getLanguageConfig,
   getLanguageOptions,
 } from '@/services';
 
+import Storage from './storage';
+
+/**
+ * localize kit for i18n
+ */
 export const loadLanguageOptions = async (forAdmin = false) => {
   const languageOptions = forAdmin
     ? await getAdminLanguageOptions()
@@ -23,7 +27,7 @@ export const loadLanguageOptions = async (forAdmin = false) => {
   if (process.env.NODE_ENV === 'development') {
     const { default: optConf } = await import('@i18n/i18n.yaml');
     optConf?.language_options.forEach((opt) => {
-      if (!languageOptions.find((_) => opt.label === _.label)) {
+      if (!languageOptions.find((_) => opt.value === _.value)) {
         languageOptions.push(opt);
       }
     });
@@ -67,13 +71,6 @@ const addI18nResource = async (langName) => {
   }
 };
 
-dayjs.extend(utc);
-dayjs.extend(timezone);
-const localeDayjs = (langName) => {
-  langName = langName.replace('_', '-').toLowerCase();
-  dayjs.locale(langName);
-};
-
 export const getCurrentLang = () => {
   const loggedUser = loggedUserInfoStore.getState().user;
   const adminInterface = interfaceStore.getState().interface;
@@ -85,6 +82,16 @@ export const getCurrentLang = () => {
   }
   currentLang ||= fallbackLang;
   return currentLang;
+};
+
+/**
+ * localize for Day.js
+ */
+dayjs.extend(utc);
+dayjs.extend(timezone);
+const localeDayjs = (langName) => {
+  langName = langName.replace('_', '-').toLowerCase();
+  dayjs.locale(langName);
 };
 
 export const setupAppLanguage = async () => {
