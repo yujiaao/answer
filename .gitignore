@@ -30,3 +30,6 @@ vendor/
 /new_answer
 
 dist/
+answer.log
+answer.run
+

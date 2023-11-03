@@ -315,9 +315,7 @@ const Comment = ({ objectId, mode, commentId }) => {
           }}>
           {t('btn_add_comment')}
         </Button>
-        {data &&
-          (pageIndex || 1) < Math.ceil((data?.count || 0) / pageSize) && (
-            <Button
+        {data && (pageIndex || 1) < Math.ceil((data?.count || 0) / pageSize) && ( <Button
               variant="link"
               className="p-0 fs-14 ms-3 btn-no-border"
               onClick={() => {
