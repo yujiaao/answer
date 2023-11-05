@@ -1,9 +1,25 @@
-import { FC, ReactNode, memo } from 'react';
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
 
-import builtin from '@/plugins/builtin';
-import * as plugins from '@/plugins';
-import { Plugin, PluginType } from '@/utils/pluginKit';
+import React, { FC, ReactNode } from 'react';
 
+import PluginKit, { Plugin, PluginType } from '@/utils/pluginKit';
 /**
  * Note：Please set at least either of the `slug_name` and `type` attributes, otherwise no plugins will be rendered.
  *
@@ -22,37 +38,70 @@ interface Props {
   [prop: string]: any;
 }
 
-const findPlugin: (s, k: 'slug_name' | 'type', v) => Plugin[] = (
-  source,
-  k,
-  v,
-) => {
-  const ret: Plugin[] = [];
-  if (source) {
-    Object.keys(source).forEach((i) => {
-      const p = source[i];
-      if (p && p.component && p.info && p.info[k] === v) {
-        ret.push(p);
+const Index: FC<Props> = ({
+  slug_name,
+  type,
+  children = null,
+  className,
+  ...props
+}) => {
+  const pluginSlice: Plugin[] = [];
+  const plugins = PluginKit.getPlugins().filter((plugin) => plugin.activated);
+
+  console.log('default list', plugins);
+  plugins.forEach((plugin) => {
+    console.log('plugininfo ====', plugin);
+    if (type && slug_name) {
+      if (plugin.info.slug_name === slug_name && plugin.info.type === type) {
+        pluginSlice.push(plugin);
       }
-    });
-  }
-  return ret;
-};
+    } else if (type) {
+      if (plugin.info.type === type) {
+        pluginSlice.push(plugin);
+      }
+    } else if (slug_name) {
+      if (plugin.info.slug_name === slug_name) {
+        pluginSlice.push(plugin);
+      }
+    }
+  });
 
-const Index: FC<Props> = ({ slug_name, type, children, ...props }) => {
-  const fk = slug_name ? 'slug_name' : 'type';
-  const fv = fk === 'slug_name' ? slug_name : type;
-  const bp = findPlugin(builtin, fk, fv);
-  const vp = findPlugin(plugins, fk, fv);
-  const pluginSlice = [...bp, ...vp];
-
-  if (!pluginSlice.length) {
-    return null;
-  }
   /**
    * TODO: Rendering control for non-builtin plug-ins
    * ps: Logic such as version compatibility determination can be placed here
    */
+  if (pluginSlice.length === 0) {
+    if (type === 'editor') {
+      return <div className={className}>{children}</div>;
+    }
+    return null;
+  }
+
+  if (type === 'editor') {
+    console.log('444');
+    const nodes = React.Children.map(children, (child, index) => {
+      if (index === 15) {
+        return (
+          <>
+            {child}
+            {pluginSlice.map((ps) => {
+              const PluginFC = ps.component;
+              console.log('333', ps.info.slug_name);
+              return (
+                // @ts-ignore
+                <PluginFC key={ps.info.slug_name} {...props} />
+              );
+            })}
+            <div className="toolbar-divider" />
+          </>
+        );
+      }
+      return child;
+    });
+    console.log('222', nodes?.length);
+
+    return <div className={className}>{nodes}</div>;
+  }
 
   return (
     <>
@@ -60,13 +109,11 @@ const Index: FC<Props> = ({ slug_name, type, children, ...props }) => {
         const PluginFC = ps.component;
         return (
           // @ts-ignore
-          <PluginFC key={ps.info.slug_name} {...props}>
-            {children}
-          </PluginFC>
+          <PluginFC key={ps.info.slug_name} className={className} {...props} />
         );
       })}
     </>
   );
 };
 
-export default memo(Index);
+export default Index;

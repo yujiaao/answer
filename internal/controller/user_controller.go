@@ -1,32 +1,54 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package controller
 
 import (
-	"github.com/answerdev/answer/internal/base/handler"
-	"github.com/answerdev/answer/internal/base/middleware"
-	"github.com/answerdev/answer/internal/base/reason"
-	"github.com/answerdev/answer/internal/base/translator"
-	"github.com/answerdev/answer/internal/base/validator"
-	"github.com/answerdev/answer/internal/schema"
-	"github.com/answerdev/answer/internal/service"
-	"github.com/answerdev/answer/internal/service/action"
-	"github.com/answerdev/answer/internal/service/auth"
-	"github.com/answerdev/answer/internal/service/export"
-	"github.com/answerdev/answer/internal/service/siteinfo_common"
-	"github.com/answerdev/answer/internal/service/uploader"
-	"github.com/answerdev/answer/pkg/checker"
+	"github.com/apache/incubator-answer/internal/base/constant"
+	"github.com/apache/incubator-answer/internal/base/handler"
+	"github.com/apache/incubator-answer/internal/base/middleware"
+	"github.com/apache/incubator-answer/internal/base/reason"
+	"github.com/apache/incubator-answer/internal/base/translator"
+	"github.com/apache/incubator-answer/internal/base/validator"
+	"github.com/apache/incubator-answer/internal/entity"
+	"github.com/apache/incubator-answer/internal/schema"
+	"github.com/apache/incubator-answer/internal/service"
+	"github.com/apache/incubator-answer/internal/service/action"
+	"github.com/apache/incubator-answer/internal/service/auth"
+	"github.com/apache/incubator-answer/internal/service/export"
+	"github.com/apache/incubator-answer/internal/service/siteinfo_common"
+	"github.com/apache/incubator-answer/internal/service/user_notification_config"
+	"github.com/apache/incubator-answer/pkg/checker"
 	"github.com/gin-gonic/gin"
 	"github.com/segmentfault/pacman/errors"
 	"github.com/segmentfault/pacman/log"
+	"net/url"
 )
 
 // UserController user controller
 type UserController struct {
-	userService           *service.UserService
-	authService           *auth.AuthService
-	actionService         *action.CaptchaService
-	uploaderService       uploader.UploaderService
-	emailService          *export.EmailService
-	siteInfoCommonService *siteinfo_common.SiteInfoCommonService
+	userService                   *service.UserService
+	authService                   *auth.AuthService
+	actionService                 *action.CaptchaService
+	emailService                  *export.EmailService
+	siteInfoCommonService         siteinfo_common.SiteInfoCommonService
+	userNotificationConfigService *user_notification_config.UserNotificationConfigService
 }
 
 // NewUserController new controller
@@ -35,16 +57,16 @@ func NewUserController(
 	userService *service.UserService,
 	actionService *action.CaptchaService,
 	emailService *export.EmailService,
-	uploaderService uploader.UploaderService,
-	siteInfoCommonService *siteinfo_common.SiteInfoCommonService,
+	siteInfoCommonService siteinfo_common.SiteInfoCommonService,
+	userNotificationConfigService *user_notification_config.UserNotificationConfigService,
 ) *UserController {
 	return &UserController{
-		authService:           authService,
-		userService:           userService,
-		actionService:         actionService,
-		uploaderService:       uploaderService,
-		emailService:          emailService,
-		siteInfoCommonService: siteInfoCommonService,
+		authService:                   authService,
+		userService:                   userService,
+		actionService:                 actionService,
+		emailService:                  emailService,
+		siteInfoCommonService:         siteInfoCommonService,
+		userNotificationConfigService: userNotificationConfigService,
 	}
 }
 
@@ -72,6 +94,7 @@ func (uc *UserController) GetUserInfoByUserID(ctx *gin.Context) {
 	}
 
 	resp, err := uc.userService.GetUserInfoByUserID(ctx, token, userInfo.UserID)
+	uc.setVisitCookies(ctx, userInfo.VisitToken, false)
 	handler.HandleResponse(ctx, err, resp)
 }
 
@@ -101,28 +124,30 @@ func (uc *UserController) GetOtherUserInfoByUsername(ctx *gin.Context) {
 // @Tags User
 // @Accept json
 // @Produce json
-// @Param data body schema.UserEmailLogin true "UserEmailLogin"
+// @Param data body schema.UserEmailLoginReq true "UserEmailLogin"
 // @Success 200 {object} handler.RespBody{data=schema.UserLoginResp}
 // @Router /answer/api/v1/user/login/email [post]
 func (uc *UserController) UserEmailLogin(ctx *gin.Context) {
-	req := &schema.UserEmailLogin{}
+	req := &schema.UserEmailLoginReq{}
 	if handler.BindAndCheck(ctx, req) {
 		return
 	}
-
-	captchaPass := uc.actionService.ActionRecordVerifyCaptcha(ctx, schema.ActionRecordTypeLogin, ctx.ClientIP(), req.CaptchaID, req.CaptchaCode)
-	if !captchaPass {
-		errFields := append([]*validator.FormErrorField{}, &validator.FormErrorField{
-			ErrorField: "captcha_code",
-			ErrorMsg:   translator.Tr(handler.GetLang(ctx), reason.CaptchaVerificationFailed),
-		})
-		handler.HandleResponse(ctx, errors.BadRequest(reason.CaptchaVerificationFailed), errFields)
-		return
+	isAdmin := middleware.GetUserIsAdminModerator(ctx)
+	if !isAdmin {
+		captchaPass := uc.actionService.ActionRecordVerifyCaptcha(ctx, entity.CaptchaActionPassword, ctx.ClientIP(), req.CaptchaID, req.CaptchaCode)
+		if !captchaPass {
+			errFields := append([]*validator.FormErrorField{}, &validator.FormErrorField{
+				ErrorField: "captcha_code",
+				ErrorMsg:   translator.Tr(handler.GetLang(ctx), reason.CaptchaVerificationFailed),
+			})
+			handler.HandleResponse(ctx, errors.BadRequest(reason.CaptchaVerificationFailed), errFields)
+			return
+		}
 	}
 
 	resp, err := uc.userService.EmailLogin(ctx, req)
 	if err != nil {
-		_, _ = uc.actionService.ActionRecordAdd(ctx, schema.ActionRecordTypeLogin, ctx.ClientIP())
+		_, _ = uc.actionService.ActionRecordAdd(ctx, entity.CaptchaActionPassword, ctx.ClientIP())
 		errFields := append([]*validator.FormErrorField{}, &validator.FormErrorField{
 			ErrorField: "e_mail",
 			ErrorMsg:   translator.Tr(handler.GetLang(ctx), reason.EmailOrPasswordWrong),
@@ -130,7 +155,10 @@ func (uc *UserController) UserEmailLogin(ctx *gin.Context) {
 		handler.HandleResponse(ctx, errors.BadRequest(reason.EmailOrPasswordWrong), errFields)
 		return
 	}
-	uc.actionService.ActionRecordDel(ctx, schema.ActionRecordTypeLogin, ctx.ClientIP())
+	if !isAdmin {
+		uc.actionService.ActionRecordDel(ctx, entity.CaptchaActionPassword, ctx.ClientIP())
+	}
+	uc.setVisitCookies(ctx, resp.VisitToken, true)
 	handler.HandleResponse(ctx, nil, resp)
 }
 
@@ -148,16 +176,18 @@ func (uc *UserController) RetrievePassWord(ctx *gin.Context) {
 	if handler.BindAndCheck(ctx, req) {
 		return
 	}
-	captchaPass := uc.actionService.ActionRecordVerifyCaptcha(ctx, schema.ActionRecordTypeFindPass, ctx.ClientIP(), req.CaptchaID, req.CaptchaCode)
-	if !captchaPass {
-		errFields := append([]*validator.FormErrorField{}, &validator.FormErrorField{
-			ErrorField: "captcha_code",
-			ErrorMsg:   translator.Tr(handler.GetLang(ctx), reason.CaptchaVerificationFailed),
-		})
-		handler.HandleResponse(ctx, errors.BadRequest(reason.CaptchaVerificationFailed), errFields)
-		return
+	isAdmin := middleware.GetUserIsAdminModerator(ctx)
+	if !isAdmin {
+		captchaPass := uc.actionService.ActionRecordVerifyCaptcha(ctx, entity.CaptchaActionEmail, ctx.ClientIP(), req.CaptchaID, req.CaptchaCode)
+		if !captchaPass {
+			errFields := append([]*validator.FormErrorField{}, &validator.FormErrorField{
+				ErrorField: "captcha_code",
+				ErrorMsg:   translator.Tr(handler.GetLang(ctx), reason.CaptchaVerificationFailed),
+			})
+			handler.HandleResponse(ctx, errors.BadRequest(reason.CaptchaVerificationFailed), errFields)
+			return
+		}
 	}
-	_, _ = uc.actionService.ActionRecordAdd(ctx, schema.ActionRecordTypeFindPass, ctx.ClientIP())
 	err := uc.userService.RetrievePassWord(ctx, req)
 	handler.HandleResponse(ctx, err, nil)
 }
@@ -185,7 +215,7 @@ func (uc *UserController) UseRePassWord(ctx *gin.Context) {
 	}
 
 	err := uc.userService.UpdatePasswordWhenForgot(ctx, req)
-	uc.actionService.ActionRecordDel(ctx, schema.ActionRecordTypeFindPass, ctx.ClientIP())
+	uc.actionService.ActionRecordDel(ctx, entity.CaptchaActionPassword, ctx.ClientIP())
 	handler.HandleResponse(ctx, err, nil)
 }
 
@@ -205,6 +235,8 @@ func (uc *UserController) UserLogout(ctx *gin.Context) {
 	}
 	_ = uc.authService.RemoveUserCacheInfo(ctx, accessToken)
 	_ = uc.authService.RemoveAdminUserCacheInfo(ctx, accessToken)
+	visitToken, _ := ctx.Cookie(constant.UserVisitCookiesCacheKey)
+	_ = uc.authService.RemoveUserVisitCacheInfo(ctx, visitToken)
 	handler.HandleResponse(ctx, nil, nil)
 }
 
@@ -238,14 +270,17 @@ func (uc *UserController) UserRegisterByEmail(ctx *gin.Context) {
 		return
 	}
 	req.IP = ctx.ClientIP()
-	captchaPass := uc.actionService.UserRegisterVerifyCaptcha(ctx, req.CaptchaID, req.CaptchaCode)
-	if !captchaPass {
-		errFields := append([]*validator.FormErrorField{}, &validator.FormErrorField{
-			ErrorField: "captcha_code",
-			ErrorMsg:   translator.Tr(handler.GetLang(ctx), reason.CaptchaVerificationFailed),
-		})
-		handler.HandleResponse(ctx, errors.BadRequest(reason.CaptchaVerificationFailed), errFields)
-		return
+	isAdmin := middleware.GetUserIsAdminModerator(ctx)
+	if !isAdmin {
+		captchaPass := uc.actionService.ActionRecordVerifyCaptcha(ctx, entity.CaptchaActionEmail, req.IP, req.CaptchaID, req.CaptchaCode)
+		if !captchaPass {
+			errFields := append([]*validator.FormErrorField{}, &validator.FormErrorField{
+				ErrorField: "captcha_code",
+				ErrorMsg:   translator.Tr(handler.GetLang(ctx), reason.CaptchaVerificationFailed),
+			})
+			handler.HandleResponse(ctx, errors.BadRequest(reason.CaptchaVerificationFailed), errFields)
+			return
+		}
 	}
 
 	resp, errFields, err := uc.userService.UserRegisterByEmail(ctx, req)
@@ -288,7 +323,7 @@ func (uc *UserController) UserVerifyEmail(ctx *gin.Context) {
 		return
 	}
 
-	uc.actionService.ActionRecordDel(ctx, schema.ActionRecordTypeEmail, ctx.ClientIP())
+	uc.actionService.ActionRecordDel(ctx, entity.CaptchaActionEmail, ctx.ClientIP())
 	handler.HandleResponse(ctx, err, resp)
 }
 
@@ -313,22 +348,20 @@ func (uc *UserController) UserVerifyEmailSend(ctx *gin.Context) {
 		handler.HandleResponse(ctx, errors.Unauthorized(reason.UnauthorizedError), nil)
 		return
 	}
+	isAdmin := middleware.GetUserIsAdminModerator(ctx)
+	if !isAdmin {
+		captchaPass := uc.actionService.ActionRecordVerifyCaptcha(ctx, entity.CaptchaActionEmail, ctx.ClientIP(), req.CaptchaID, req.CaptchaCode)
+		if !captchaPass {
+			errFields := append([]*validator.FormErrorField{}, &validator.FormErrorField{
+				ErrorField: "captcha_code",
+				ErrorMsg:   translator.Tr(handler.GetLang(ctx), reason.CaptchaVerificationFailed),
+			})
+			handler.HandleResponse(ctx, errors.BadRequest(reason.CaptchaVerificationFailed), errFields)
+			return
+		}
+	}
 
-	captchaPass := uc.actionService.ActionRecordVerifyCaptcha(ctx, schema.ActionRecordTypeEmail, ctx.ClientIP(),
-		req.CaptchaID, req.CaptchaCode)
-	if !captchaPass {
-		errFields := append([]*validator.FormErrorField{}, &validator.FormErrorField{
-			ErrorField: "captcha_code",
-			ErrorMsg:   translator.Tr(handler.GetLang(ctx), reason.CaptchaVerificationFailed),
-		})
-		handler.HandleResponse(ctx, errors.BadRequest(reason.CaptchaVerificationFailed), errFields)
-		return
-	}
-	_, err := uc.actionService.ActionRecordAdd(ctx, schema.ActionRecordTypeEmail, ctx.ClientIP())
-	if err != nil {
-		log.Error(err)
-	}
-	err = uc.userService.UserVerifyEmailSend(ctx, userInfo.UserID)
+	err := uc.userService.UserVerifyEmailSend(ctx, userInfo.UserID)
 	handler.HandleResponse(ctx, err, nil)
 }
 
@@ -349,20 +382,22 @@ func (uc *UserController) UserModifyPassWord(ctx *gin.Context) {
 	}
 	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
 	req.AccessToken = middleware.ExtractToken(ctx)
-
-	captchaPass := uc.actionService.ActionRecordVerifyCaptcha(ctx, schema.ActionRecordTypeModifyPass, ctx.ClientIP(),
-		req.CaptchaID, req.CaptchaCode)
-	if !captchaPass {
-		errFields := append([]*validator.FormErrorField{}, &validator.FormErrorField{
-			ErrorField: "captcha_code",
-			ErrorMsg:   translator.Tr(handler.GetLang(ctx), reason.CaptchaVerificationFailed),
-		})
-		handler.HandleResponse(ctx, errors.BadRequest(reason.CaptchaVerificationFailed), errFields)
-		return
-	}
-	_, err := uc.actionService.ActionRecordAdd(ctx, schema.ActionRecordTypeModifyPass, ctx.ClientIP())
-	if err != nil {
-		log.Error(err)
+	isAdmin := middleware.GetUserIsAdminModerator(ctx)
+	if !isAdmin {
+		captchaPass := uc.actionService.ActionRecordVerifyCaptcha(ctx, entity.CaptchaActionPassword, req.UserID,
+			req.CaptchaID, req.CaptchaCode)
+		if !captchaPass {
+			errFields := append([]*validator.FormErrorField{}, &validator.FormErrorField{
+				ErrorField: "captcha_code",
+				ErrorMsg:   translator.Tr(handler.GetLang(ctx), reason.CaptchaVerificationFailed),
+			})
+			handler.HandleResponse(ctx, errors.BadRequest(reason.CaptchaVerificationFailed), errFields)
+			return
+		}
+		_, err := uc.actionService.ActionRecordAdd(ctx, entity.CaptchaActionPassword, req.UserID)
+		if err != nil {
+			log.Error(err)
+		}
 	}
 
 	oldPassVerification, err := uc.userService.UserModifyPassWordVerification(ctx, req)
@@ -389,7 +424,7 @@ func (uc *UserController) UserModifyPassWord(ctx *gin.Context) {
 	}
 	err = uc.userService.UserModifyPassword(ctx, req)
 	if err == nil {
-		uc.actionService.ActionRecordDel(ctx, schema.ActionRecordTypeLogin, ctx.ClientIP())
+		uc.actionService.ActionRecordDel(ctx, entity.CaptchaActionPassword, req.UserID)
 	}
 	handler.HandleResponse(ctx, err, nil)
 }
@@ -411,6 +446,7 @@ func (uc *UserController) UserUpdateInfo(ctx *gin.Context) {
 		return
 	}
 	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
+	req.IsAdmin = middleware.GetUserIsAdminModerator(ctx)
 	errFields, err := uc.userService.UpdateInfo(ctx, req)
 	for _, field := range errFields {
 		field.ErrorMsg = translator.Tr(handler.GetLang(ctx), field.ErrorMsg)
@@ -452,10 +488,21 @@ func (uc *UserController) ActionRecord(ctx *gin.Context) {
 	if handler.BindAndCheck(ctx, req) {
 		return
 	}
+	userinfo := middleware.GetUserInfoFromContext(ctx)
+	if userinfo != nil {
+		req.UserID = userinfo.UserID
+	}
 	req.IP = ctx.ClientIP()
+	resp := &schema.ActionRecordResp{}
+	isAdmin := middleware.GetUserIsAdminModerator(ctx)
+	if isAdmin {
+		resp.Verify = false
+		handler.HandleResponse(ctx, nil, resp)
+	} else {
+		resp, err := uc.actionService.ActionRecord(ctx, req)
+		handler.HandleResponse(ctx, err, resp)
+	}
 
-	resp, err := uc.actionService.ActionRecord(ctx, req)
-	handler.HandleResponse(ctx, err, resp)
 }
 
 // UserRegisterCaptcha godoc
@@ -471,25 +518,40 @@ func (uc *UserController) UserRegisterCaptcha(ctx *gin.Context) {
 	handler.HandleResponse(ctx, err, resp)
 }
 
-// UserNoticeSet godoc
-// @Summary UserNoticeSet
-// @Description UserNoticeSet
+// GetUserNotificationConfig get user's notification config
+// @Summary get user's notification config
+// @Description get user's notification config
 // @Tags User
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Param data body schema.UserNoticeSetRequest true "UserNoticeSetRequest"
-// @Success 200 {object} handler.RespBody{data=schema.UserNoticeSetResp}
-// @Router /answer/api/v1/user/notice/set [post]
-func (uc *UserController) UserNoticeSet(ctx *gin.Context) {
-	req := &schema.UserNoticeSetRequest{}
+// @Success 200 {object} handler.RespBody{data=schema.GetUserNotificationConfigResp}
+// @Router /answer/api/v1/user/notification/config [post]
+func (uc *UserController) GetUserNotificationConfig(ctx *gin.Context) {
+	userID := middleware.GetLoginUserIDFromContext(ctx)
+	resp, err := uc.userNotificationConfigService.GetUserNotificationConfig(ctx, userID)
+	handler.HandleResponse(ctx, err, resp)
+}
+
+// UpdateUserNotificationConfig update user's notification config
+// @Summary update user's notification config
+// @Description update user's notification config
+// @Tags User
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param data body schema.UpdateUserNotificationConfigReq true "UpdateUserNotificationConfigReq"
+// @Success 200 {object} handler.RespBody{}
+// @Router /answer/api/v1/user/notification/config [put]
+func (uc *UserController) UpdateUserNotificationConfig(ctx *gin.Context) {
+	req := &schema.UpdateUserNotificationConfigReq{}
 	if handler.BindAndCheck(ctx, req) {
 		return
 	}
 
 	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
-	resp, err := uc.userService.UserNoticeSet(ctx, req.UserID, req.NoticeSwitch)
-	handler.HandleResponse(ctx, err, resp)
+	err := uc.userNotificationConfigService.UpdateUserNotificationConfig(ctx, req)
+	handler.HandleResponse(ctx, err, nil)
 }
 
 // UserChangeEmailSendCode send email to the user email then change their email
@@ -523,22 +585,30 @@ func (uc *UserController) UserChangeEmailSendCode(ctx *gin.Context) {
 		handler.HandleResponse(ctx, errors.BadRequest(reason.EmailIllegalDomainError), nil)
 		return
 	}
+	isAdmin := middleware.GetUserIsAdminModerator(ctx)
 
-	captchaPass := uc.actionService.ActionRecordVerifyCaptcha(ctx, schema.ActionRecordTypeEmail, ctx.ClientIP(), req.CaptchaID, req.CaptchaCode)
-	if !captchaPass {
-		errFields := append([]*validator.FormErrorField{}, &validator.FormErrorField{
-			ErrorField: "captcha_code",
-			ErrorMsg:   translator.Tr(handler.GetLang(ctx), reason.CaptchaVerificationFailed),
-		})
-		handler.HandleResponse(ctx, errors.BadRequest(reason.CaptchaVerificationFailed), errFields)
-		return
+	if !isAdmin {
+		captchaPass := uc.actionService.ActionRecordVerifyCaptcha(ctx, entity.CaptchaActionEditUserinfo, req.UserID, req.CaptchaID, req.CaptchaCode)
+		uc.actionService.ActionRecordAdd(ctx, entity.CaptchaActionEditUserinfo, req.UserID)
+		if !captchaPass {
+			errFields := append([]*validator.FormErrorField{}, &validator.FormErrorField{
+				ErrorField: "captcha_code",
+				ErrorMsg:   translator.Tr(handler.GetLang(ctx), reason.CaptchaVerificationFailed),
+			})
+			handler.HandleResponse(ctx, errors.BadRequest(reason.CaptchaVerificationFailed), errFields)
+			return
+		}
 	}
-	_, _ = uc.actionService.ActionRecordAdd(ctx, schema.ActionRecordTypeEmail, ctx.ClientIP())
+
 	resp, err := uc.userService.UserChangeEmailSendCode(ctx, req)
 	if err != nil {
 		handler.HandleResponse(ctx, err, resp)
 		return
 	}
+	if !isAdmin {
+		uc.actionService.ActionRecordDel(ctx, entity.CaptchaActionEditUserinfo, ctx.ClientIP())
+	}
+
 	handler.HandleResponse(ctx, err, nil)
 }
 
@@ -565,7 +635,7 @@ func (uc *UserController) UserChangeEmailVerify(ctx *gin.Context) {
 	}
 
 	resp, err := uc.userService.UserChangeEmailVerify(ctx, req.Content)
-	uc.actionService.ActionRecordDel(ctx, schema.ActionRecordTypeEmail, ctx.ClientIP())
+	uc.actionService.ActionRecordDel(ctx, entity.CaptchaActionEmail, ctx.ClientIP())
 	handler.HandleResponse(ctx, err, resp)
 }
 
@@ -583,16 +653,17 @@ func (uc *UserController) UserRanking(ctx *gin.Context) {
 	handler.HandleResponse(ctx, err, resp)
 }
 
-// UserUnsubscribeEmailNotification unsubscribe email notification
-// @Summary unsubscribe email notification
-// @Description unsubscribe email notification
+// UserUnsubscribeNotification unsubscribe notification
+// @Summary unsubscribe notification
+// @Description unsubscribe notification
 // @Tags User
 // @Accept json
 // @Produce json
+// @Param data body schema.UserUnsubscribeNotificationReq true "UserUnsubscribeNotificationReq"
 // @Success 200 {object} handler.RespBody{}
-// @Router /answer/api/v1/user/email/notification [put]
-func (uc *UserController) UserUnsubscribeEmailNotification(ctx *gin.Context) {
-	req := &schema.UserUnsubscribeEmailNotificationReq{}
+// @Router /answer/api/v1/user/notification/unsubscribe [put]
+func (uc *UserController) UserUnsubscribeNotification(ctx *gin.Context) {
+	req := &schema.UserUnsubscribeNotificationReq{}
 	if handler.BindAndCheck(ctx, req) {
 		return
 	}
@@ -604,7 +675,7 @@ func (uc *UserController) UserUnsubscribeEmailNotification(ctx *gin.Context) {
 		return
 	}
 
-	err := uc.userService.UserUnsubscribeEmailNotification(ctx, req)
+	err := uc.userService.UserUnsubscribeNotification(ctx, req)
 	handler.HandleResponse(ctx, err, nil)
 }
 
@@ -626,4 +697,23 @@ func (uc *UserController) SearchUserListByName(ctx *gin.Context) {
 	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
 	resp, err := uc.userService.SearchUserListByName(ctx, req)
 	handler.HandleResponse(ctx, err, resp)
+}
+
+func (uc *UserController) setVisitCookies(ctx *gin.Context, visitToken string, force bool) {
+	cookie, err := ctx.Cookie(constant.UserVisitCookiesCacheKey)
+	if err == nil && len(cookie) > 0 && !force {
+		return
+	}
+	general, err := uc.siteInfoCommonService.GetSiteGeneral(ctx)
+	if err != nil {
+		log.Errorf("get site general error: %v", err)
+		return
+	}
+	parsedURL, err := url.Parse(general.SiteUrl)
+	if err != nil {
+		log.Errorf("parse url error: %v", err)
+		return
+	}
+	ctx.SetCookie(constant.UserVisitCookiesCacheKey,
+		visitToken, constant.UserVisitCacheTime, "/", parsedURL.Host, true, true)
 }

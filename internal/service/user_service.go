@@ -1,46 +1,67 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package service
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/apache/incubator-answer/internal/base/constant"
+	"github.com/apache/incubator-answer/internal/service/user_notification_config"
 	"time"
 
-	"github.com/answerdev/answer/internal/base/handler"
-	"github.com/answerdev/answer/internal/base/reason"
-	"github.com/answerdev/answer/internal/base/translator"
-	"github.com/answerdev/answer/internal/base/validator"
-	"github.com/answerdev/answer/internal/entity"
-	"github.com/answerdev/answer/internal/schema"
-	"github.com/answerdev/answer/internal/service/activity"
-	"github.com/answerdev/answer/internal/service/activity_common"
-	"github.com/answerdev/answer/internal/service/auth"
-	"github.com/answerdev/answer/internal/service/export"
-	"github.com/answerdev/answer/internal/service/role"
-	"github.com/answerdev/answer/internal/service/siteinfo_common"
-	usercommon "github.com/answerdev/answer/internal/service/user_common"
-	"github.com/answerdev/answer/internal/service/user_external_login"
-	"github.com/answerdev/answer/pkg/checker"
-	"github.com/answerdev/answer/plugin"
+	"github.com/apache/incubator-answer/internal/base/handler"
+	"github.com/apache/incubator-answer/internal/base/reason"
+	"github.com/apache/incubator-answer/internal/base/translator"
+	"github.com/apache/incubator-answer/internal/base/validator"
+	"github.com/apache/incubator-answer/internal/entity"
+	"github.com/apache/incubator-answer/internal/schema"
+	"github.com/apache/incubator-answer/internal/service/activity"
+	"github.com/apache/incubator-answer/internal/service/activity_common"
+	"github.com/apache/incubator-answer/internal/service/auth"
+	"github.com/apache/incubator-answer/internal/service/export"
+	"github.com/apache/incubator-answer/internal/service/role"
+	"github.com/apache/incubator-answer/internal/service/siteinfo_common"
+	usercommon "github.com/apache/incubator-answer/internal/service/user_common"
+	"github.com/apache/incubator-answer/internal/service/user_external_login"
+	"github.com/apache/incubator-answer/pkg/checker"
+	"github.com/apache/incubator-answer/plugin"
 	"github.com/google/uuid"
 	"github.com/segmentfault/pacman/errors"
 	"github.com/segmentfault/pacman/log"
 	"golang.org/x/crypto/bcrypt"
 )
 
-// UserRepo user repository
-
 // UserService user service
 type UserService struct {
-	userCommonService        *usercommon.UserCommon
-	userRepo                 usercommon.UserRepo
-	userActivity             activity.UserActiveActivityRepo
-	activityRepo             activity_common.ActivityRepo
-	emailService             *export.EmailService
-	authService              *auth.AuthService
-	siteInfoService          *siteinfo_common.SiteInfoCommonService
-	userRoleService          *role.UserRoleRelService
-	userExternalLoginService *user_external_login.UserExternalLoginService
+	userCommonService             *usercommon.UserCommon
+	userRepo                      usercommon.UserRepo
+	userActivity                  activity.UserActiveActivityRepo
+	activityRepo                  activity_common.ActivityRepo
+	emailService                  *export.EmailService
+	authService                   *auth.AuthService
+	siteInfoService               siteinfo_common.SiteInfoCommonService
+	userRoleService               *role.UserRoleRelService
+	userExternalLoginService      *user_external_login.UserExternalLoginService
+	userNotificationConfigRepo    user_notification_config.UserNotificationConfigRepo
+	userNotificationConfigService *user_notification_config.UserNotificationConfigService
 }
 
 func NewUserService(userRepo usercommon.UserRepo,
@@ -48,21 +69,25 @@ func NewUserService(userRepo usercommon.UserRepo,
 	activityRepo activity_common.ActivityRepo,
 	emailService *export.EmailService,
 	authService *auth.AuthService,
-	siteInfoService *siteinfo_common.SiteInfoCommonService,
+	siteInfoService siteinfo_common.SiteInfoCommonService,
 	userRoleService *role.UserRoleRelService,
 	userCommonService *usercommon.UserCommon,
 	userExternalLoginService *user_external_login.UserExternalLoginService,
+	userNotificationConfigRepo user_notification_config.UserNotificationConfigRepo,
+	userNotificationConfigService *user_notification_config.UserNotificationConfigService,
 ) *UserService {
 	return &UserService{
-		userCommonService:        userCommonService,
-		userRepo:                 userRepo,
-		userActivity:             userActivity,
-		activityRepo:             activityRepo,
-		emailService:             emailService,
-		authService:              authService,
-		siteInfoService:          siteInfoService,
-		userRoleService:          userRoleService,
-		userExternalLoginService: userExternalLoginService,
+		userCommonService:             userCommonService,
+		userRepo:                      userRepo,
+		userActivity:                  userActivity,
+		activityRepo:                  activityRepo,
+		emailService:                  emailService,
+		authService:                   authService,
+		siteInfoService:               siteInfoService,
+		userRoleService:               userRoleService,
+		userExternalLoginService:      userExternalLoginService,
+		userNotificationConfigRepo:    userNotificationConfigRepo,
+		userNotificationConfigService: userNotificationConfigService,
 	}
 }
 
@@ -86,15 +111,14 @@ func (us *UserService) GetUserInfoByUserID(ctx context.Context, token, userID st
 	if err != nil {
 		log.Error(err)
 	}
-	resp.Avatar = us.siteInfoService.FormatAvatar(ctx, userInfo.Avatar, userInfo.EMail)
+	resp.Avatar = us.siteInfoService.FormatAvatar(ctx, userInfo.Avatar, userInfo.EMail, userInfo.Status)
 	resp.AccessToken = token
 	resp.HavePassword = len(userInfo.Pass) > 0
 	return resp, nil
 }
 
 func (us *UserService) GetOtherUserInfoByUsername(ctx context.Context, username string) (
-	resp *schema.GetOtherUserInfoByUsernameResp, err error,
-) {
+	resp *schema.GetOtherUserInfoByUsernameResp, err error) {
 	userInfo, exist, err := us.userRepo.GetByUsername(ctx, username)
 	if err != nil {
 		return nil, err
@@ -104,12 +128,12 @@ func (us *UserService) GetOtherUserInfoByUsername(ctx context.Context, username 
 	}
 	resp = &schema.GetOtherUserInfoByUsernameResp{}
 	resp.ConvertFromUserEntity(userInfo)
-	resp.Avatar = us.siteInfoService.FormatAvatar(ctx, userInfo.Avatar, userInfo.EMail).GetURL()
+	resp.Avatar = us.siteInfoService.FormatAvatar(ctx, userInfo.Avatar, userInfo.EMail, userInfo.Status).GetURL()
 	return resp, nil
 }
 
 // EmailLogin email login
-func (us *UserService) EmailLogin(ctx context.Context, req *schema.UserEmailLogin) (resp *schema.UserLoginResp, err error) {
+func (us *UserService) EmailLogin(ctx context.Context, req *schema.UserEmailLoginReq) (resp *schema.UserLoginResp, err error) {
 	userInfo, exist, err := us.userRepo.GetByEmail(ctx, req.Email)
 	if err != nil {
 		return nil, err
@@ -140,7 +164,7 @@ func (us *UserService) EmailLogin(ctx context.Context, req *schema.UserEmailLogi
 
 	resp = &schema.UserLoginResp{}
 	resp.ConvertFromUserEntity(userInfo)
-	resp.Avatar = us.siteInfoService.FormatAvatar(ctx, userInfo.Avatar, userInfo.EMail).GetURL()
+	resp.Avatar = us.siteInfoService.FormatAvatar(ctx, userInfo.Avatar, userInfo.EMail, userInfo.Status).GetURL()
 	userCacheInfo := &entity.UserCacheInfo{
 		UserID:      userInfo.ID,
 		EmailStatus: userInfo.MailStatus,
@@ -148,7 +172,7 @@ func (us *UserService) EmailLogin(ctx context.Context, req *schema.UserEmailLogi
 		RoleID:      roleID,
 		ExternalID:  externalID,
 	}
-	resp.AccessToken, err = us.authService.SetUserCacheInfo(ctx, userCacheInfo)
+	resp.AccessToken, resp.VisitToken, err = us.authService.SetUserCacheInfo(ctx, userCacheInfo)
 	if err != nil {
 		return nil, err
 	}
@@ -269,18 +293,22 @@ func (us *UserService) UpdateInfo(ctx context.Context, req *schema.UpdateInfoReq
 
 	if siteUsers.AllowUpdateUsername && len(req.Username) > 0 {
 		if checker.IsInvalidUsername(req.Username) {
-			errFields = append(errFields, &validator.FormErrorField{
+			return append(errFields, &validator.FormErrorField{
 				ErrorField: "username",
 				ErrorMsg:   reason.UsernameInvalid,
-			})
-			return errFields, errors.BadRequest(reason.UsernameInvalid)
+			}), errors.BadRequest(reason.UsernameInvalid)
 		}
-		if checker.IsReservedUsername(req.Username) {
-			errFields = append(errFields, &validator.FormErrorField{
+		// admin can use reserved username
+		if !req.IsAdmin && checker.IsReservedUsername(req.Username) {
+			return append(errFields, &validator.FormErrorField{
 				ErrorField: "username",
 				ErrorMsg:   reason.UsernameInvalid,
-			})
-			return errFields, errors.BadRequest(reason.UsernameInvalid)
+			}), errors.BadRequest(reason.UsernameInvalid)
+		} else if req.IsAdmin && checker.IsUsersIgnorePath(req.Username) {
+			return append(errFields, &validator.FormErrorField{
+				ErrorField: "username",
+				ErrorMsg:   reason.UsernameInvalid,
+			}), errors.BadRequest(reason.UsernameInvalid)
 		}
 
 		userInfo, exist, err := us.userRepo.GetByUsername(ctx, req.Username)
@@ -288,11 +316,10 @@ func (us *UserService) UpdateInfo(ctx context.Context, req *schema.UpdateInfoReq
 			return nil, err
 		}
 		if exist && userInfo.ID != req.UserID {
-			errFields = append(errFields, &validator.FormErrorField{
+			return append(errFields, &validator.FormErrorField{
 				ErrorField: "username",
 				ErrorMsg:   reason.UsernameDuplicate,
-			})
-			return errFields, errors.BadRequest(reason.UsernameDuplicate)
+			}), errors.BadRequest(reason.UsernameDuplicate)
 		}
 	}
 
@@ -343,14 +370,6 @@ func (us *UserService) formatUserInfoForUpdateInfo(
 		userInfo.Location = req.Location
 	}
 	return userInfo
-}
-
-func (us *UserService) UserEmailHas(ctx context.Context, email string) (bool, error) {
-	_, has, err := us.userRepo.GetByEmail(ctx, email)
-	if err != nil {
-		return false, err
-	}
-	return has, nil
 }
 
 // UserUpdateInterface update user interface
@@ -404,6 +423,9 @@ func (us *UserService) UserRegisterByEmail(ctx context.Context, registerUserInfo
 	if err != nil {
 		return nil, nil, err
 	}
+	if err := us.userNotificationConfigService.SetDefaultUserNotificationConfig(ctx, []string{userInfo.ID}); err != nil {
+		log.Errorf("set default user notification config failed, err: %v", err)
+	}
 
 	// send email
 	data := &schema.EmailCodeContent{
@@ -426,14 +448,14 @@ func (us *UserService) UserRegisterByEmail(ctx context.Context, registerUserInfo
 	// return user info and token
 	resp = &schema.UserLoginResp{}
 	resp.ConvertFromUserEntity(userInfo)
-	resp.Avatar = us.siteInfoService.FormatAvatar(ctx, userInfo.Avatar, userInfo.EMail).GetURL()
+	resp.Avatar = us.siteInfoService.FormatAvatar(ctx, userInfo.Avatar, userInfo.EMail, userInfo.Status).GetURL()
 	userCacheInfo := &entity.UserCacheInfo{
 		UserID:      userInfo.ID,
 		EmailStatus: userInfo.MailStatus,
 		UserStatus:  userInfo.Status,
 		RoleID:      roleID,
 	}
-	resp.AccessToken, err = us.authService.SetUserCacheInfo(ctx, userCacheInfo)
+	resp.AccessToken, resp.VisitToken, err = us.authService.SetUserCacheInfo(ctx, userCacheInfo)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -468,25 +490,6 @@ func (us *UserService) UserVerifyEmailSend(ctx context.Context, userID string) e
 	}
 	go us.emailService.SendAndSaveCode(ctx, userInfo.EMail, title, body, code, data.ToJSONString())
 	return nil
-}
-
-func (us *UserService) UserNoticeSet(ctx context.Context, userID string, noticeSwitch bool) (
-	resp *schema.UserNoticeSetResp, err error,
-) {
-	userInfo, has, err := us.userRepo.GetByUserID(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	if !has {
-		return nil, errors.BadRequest(reason.UserNotFound)
-	}
-	if noticeSwitch {
-		userInfo.NoticeStatus = schema.NoticeStatusOn
-	} else {
-		userInfo.NoticeStatus = schema.NoticeStatusOff
-	}
-	err = us.userRepo.UpdateNoticeStatus(ctx, userInfo.ID, userInfo.NoticeStatus)
-	return &schema.UserNoticeSetResp{NoticeSwitch: noticeSwitch}, err
 }
 
 func (us *UserService) UserVerifyEmail(ctx context.Context, req *schema.UserVerifyEmailReq) (resp *schema.UserLoginResp, err error) {
@@ -530,7 +533,7 @@ func (us *UserService) UserVerifyEmail(ctx context.Context, req *schema.UserVeri
 
 	resp = &schema.UserLoginResp{}
 	resp.ConvertFromUserEntity(userInfo)
-	resp.Avatar = us.siteInfoService.FormatAvatar(ctx, userInfo.Avatar, userInfo.EMail).GetURL()
+	resp.Avatar = us.siteInfoService.FormatAvatar(ctx, userInfo.Avatar, userInfo.EMail, userInfo.Status).GetURL()
 	resp.AccessToken = accessToken
 	// User verified email will update user email status. So user status cache should be updated.
 	if err = us.authService.SetUserStatus(ctx, userCacheInfo); err != nil {
@@ -606,7 +609,7 @@ func (us *UserService) UserChangeEmailSendCode(ctx context.Context, req *schema.
 	}
 	log.Infof("send email confirmation %s", verifyEmailURL)
 
-	go us.emailService.SendAndSaveCode(context.Background(), req.Email, title, body, code, data.ToJSONString())
+	go us.emailService.SendAndSaveCode(ctx, req.Email, title, body, code, data.ToJSONString())
 	return nil, nil
 }
 
@@ -649,14 +652,14 @@ func (us *UserService) UserChangeEmailVerify(ctx context.Context, content string
 
 	resp = &schema.UserLoginResp{}
 	resp.ConvertFromUserEntity(userInfo)
-	resp.Avatar = us.siteInfoService.FormatAvatar(ctx, userInfo.Avatar, userInfo.EMail).GetURL()
+	resp.Avatar = us.siteInfoService.FormatAvatar(ctx, userInfo.Avatar, userInfo.EMail, userInfo.Status).GetURL()
 	userCacheInfo := &entity.UserCacheInfo{
 		UserID:      userInfo.ID,
 		EmailStatus: entity.EmailStatusAvailable,
 		UserStatus:  userInfo.Status,
 		RoleID:      roleID,
 	}
-	resp.AccessToken, err = us.authService.SetUserCacheInfo(ctx, userCacheInfo)
+	resp.AccessToken, resp.VisitToken, err = us.authService.SetUserCacheInfo(ctx, userCacheInfo)
 	if err != nil {
 		return nil, err
 	}
@@ -720,23 +723,37 @@ func (us *UserService) UserRanking(ctx context.Context) (resp *schema.UserRankin
 	return us.warpStatRankingResp(userInfoMapping, rankStat, voteStat, userRoleRels), nil
 }
 
-// UserUnsubscribeEmailNotification user unsubscribe email notification
-func (us *UserService) UserUnsubscribeEmailNotification(
-	ctx context.Context, req *schema.UserUnsubscribeEmailNotificationReq) (err error) {
+// UserUnsubscribeNotification user unsubscribe email notification
+func (us *UserService) UserUnsubscribeNotification(
+	ctx context.Context, req *schema.UserUnsubscribeNotificationReq) (err error) {
 	data := &schema.EmailCodeContent{}
 	err = data.FromJSONString(req.Content)
 	if err != nil || len(data.UserID) == 0 {
 		return errors.BadRequest(reason.EmailVerifyURLExpired)
 	}
 
-	userInfo, exist, err := us.userRepo.GetByUserID(ctx, data.UserID)
-	if err != nil {
-		return err
+	for _, source := range data.NotificationSources {
+		notificationConfig, exist, err := us.userNotificationConfigRepo.GetByUserIDAndSource(
+			ctx, data.UserID, source)
+		if err != nil {
+			return err
+		}
+		if !exist {
+			continue
+		}
+		channels := schema.NewNotificationChannelsFormJson(notificationConfig.Channels)
+		// unsubscribe email notification
+		for _, channel := range channels {
+			if channel.Key == constant.EmailChannel {
+				channel.Enable = false
+			}
+		}
+		notificationConfig.Channels = channels.ToJsonString()
+		if err = us.userNotificationConfigRepo.Save(ctx, notificationConfig); err != nil {
+			return err
+		}
 	}
-	if !exist {
-		return errors.BadRequest(reason.UserNotFound)
-	}
-	return us.userRepo.UpdateNoticeStatus(ctx, userInfo.ID, schema.NoticeStatusOff)
+	return nil
 }
 
 func (us *UserService) getActivityUserRankStat(ctx context.Context, startTime, endTime time.Time, limit int,
@@ -817,22 +834,26 @@ func (us *UserService) getUserInfoMapping(ctx context.Context, userIDs []string)
 	return userInfoMapping, nil
 }
 
-func (us *UserService) SearchUserListByName(ctx context.Context, input *schema.GetOtherUserInfoByUsernameReq) ([]*schema.UserBasicInfo, error) {
-	userinfolist := make([]*schema.UserBasicInfo, 0)
-	list, err := us.userRepo.SearchUserListByName(ctx, input.Username)
+func (us *UserService) SearchUserListByName(ctx context.Context, req *schema.GetOtherUserInfoByUsernameReq) (
+	resp []*schema.UserBasicInfo, err error) {
+	resp = make([]*schema.UserBasicInfo, 0)
+	if len(req.Username) == 0 {
+		return resp, nil
+	}
+	userList, err := us.userRepo.SearchUserListByName(ctx, req.Username, 5)
 	if err != nil {
-		return userinfolist, err
+		return resp, err
 	}
-	avatarMapping := us.siteInfoService.FormatListAvatar(ctx, list)
-	for _, user := range list {
-		if input.UserID != user.ID {
-			userinfo := us.userCommonService.FormatUserBasicInfo(ctx, user)
-			userinfo.Avatar = avatarMapping[user.ID].GetURL()
-			userinfolist = append(userinfolist, userinfo)
+	avatarMapping := us.siteInfoService.FormatListAvatar(ctx, userList)
+	for _, u := range userList {
+		if req.UserID == u.ID {
+			continue
 		}
-
+		basicInfo := us.userCommonService.FormatUserBasicInfo(ctx, u)
+		basicInfo.Avatar = avatarMapping[u.ID].GetURL()
+		resp = append(resp, basicInfo)
 	}
-	return userinfolist, nil
+	return resp, nil
 }
 
 func (us *UserService) warpStatRankingResp(

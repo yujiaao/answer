@@ -1,3 +1,22 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package controller
 
 import (
@@ -9,17 +28,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/answerdev/answer/internal/base/constant"
-	"github.com/answerdev/answer/internal/base/handler"
-	templaterender "github.com/answerdev/answer/internal/controller/template_render"
-	"github.com/answerdev/answer/internal/schema"
-	"github.com/answerdev/answer/internal/service/siteinfo_common"
-	"github.com/answerdev/answer/pkg/checker"
-	"github.com/answerdev/answer/pkg/converter"
-	"github.com/answerdev/answer/pkg/htmltext"
-	"github.com/answerdev/answer/pkg/obj"
-	"github.com/answerdev/answer/pkg/uid"
-	"github.com/answerdev/answer/ui"
+	"github.com/apache/incubator-answer/internal/base/constant"
+	"github.com/apache/incubator-answer/internal/base/handler"
+	templaterender "github.com/apache/incubator-answer/internal/controller/template_render"
+	"github.com/apache/incubator-answer/internal/schema"
+	"github.com/apache/incubator-answer/internal/service/siteinfo_common"
+	"github.com/apache/incubator-answer/pkg/checker"
+	"github.com/apache/incubator-answer/pkg/converter"
+	"github.com/apache/incubator-answer/pkg/htmltext"
+	"github.com/apache/incubator-answer/pkg/obj"
+	"github.com/apache/incubator-answer/pkg/uid"
+	"github.com/apache/incubator-answer/ui"
 	"github.com/gin-gonic/gin"
 	"github.com/segmentfault/pacman/log"
 )
@@ -30,13 +49,13 @@ type TemplateController struct {
 	scriptPath               string
 	cssPath                  string
 	templateRenderController *templaterender.TemplateRenderController
-	siteInfoService          *siteinfo_common.SiteInfoCommonService
+	siteInfoService          siteinfo_common.SiteInfoCommonService
 }
 
 // NewTemplateController new controller
 func NewTemplateController(
 	templateRenderController *templaterender.TemplateRenderController,
-	siteInfoService *siteinfo_common.SiteInfoCommonService,
+	siteInfoService siteinfo_common.SiteInfoCommonService,
 ) *TemplateController {
 	script, css := GetStyle()
 	return &TemplateController{
@@ -116,7 +135,7 @@ func (tc *TemplateController) Index(ctx *gin.Context) {
 	siteInfo.Canonical = siteInfo.General.SiteUrl
 
 	UrlUseTitle := false
-	if siteInfo.SiteSeo.PermaLink == schema.PermaLinkQuestionIDAndTitle {
+	if siteInfo.SiteSeo.Permalink == constant.PermalinkQuestionIDAndTitle {
 		UrlUseTitle = true
 	}
 	siteInfo.Title = ""
@@ -149,7 +168,7 @@ func (tc *TemplateController) QuestionList(ctx *gin.Context) {
 	}
 
 	UrlUseTitle := false
-	if siteInfo.SiteSeo.PermaLink == schema.PermaLinkQuestionIDAndTitle {
+	if siteInfo.SiteSeo.Permalink == constant.PermalinkQuestionIDAndTitle {
 		UrlUseTitle = true
 	}
 	siteInfo.Title = fmt.Sprintf("Questions - %s", siteInfo.General.Name)
@@ -161,36 +180,46 @@ func (tc *TemplateController) QuestionList(ctx *gin.Context) {
 }
 
 func (tc *TemplateController) QuestionInfoeRdirect(ctx *gin.Context, siteInfo *schema.TemplateSiteInfoResp, correctTitle bool) (jump bool, url string) {
-	id := ctx.Param("id")
+	questionID := ctx.Param("id")
 	title := ctx.Param("title")
+	answerID := uid.DeShortID(title)
 	titleIsAnswerID := false
-	NeedChangeShortID := false
-	isShortID := uid.IsShortID(id)
-	if uid.ShortIDSwitch {
+	needChangeShortID := false
+
+	objectType, err := obj.GetObjectTypeStrByObjectID(answerID)
+	if err == nil && objectType == constant.AnswerObjectType {
+		titleIsAnswerID = true
+	}
+
+	siteSeo, err := tc.siteInfoService.GetSiteSeo(ctx)
+	if err != nil {
+		return false, ""
+	}
+	isShortID := uid.IsShortID(questionID)
+	if siteSeo.IsShortLink() {
 		if !isShortID {
-			id = uid.EnShortID(id)
-			NeedChangeShortID = true
+			questionID = uid.EnShortID(questionID)
+			needChangeShortID = true
+		}
+		if titleIsAnswerID {
+			answerID = uid.EnShortID(answerID)
 		}
 	} else {
 		if isShortID {
-			NeedChangeShortID = true
-			id = uid.DeShortID(id)
+			needChangeShortID = true
+			questionID = uid.DeShortID(questionID)
+		}
+		if titleIsAnswerID {
+			answerID = uid.DeShortID(answerID)
 		}
 	}
 
-	objectType, objectTypeerr := obj.GetObjectTypeStrByObjectID(uid.DeShortID(title))
-	if objectTypeerr == nil {
-		if objectType == constant.AnswerObjectType {
-			titleIsAnswerID = true
-		}
-	}
-	siteInfo = tc.SiteInfo(ctx)
-	url = fmt.Sprintf("%s/questions/%s", siteInfo.General.SiteUrl, id)
-	if siteInfo.SiteSeo.PermaLink == schema.PermaLinkQuestionID || siteInfo.SiteSeo.PermaLink == schema.PermaLinkQuestionIDByShortID {
+	url = fmt.Sprintf("%s/questions/%s", siteInfo.General.SiteUrl, questionID)
+	if siteInfo.SiteSeo.Permalink == constant.PermalinkQuestionID || siteInfo.SiteSeo.Permalink == constant.PermalinkQuestionIDByShortID {
 		if len(ctx.Request.URL.Query()) > 0 {
 			url = fmt.Sprintf("%s?%s", url, ctx.Request.URL.RawQuery)
 		}
-		if NeedChangeShortID {
+		if needChangeShortID {
 			return true, url
 		}
 		//not have title
@@ -201,14 +230,14 @@ func (tc *TemplateController) QuestionInfoeRdirect(ctx *gin.Context, siteInfo *s
 		return true, url
 	} else {
 
-		detail, err := tc.templateRenderController.QuestionDetail(ctx, id)
+		detail, err := tc.templateRenderController.QuestionDetail(ctx, questionID)
 		if err != nil {
 			tc.Page404(ctx)
 			return
 		}
 		url = fmt.Sprintf("%s/%s", url, htmltext.UrlTitle(detail.Title))
 		if titleIsAnswerID {
-			url = fmt.Sprintf("%s/%s", url, title)
+			url = fmt.Sprintf("%s/%s", url, answerID)
 		}
 
 		if len(ctx.Request.URL.Query()) > 0 {
@@ -216,7 +245,7 @@ func (tc *TemplateController) QuestionInfoeRdirect(ctx *gin.Context, siteInfo *s
 		}
 		//have title
 		if len(title) > 0 && !titleIsAnswerID && correctTitle {
-			if NeedChangeShortID {
+			if needChangeShortID {
 				return true, url
 			}
 			return false, ""
@@ -289,7 +318,7 @@ func (tc *TemplateController) QuestionInfo(ctx *gin.Context) {
 		return
 	}
 	siteInfo.Canonical = fmt.Sprintf("%s/questions/%s/%s", siteInfo.General.SiteUrl, id, encodeTitle)
-	if siteInfo.SiteSeo.PermaLink == schema.PermaLinkQuestionID {
+	if siteInfo.SiteSeo.Permalink == constant.PermalinkQuestionID {
 		siteInfo.Canonical = fmt.Sprintf("%s/questions/%s", siteInfo.General.SiteUrl, id)
 	}
 	jsonLD := &schema.QAPageJsonLD{}
@@ -404,7 +433,7 @@ func (tc *TemplateController) TagInfo(ctx *gin.Context) {
 	siteInfo.Keywords = taginifo.DisplayName
 
 	UrlUseTitle := false
-	if siteInfo.SiteSeo.PermaLink == schema.PermaLinkQuestionIDAndTitle {
+	if siteInfo.SiteSeo.Permalink == constant.PermalinkQuestionIDAndTitle {
 		UrlUseTitle = true
 	}
 	siteInfo.Title = fmt.Sprintf("'%s' Questions - %s", taginifo.DisplayName, siteInfo.General.Name)

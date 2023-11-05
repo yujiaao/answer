@@ -1,24 +1,42 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package answer
 
 import (
 	"context"
-	"strings"
+	"github.com/apache/incubator-answer/plugin"
+	"github.com/segmentfault/pacman/log"
 	"time"
-	"unicode"
 
-	"xorm.io/builder"
-
-	"github.com/answerdev/answer/internal/base/constant"
-	"github.com/answerdev/answer/internal/base/data"
-	"github.com/answerdev/answer/internal/base/pager"
-	"github.com/answerdev/answer/internal/base/reason"
-	"github.com/answerdev/answer/internal/entity"
-	"github.com/answerdev/answer/internal/schema"
-	"github.com/answerdev/answer/internal/service/activity_common"
-	answercommon "github.com/answerdev/answer/internal/service/answer_common"
-	"github.com/answerdev/answer/internal/service/rank"
-	"github.com/answerdev/answer/internal/service/unique"
-	"github.com/answerdev/answer/pkg/uid"
+	"github.com/apache/incubator-answer/internal/base/constant"
+	"github.com/apache/incubator-answer/internal/base/data"
+	"github.com/apache/incubator-answer/internal/base/handler"
+	"github.com/apache/incubator-answer/internal/base/pager"
+	"github.com/apache/incubator-answer/internal/base/reason"
+	"github.com/apache/incubator-answer/internal/entity"
+	"github.com/apache/incubator-answer/internal/schema"
+	"github.com/apache/incubator-answer/internal/service/activity_common"
+	answercommon "github.com/apache/incubator-answer/internal/service/answer_common"
+	"github.com/apache/incubator-answer/internal/service/rank"
+	"github.com/apache/incubator-answer/internal/service/unique"
+	"github.com/apache/incubator-answer/pkg/uid"
 	"github.com/segmentfault/pacman/errors"
 )
 
@@ -58,44 +76,93 @@ func (ar *answerRepo) AddAnswer(ctx context.Context, answer *entity.Answer) (err
 	if err != nil {
 		return errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 	}
-	answer.ID = uid.EnShortID(answer.ID)
-	answer.QuestionID = uid.EnShortID(answer.QuestionID)
+	if handler.GetEnableShortID(ctx) {
+		answer.ID = uid.EnShortID(answer.ID)
+		answer.QuestionID = uid.EnShortID(answer.QuestionID)
+	}
+	_ = ar.updateSearch(ctx, answer.ID)
 	return nil
 }
 
 // RemoveAnswer delete answer
-func (ar *answerRepo) RemoveAnswer(ctx context.Context, id string) (err error) {
-	id = uid.DeShortID(id)
-	answer := &entity.Answer{
-		ID:     id,
+func (ar *answerRepo) RemoveAnswer(ctx context.Context, answerID string) (err error) {
+	answerID = uid.DeShortID(answerID)
+	_, err = ar.data.DB.Context(ctx).ID(answerID).Cols("status").Update(&entity.Answer{
 		Status: entity.AnswerStatusDeleted,
-	}
-	_, err = ar.data.DB.Context(ctx).Where("id = ?", id).Cols("status").Update(answer)
+	})
 	if err != nil {
 		return errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+	_ = ar.updateSearch(ctx, answerID)
+	return nil
+}
+
+// RecoverAnswer recover answer
+func (ar *answerRepo) RecoverAnswer(ctx context.Context, answerID string) (err error) {
+	answerID = uid.DeShortID(answerID)
+	_, err = ar.data.DB.Context(ctx).ID(answerID).Cols("status").Update(&entity.Answer{
+		Status: entity.AnswerStatusAvailable,
+	})
+	if err != nil {
+		return errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+	_ = ar.updateSearch(ctx, answerID)
+	return nil
+}
+
+// RemoveAllUserAnswer remove all user answer
+func (ar *answerRepo) RemoveAllUserAnswer(ctx context.Context, userID string) (err error) {
+	// find all answer id that need to be deleted
+	answerIDs := make([]string, 0)
+	session := ar.data.DB.Context(ctx).Where("user_id = ?", userID)
+	session.Where("status != ?", entity.AnswerStatusDeleted)
+	err = session.Select("id").Table("answer").Find(&answerIDs)
+	if err != nil {
+		return errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+	if len(answerIDs) == 0 {
+		return nil
+	}
+
+	log.Infof("find %d answers need to be deleted for user %s", len(answerIDs), userID)
+
+	// delete all question
+	session = ar.data.DB.Context(ctx).Where("user_id = ?", userID)
+	session.Where("status != ?", entity.AnswerStatusDeleted)
+	_, err = session.Cols("status", "updated_at").Update(&entity.Answer{
+		UpdatedAt: time.Now(),
+		Status:    entity.AnswerStatusDeleted,
+	})
+	if err != nil {
+		return errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+
+	// update search content
+	for _, id := range answerIDs {
+		_ = ar.updateSearch(ctx, id)
 	}
 	return nil
 }
 
 // UpdateAnswer update answer
-func (ar *answerRepo) UpdateAnswer(ctx context.Context, answer *entity.Answer, Colar []string) (err error) {
+func (ar *answerRepo) UpdateAnswer(ctx context.Context, answer *entity.Answer, cols []string) (err error) {
 	answer.ID = uid.DeShortID(answer.ID)
 	answer.QuestionID = uid.DeShortID(answer.QuestionID)
-	_, err = ar.data.DB.Context(ctx).ID(answer.ID).Cols(Colar...).Update(answer)
+	_, err = ar.data.DB.Context(ctx).ID(answer.ID).Cols(cols...).Update(answer)
 	if err != nil {
 		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 	}
+	_ = ar.updateSearch(ctx, answer.ID)
 	return err
 }
 
-func (ar *answerRepo) UpdateAnswerStatus(ctx context.Context, answer *entity.Answer) (err error) {
-	now := time.Now()
-	answer.ID = uid.DeShortID(answer.ID)
-	answer.UpdatedAt = now
-	_, err = ar.data.DB.Context(ctx).Where("id =?", answer.ID).Cols("status", "updated_at").Update(answer)
+func (ar *answerRepo) UpdateAnswerStatus(ctx context.Context, answerID string, status int) (err error) {
+	answerID = uid.DeShortID(answerID)
+	_, err = ar.data.DB.Context(ctx).ID(answerID).Cols("status").Update(&entity.Answer{Status: status})
 	if err != nil {
 		return errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 	}
+	_ = ar.updateSearch(ctx, answerID)
 	return
 }
 
@@ -109,9 +176,10 @@ func (ar *answerRepo) GetAnswer(ctx context.Context, id string) (
 	if err != nil {
 		return nil, false, errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 	}
-	answer.ID = uid.EnShortID(answer.ID)
-	answer.QuestionID = uid.EnShortID(answer.QuestionID)
-
+	if handler.GetEnableShortID(ctx) {
+		answer.ID = uid.EnShortID(answer.ID)
+		answer.QuestionID = uid.EnShortID(answer.QuestionID)
+	}
 	return
 }
 
@@ -134,9 +202,11 @@ func (ar *answerRepo) GetAnswerList(ctx context.Context, answer *entity.Answer) 
 	if err != nil {
 		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 	}
-	for _, item := range answerList {
-		item.ID = uid.EnShortID(item.ID)
-		item.QuestionID = uid.EnShortID(item.QuestionID)
+	if handler.GetEnableShortID(ctx) {
+		for _, item := range answerList {
+			item.ID = uid.EnShortID(item.ID)
+			item.QuestionID = uid.EnShortID(item.QuestionID)
+		}
 	}
 	return
 }
@@ -150,49 +220,53 @@ func (ar *answerRepo) GetAnswerPage(ctx context.Context, page, pageSize int, ans
 	if err != nil {
 		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 	}
-	for _, item := range answerList {
-		item.ID = uid.EnShortID(item.ID)
-		item.QuestionID = uid.EnShortID(item.QuestionID)
+	if handler.GetEnableShortID(ctx) {
+		for _, item := range answerList {
+			item.ID = uid.EnShortID(item.ID)
+			item.QuestionID = uid.EnShortID(item.QuestionID)
+		}
 	}
 	return
 }
 
-// UpdateAccepted
-// If no answer is selected, the answer id can be 0
-func (ar *answerRepo) UpdateAccepted(ctx context.Context, id string, questionID string) error {
-	if questionID == "" {
-		return nil
-	}
-	id = uid.DeShortID(id)
+// UpdateAcceptedStatus update all accepted status of this question's answers
+func (ar *answerRepo) UpdateAcceptedStatus(ctx context.Context, acceptedAnswerID string, questionID string) error {
+	acceptedAnswerID = uid.DeShortID(acceptedAnswerID)
 	questionID = uid.DeShortID(questionID)
-	var data entity.Answer
-	data.ID = id
 
-	data.Accepted = schema.AnswerAcceptedFailed
-	_, err := ar.data.DB.Context(ctx).Where("question_id =?", questionID).Cols("adopted").Update(&data)
+	// update all this question's answer accepted status to false
+	_, err := ar.data.DB.Context(ctx).Where("question_id = ?", questionID).Cols("adopted").Update(&entity.Answer{
+		Accepted: schema.AnswerAcceptedFailed,
+	})
 	if err != nil {
-		return err
+		return errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 	}
-	if id != "0" {
-		data.Accepted = schema.AnswerAcceptedEnable
-		_, err = ar.data.DB.Context(ctx).Where("id = ?", id).Cols("adopted").Update(&data)
+
+	// if acceptedAnswerID is not empty, update accepted status to true
+	if len(acceptedAnswerID) > 0 && acceptedAnswerID != "0" {
+		_, err = ar.data.DB.Context(ctx).Where("id = ?", acceptedAnswerID).Cols("adopted").Update(&entity.Answer{
+			Accepted: schema.AnswerAcceptedEnable,
+		})
 		if err != nil {
 			return errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 		}
 	}
+	_ = ar.updateSearch(ctx, acceptedAnswerID)
 	return nil
 }
 
 // GetByID
-func (ar *answerRepo) GetByID(ctx context.Context, id string) (*entity.Answer, bool, error) {
+func (ar *answerRepo) GetByID(ctx context.Context, answerID string) (*entity.Answer, bool, error) {
 	var resp entity.Answer
-	id = uid.DeShortID(id)
-	has, err := ar.data.DB.Context(ctx).Where("id =? ", id).Get(&resp)
+	answerID = uid.DeShortID(answerID)
+	has, err := ar.data.DB.Context(ctx).ID(answerID).Get(&resp)
 	if err != nil {
 		return &resp, false, errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 	}
-	resp.ID = uid.EnShortID(resp.ID)
-	resp.QuestionID = uid.EnShortID(resp.QuestionID)
+	if handler.GetEnableShortID(ctx) {
+		resp.ID = uid.EnShortID(resp.ID)
+		resp.QuestionID = uid.EnShortID(resp.QuestionID)
+	}
 	return &resp, has, nil
 }
 
@@ -222,8 +296,10 @@ func (ar *answerRepo) GetByUserIDQuestionID(ctx context.Context, userID string, 
 	if err != nil {
 		return &resp, false, errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 	}
-	resp.ID = uid.EnShortID(resp.ID)
-	resp.QuestionID = uid.EnShortID(resp.QuestionID)
+	if handler.GetEnableShortID(ctx) {
+		resp.ID = uid.EnShortID(resp.ID)
+		resp.QuestionID = uid.EnShortID(resp.QuestionID)
+	}
 	return &resp, has, nil
 }
 
@@ -245,7 +321,7 @@ func (ar *answerRepo) SearchList(ctx context.Context, search *entity.AnswerSearc
 		search.PageSize = constant.DefaultPageSize
 	}
 	offset := search.Page * search.PageSize
-	session := ar.data.DB.Context(ctx).Where("")
+	session := ar.data.DB.Context(ctx)
 
 	if search.QuestionID != "" {
 		session = session.And("question_id = ?", search.QuestionID)
@@ -274,87 +350,109 @@ func (ar *answerRepo) SearchList(ctx context.Context, search *entity.AnswerSearc
 	if err != nil {
 		return rows, count, errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 	}
-	for _, item := range rows {
-		item.ID = uid.EnShortID(item.ID)
-		item.QuestionID = uid.EnShortID(item.QuestionID)
+	if handler.GetEnableShortID(ctx) {
+		for _, item := range rows {
+			item.ID = uid.EnShortID(item.ID)
+			item.QuestionID = uid.EnShortID(item.QuestionID)
+		}
 	}
 	return rows, count, nil
 }
 
-func (ar *answerRepo) AdminSearchList(ctx context.Context, search *entity.AdminAnswerSearch) ([]*entity.Answer, int64, error) {
-	var (
-		count   int64
-		err     error
-		session = ar.data.DB.Context(ctx).Table([]string{entity.Answer{}.TableName(), "a"}).Select("a.*")
-	)
-	if search.QuestionID != "" {
-		search.QuestionID = uid.DeShortID(search.QuestionID)
-	}
-
-	session.Where(builder.Eq{
-		"a.status": search.Status,
-	})
-
-	rows := make([]*entity.Answer, 0)
-	if search.Page > 0 {
-		search.Page = search.Page - 1
-	} else {
-		search.Page = 0
-	}
-	if search.PageSize == 0 {
-		search.PageSize = constant.DefaultPageSize
-	}
-
-	// search by question title like or answer id
-	if len(search.Query) > 0 {
-		// check id search
-		var (
-			idSearch = false
-			id       = ""
-		)
-
-		if strings.Contains(search.Query, "answer:") {
-			idSearch = true
-			id = strings.TrimSpace(strings.TrimPrefix(search.Query, "answer:"))
-			id = uid.DeShortID(id)
-			for _, r := range id {
-				if !unicode.IsDigit(r) {
-					idSearch = false
-					break
-				}
-			}
-		}
-
-		if idSearch {
-			session.And(builder.Eq{
-				"id": id,
-			})
-		} else {
-			session.Join("LEFT", []string{entity.Question{}.TableName(), "q"}, "q.id = a.question_id")
-			session.And(builder.Like{
-				"q.title", search.Query,
-			})
+func (ar *answerRepo) AdminSearchList(ctx context.Context, req *schema.AdminAnswerPageReq) (
+	resp []*entity.Answer, total int64, err error) {
+	cond := &entity.Answer{}
+	session := ar.data.DB.Context(ctx)
+	if len(req.QuestionID) == 0 && len(req.AnswerID) == 0 {
+		session.Join("INNER", "question", "answer.question_id = question.id")
+		if len(req.QuestionTitle) > 0 {
+			session.Where("question.title like ?", "%"+req.QuestionTitle+"%")
 		}
 	}
-
-	// check search by question id
-	if len(search.QuestionID) > 0 {
-		session.And(builder.Eq{
-			"question_id": search.QuestionID,
-		})
+	if len(req.AnswerID) > 0 {
+		cond.ID = req.AnswerID
 	}
+	if len(req.QuestionID) > 0 {
+		session.Where("answer.question_id = ?", req.QuestionID)
+	}
+	if req.Status > 0 {
+		cond.Status = req.Status
+	}
+	session.Desc("answer.created_at")
 
-	offset := search.Page * search.PageSize
-	session.
-		OrderBy("a.created_at desc").
-		Limit(search.PageSize, offset)
-	count, err = session.FindAndCount(&rows)
+	resp = make([]*entity.Answer, 0)
+	total, err = pager.Help(req.Page, req.PageSize, &resp, cond, session)
 	if err != nil {
-		return rows, count, errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+		return nil, 0, errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 	}
-	for _, item := range rows {
-		item.ID = uid.EnShortID(item.ID)
-		item.QuestionID = uid.EnShortID(item.QuestionID)
+	return resp, total, nil
+}
+
+// updateSearch update search, if search plugin not enable, do nothing
+func (ar *answerRepo) updateSearch(ctx context.Context, answerID string) (err error) {
+	answerID = uid.DeShortID(answerID)
+	// check search plugin
+	var (
+		s plugin.Search
+	)
+	_ = plugin.CallSearch(func(search plugin.Search) error {
+		s = search
+		return nil
+	})
+	if s == nil {
+		return
 	}
-	return rows, count, nil
+	answer, exist, err := ar.GetAnswer(ctx, answerID)
+	if !exist {
+		return
+	}
+	if err != nil {
+		return err
+	}
+
+	// get question
+	var (
+		question *entity.Question
+	)
+	exist, err = ar.data.DB.Context(ctx).Where("id = ?", answer.QuestionID).Get(&question)
+	if err != nil {
+		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+	if !exist {
+		return
+	}
+
+	// get tags
+	var (
+		tagListList = make([]*entity.TagRel, 0)
+		tags        = make([]string, 0)
+	)
+	st := ar.data.DB.Context(ctx).Where("object_id = ?", uid.DeShortID(question.ID))
+	st.Where("status = ?", entity.TagRelStatusAvailable)
+	err = st.Find(&tagListList)
+	if err != nil {
+		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+	for _, tag := range tagListList {
+		tags = append(tags, tag.TagID)
+	}
+
+	content := &plugin.SearchContent{
+		ObjectID:    answerID,
+		Title:       question.Title,
+		Type:        constant.AnswerObjectType,
+		Content:     answer.OriginalText,
+		Answers:     0,
+		Status:      plugin.SearchContentStatus(answer.Status),
+		Tags:        tags,
+		QuestionID:  answer.QuestionID,
+		UserID:      answer.UserID,
+		Views:       int64(question.ViewCount),
+		Created:     answer.CreatedAt.Unix(),
+		Active:      answer.UpdatedAt.Unix(),
+		Score:       int64(answer.VoteCount),
+		HasAccepted: answer.Accepted == schema.AnswerAcceptedEnable,
+	}
+	err = s.UpdateContent(ctx, content)
+	return
 }

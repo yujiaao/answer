@@ -1,15 +1,35 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package tag_common
 
 import (
 	"context"
 	"fmt"
+	"strings"
 
-	"github.com/answerdev/answer/internal/base/data"
-	"github.com/answerdev/answer/internal/base/pager"
-	"github.com/answerdev/answer/internal/base/reason"
-	"github.com/answerdev/answer/internal/entity"
-	tagcommon "github.com/answerdev/answer/internal/service/tag_common"
-	"github.com/answerdev/answer/internal/service/unique"
+	"github.com/apache/incubator-answer/internal/base/data"
+	"github.com/apache/incubator-answer/internal/base/pager"
+	"github.com/apache/incubator-answer/internal/base/reason"
+	"github.com/apache/incubator-answer/internal/entity"
+	tagcommon "github.com/apache/incubator-answer/internal/service/tag_common"
+	"github.com/apache/incubator-answer/internal/service/unique"
 	"github.com/segmentfault/pacman/errors"
 	"xorm.io/builder"
 )
@@ -56,19 +76,28 @@ func (tr *tagCommonRepo) GetTagBySlugName(ctx context.Context, slugName string) 
 }
 
 // GetTagListByName get tag list all like name
-func (tr *tagCommonRepo) GetTagListByName(ctx context.Context, name string, hasReserved bool) (tagList []*entity.Tag, err error) {
-	tagList = make([]*entity.Tag, 0)
+func (tr *tagCommonRepo) GetTagListByName(ctx context.Context, name string, recommend, reserved bool) (tagList []*entity.Tag, err error) {
 	cond := &entity.Tag{}
-	session := tr.data.DB.Context(ctx).Where("")
-	if name != "" {
-		session.Where("slug_name LIKE LOWER(?) or display_name LIKE ?", name+"%", name+"%")
-	} else {
-		session.UseBool("recommend")
+	session := tr.data.DB.Context(ctx)
+	if len(name) > 0 {
+		session.Where("slug_name LIKE ? OR display_name LIKE ?", strings.ToLower(name)+"%", name+"%")
+	}
+	var columns []string
+	if recommend {
+		columns = append(columns, "recommend")
 		cond.Recommend = true
 	}
+	if reserved {
+		columns = append(columns, "reserved")
+		cond.Reserved = true
+	}
+	if len(columns) > 0 {
+		session.UseBool(columns...)
+	}
 	session.Where(builder.Eq{"status": entity.TagStatusAvailable})
-	session.Asc("slug_name")
-	err = session.OrderBy("recommend desc,reserved desc,id desc").Find(&tagList, cond)
+
+	tagList = make([]*entity.Tag, 0)
+	err = session.OrderBy("recommend DESC,reserved DESC,slug_name ASC").Find(&tagList, cond)
 	if err != nil {
 		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 	}
@@ -107,10 +136,9 @@ func (tr *tagCommonRepo) GetReservedTagList(ctx context.Context) (tagList []*ent
 
 // GetTagListByNames get tag list all like name
 func (tr *tagCommonRepo) GetTagListByNames(ctx context.Context, names []string) (tagList []*entity.Tag, err error) {
-
 	tagList = make([]*entity.Tag, 0)
 	session := tr.data.DB.Context(ctx).In("slug_name", names).UseBool("recommend", "reserved")
-	// session.Where(builder.Eq{"status": entity.TagStatusAvailable})
+	session.Where(builder.Eq{"status": entity.TagStatusAvailable})
 	err = session.OrderBy("recommend desc,reserved desc,id desc").Find(&tagList)
 	if err != nil {
 		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
@@ -166,18 +194,48 @@ func (tr *tagCommonRepo) GetTagPage(ctx context.Context, page, pageSize int, tag
 
 // AddTagList add tag
 func (tr *tagCommonRepo) AddTagList(ctx context.Context, tagList []*entity.Tag) (err error) {
+	addTags := make([]*entity.Tag, 0)
 	for _, item := range tagList {
+		exist, err := tr.updateDeletedTag(ctx, item)
+		if err != nil {
+			return err
+		}
+		if exist {
+			continue
+		}
+		addTags = append(addTags, item)
 		item.ID, err = tr.uniqueIDRepo.GenUniqueIDStr(ctx, item.TableName())
 		if err != nil {
 			return err
 		}
 		item.RevisionID = "0"
 	}
-	_, err = tr.data.DB.Context(ctx).Insert(tagList)
+	if len(addTags) == 0 {
+		return nil
+	}
+	_, err = tr.data.DB.Context(ctx).Insert(addTags)
 	if err != nil {
 		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 	}
 	return
+}
+
+func (tr *tagCommonRepo) updateDeletedTag(ctx context.Context, tag *entity.Tag) (exist bool, err error) {
+	old := &entity.Tag{SlugName: tag.SlugName}
+	exist, err = tr.data.DB.Context(ctx).Get(old)
+	if err != nil {
+		return false, errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+	if !exist || old.Status != entity.TagStatusDeleted {
+		return false, nil
+	}
+	tag.ID = old.ID
+	tag.Status = entity.TagStatusAvailable
+	tag.RevisionID = "0"
+	if _, err = tr.data.DB.Context(ctx).ID(tag.ID).Update(tag); err != nil {
+		return false, errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+	return true, nil
 }
 
 // UpdateTagQuestionCount update tag question count

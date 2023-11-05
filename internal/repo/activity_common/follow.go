@@ -1,15 +1,35 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package activity_common
 
 import (
 	"context"
 
-	"github.com/answerdev/answer/internal/base/data"
-	"github.com/answerdev/answer/internal/base/reason"
-	"github.com/answerdev/answer/internal/entity"
-	"github.com/answerdev/answer/internal/service/activity_common"
-	"github.com/answerdev/answer/internal/service/unique"
-	"github.com/answerdev/answer/pkg/obj"
+	"github.com/apache/incubator-answer/internal/base/data"
+	"github.com/apache/incubator-answer/internal/base/reason"
+	"github.com/apache/incubator-answer/internal/entity"
+	"github.com/apache/incubator-answer/internal/service/activity_common"
+	"github.com/apache/incubator-answer/internal/service/unique"
+	"github.com/apache/incubator-answer/pkg/obj"
 	"github.com/segmentfault/pacman/errors"
+	"github.com/segmentfault/pacman/log"
 )
 
 // FollowRepo follow repository
@@ -71,11 +91,12 @@ func (ar *FollowRepo) GetFollowAmount(ctx context.Context, objectID string) (fol
 func (ar *FollowRepo) GetFollowUserIDs(ctx context.Context, objectID string) (userIDs []string, err error) {
 	objectTypeStr, err := obj.GetObjectTypeStrByObjectID(objectID)
 	if err != nil {
-		return nil, errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+		return nil, err
 	}
-	activityType, err := ar.activityRepo.GetActivityTypeByObjKey(ctx, objectTypeStr, "follow")
+	activityType, err := ar.activityRepo.GetActivityTypeByObjectType(ctx, objectTypeStr, "follow")
 	if err != nil {
-		return nil, errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+		log.Errorf("can't get activity type by object key: %s", objectTypeStr)
+		return nil, err
 	}
 
 	userIDs = make([]string, 0)
@@ -94,7 +115,7 @@ func (ar *FollowRepo) GetFollowUserIDs(ctx context.Context, objectID string) (us
 // GetFollowIDs get all follow id list
 func (ar *FollowRepo) GetFollowIDs(ctx context.Context, userID, objectKey string) (followIDs []string, err error) {
 	followIDs = make([]string, 0)
-	activityType, err := ar.activityRepo.GetActivityTypeByObjKey(ctx, objectKey, "follow")
+	activityType, err := ar.activityRepo.GetActivityTypeByObjectType(ctx, objectKey, "follow")
 	if err != nil {
 		return nil, errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 	}
@@ -116,7 +137,7 @@ func (ar *FollowRepo) IsFollowed(ctx context.Context, userID, objectID string) (
 		return false, err
 	}
 
-	activityType, err := ar.activityRepo.GetActivityTypeByObjKey(ctx, objectKey, "follow")
+	activityType, err := ar.activityRepo.GetActivityTypeByObjectType(ctx, objectKey, "follow")
 	if err != nil {
 		return false, err
 	}

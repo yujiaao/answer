@@ -1,10 +1,29 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import { memo, FC } from 'react';
 import { Button, Dropdown } from 'react-bootstrap';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 import { Modal } from '@/components';
-import { useReportModal, useToast } from '@/hooks';
+import { useReportModal, useToast, useCaptchaModal } from '@/hooks';
 import { QuestionOperationReq } from '@/common/interface';
 import Share from '../Share';
 import {
@@ -12,7 +31,9 @@ import {
   deleteAnswer,
   editCheck,
   reopenQuestion,
-  questionOpetation,
+  questionOperation,
+  unDeleteAnswer,
+  unDeleteQuestion,
 } from '@/services';
 import { tryNormalLogged } from '@/utils/guard';
 import { floppyNavigation } from '@/utils';
@@ -23,7 +44,6 @@ interface IProps {
   qid: string;
   aid?: string;
   title: string;
-  slugTitle: string;
   hasAnswer?: boolean;
   isAccepted: boolean;
   callback: (type: string) => void;
@@ -34,7 +54,6 @@ const Index: FC<IProps> = ({
   qid,
   aid = '',
   title,
-  slugTitle,
   isAccepted = false,
   hasAnswer = false,
   memberActions = [],
@@ -44,6 +63,7 @@ const Index: FC<IProps> = ({
   const toast = useToast();
   const navigate = useNavigate();
   const reportModal = useReportModal();
+  const dCaptcha = useCaptchaModal('delete');
 
   const refreshQuestion = () => {
     callback?.('default');
@@ -77,14 +97,28 @@ const Index: FC<IProps> = ({
         confirmBtnVariant: 'danger',
         confirmText: t('delete', { keyPrefix: 'btns' }),
         onConfirm: () => {
-          deleteQuestion({
-            id: qid,
-          }).then(() => {
-            toast.onShow({
-              msg: t('post_deleted', { keyPrefix: 'messages' }),
-              variant: 'success',
-            });
-            callback?.('delete_question');
+          dCaptcha.check(() => {
+            const req = {
+              id: qid,
+              captcha_code: undefined,
+              captcha_id: undefined,
+            };
+            dCaptcha.resolveCaptchaReq(req);
+
+            deleteQuestion(req)
+              .then(async () => {
+                await dCaptcha.close();
+                toast.onShow({
+                  msg: t('post_deleted', { keyPrefix: 'messages' }),
+                  variant: 'success',
+                });
+                callback?.('delete_question');
+              })
+              .catch((ex) => {
+                if (ex.isError) {
+                  dCaptcha.handleCaptchaError(ex.list);
+                }
+              });
           });
         },
       });
@@ -98,20 +132,58 @@ const Index: FC<IProps> = ({
         confirmBtnVariant: 'danger',
         confirmText: t('delete', { keyPrefix: 'btns' }),
         onConfirm: () => {
-          deleteAnswer({
-            id: aid,
-          }).then(() => {
-            // refresh page
-            toast.onShow({
-              msg: t('tip_answer_deleted'),
-              variant: 'success',
-            });
-            callback?.('all');
+          dCaptcha.check(() => {
+            const req = {
+              id: aid,
+              captcha_code: undefined,
+              captcha_id: undefined,
+            };
+            dCaptcha.resolveCaptchaReq(req);
+
+            deleteAnswer(req)
+              .then(async () => {
+                await dCaptcha.close();
+                // refresh page
+                toast.onShow({
+                  msg: t('tip_answer_deleted'),
+                  variant: 'success',
+                });
+                callback?.('all');
+              })
+              .catch((ex) => {
+                if (ex.isError) {
+                  dCaptcha.handleCaptchaError(ex.list);
+                }
+              });
           });
         },
       });
     }
   };
+
+  const handleUndelete = () => {
+    Modal.confirm({
+      title: t('undelete_title'),
+      content: t('undelete_desc'),
+      cancelBtnVariant: 'link',
+      confirmBtnVariant: 'danger',
+      confirmText: t('undelete', { keyPrefix: 'btns' }),
+      onConfirm: () => {
+        if (type === 'question') {
+          unDeleteQuestion(qid).then(() => {
+            callback?.('default');
+          });
+        }
+
+        if (type === 'answer') {
+          unDeleteAnswer(aid).then(() => {
+            callback?.('all');
+          });
+        }
+      },
+    });
+  };
+
   const handleEdit = (evt, targetUrl) => {
     if (!floppyNavigation.shouldProcessLinkClick(evt)) {
       return;
@@ -147,7 +219,7 @@ const Index: FC<IProps> = ({
   };
 
   const handleCommon = async (params) => {
-    await questionOpetation(params);
+    await questionOperation(params);
     let msg = '';
     if (params.operation === 'pin') {
       msg = t('post_pin', { keyPrefix: 'messages' });
@@ -199,6 +271,10 @@ const Index: FC<IProps> = ({
       handleDelete();
     }
 
+    if (action === 'undelete') {
+      handleUndelete();
+    }
+
     if (action === 'report') {
       handleReport();
     }
@@ -224,7 +300,10 @@ const Index: FC<IProps> = ({
   const firstAction =
     memberActions?.filter(
       (v) =>
-        v.action === 'report' || v.action === 'edit' || v.action === 'delete',
+        v.action === 'report' ||
+        v.action === 'edit' ||
+        v.action === 'delete' ||
+        v.action === 'undelete',
     ) || [];
   const secondAction =
     memberActions?.filter(
@@ -239,13 +318,7 @@ const Index: FC<IProps> = ({
 
   return (
     <div className="d-flex align-items-center">
-      <Share
-        type={type}
-        qid={qid}
-        aid={aid}
-        title={title}
-        slugTitle={slugTitle}
-      />
+      <Share type={type} qid={qid} aid={aid} title={title} />
       {firstAction?.map((item) => {
         if (item.action === 'edit') {
           return (
@@ -271,7 +344,7 @@ const Index: FC<IProps> = ({
         );
       })}
       {secondAction.length > 0 && (
-        <Dropdown className="ms-3">
+        <Dropdown className="ms-3 d-flex">
           <Dropdown.Toggle
             variant="link"
             size="sm"

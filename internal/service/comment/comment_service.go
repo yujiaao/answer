@@ -1,28 +1,46 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package comment
 
 import (
 	"context"
+	"github.com/apache/incubator-answer/pkg/token"
 	"time"
 
-	"github.com/answerdev/answer/internal/base/constant"
-	"github.com/answerdev/answer/internal/base/pager"
-	"github.com/answerdev/answer/internal/base/reason"
-	"github.com/answerdev/answer/internal/entity"
-	"github.com/answerdev/answer/internal/schema"
-	"github.com/answerdev/answer/internal/service/activity_common"
-	"github.com/answerdev/answer/internal/service/activity_queue"
-	"github.com/answerdev/answer/internal/service/comment_common"
-	"github.com/answerdev/answer/internal/service/export"
-	"github.com/answerdev/answer/internal/service/notice_queue"
-	"github.com/answerdev/answer/internal/service/object_info"
-	"github.com/answerdev/answer/internal/service/permission"
-	usercommon "github.com/answerdev/answer/internal/service/user_common"
-	"github.com/answerdev/answer/pkg/encryption"
-	"github.com/answerdev/answer/pkg/htmltext"
-	"github.com/answerdev/answer/pkg/uid"
+	"github.com/apache/incubator-answer/internal/base/constant"
+	"github.com/apache/incubator-answer/internal/base/pager"
+	"github.com/apache/incubator-answer/internal/base/reason"
+	"github.com/apache/incubator-answer/internal/entity"
+	"github.com/apache/incubator-answer/internal/schema"
+	"github.com/apache/incubator-answer/internal/service/activity_common"
+	"github.com/apache/incubator-answer/internal/service/activity_queue"
+	"github.com/apache/incubator-answer/internal/service/comment_common"
+	"github.com/apache/incubator-answer/internal/service/export"
+	"github.com/apache/incubator-answer/internal/service/notice_queue"
+	"github.com/apache/incubator-answer/internal/service/object_info"
+	"github.com/apache/incubator-answer/internal/service/permission"
+	usercommon "github.com/apache/incubator-answer/internal/service/user_common"
+	"github.com/apache/incubator-answer/pkg/htmltext"
+	"github.com/apache/incubator-answer/pkg/uid"
 	"github.com/jinzhu/copier"
 	"github.com/segmentfault/pacman/errors"
-	"github.com/segmentfault/pacman/i18n"
 	"github.com/segmentfault/pacman/log"
 )
 
@@ -30,7 +48,7 @@ import (
 type CommentRepo interface {
 	AddComment(ctx context.Context, comment *entity.Comment) (err error)
 	RemoveComment(ctx context.Context, commentID string) (err error)
-	UpdateComment(ctx context.Context, comment *entity.Comment) (err error)
+	UpdateCommentContent(ctx context.Context, commentID string, original string, parsedText string) (err error)
 	GetComment(ctx context.Context, commentID string) (comment *entity.Comment, exist bool, err error)
 	GetCommentPage(ctx context.Context, commentQuery *CommentQuery) (
 		comments []*entity.Comment, total int64, err error)
@@ -58,13 +76,16 @@ func (c *CommentQuery) GetOrderBy() string {
 
 // CommentService user service
 type CommentService struct {
-	commentRepo       CommentRepo
-	commentCommonRepo comment_common.CommentCommonRepo
-	userCommon        *usercommon.UserCommon
-	voteCommon        activity_common.VoteRepo
-	objectInfoService *object_info.ObjService
-	emailService      *export.EmailService
-	userRepo          usercommon.UserRepo
+	commentRepo                      CommentRepo
+	commentCommonRepo                comment_common.CommentCommonRepo
+	userCommon                       *usercommon.UserCommon
+	voteCommon                       activity_common.VoteRepo
+	objectInfoService                *object_info.ObjService
+	emailService                     *export.EmailService
+	userRepo                         usercommon.UserRepo
+	notificationQueueService         notice_queue.NotificationQueueService
+	externalNotificationQueueService notice_queue.ExternalNotificationQueueService
+	activityQueueService             activity_queue.ActivityQueueService
 }
 
 // NewCommentService new comment service
@@ -76,15 +97,21 @@ func NewCommentService(
 	voteCommon activity_common.VoteRepo,
 	emailService *export.EmailService,
 	userRepo usercommon.UserRepo,
+	notificationQueueService notice_queue.NotificationQueueService,
+	externalNotificationQueueService notice_queue.ExternalNotificationQueueService,
+	activityQueueService activity_queue.ActivityQueueService,
 ) *CommentService {
 	return &CommentService{
-		commentRepo:       commentRepo,
-		commentCommonRepo: commentCommonRepo,
-		userCommon:        userCommon,
-		voteCommon:        voteCommon,
-		objectInfoService: objectInfoService,
-		emailService:      emailService,
-		userRepo:          userRepo,
+		commentRepo:                      commentRepo,
+		commentCommonRepo:                commentCommonRepo,
+		userCommon:                       userCommon,
+		voteCommon:                       voteCommon,
+		objectInfoService:                objectInfoService,
+		emailService:                     emailService,
+		userRepo:                         userRepo,
+		notificationQueueService:         notificationQueueService,
+		externalNotificationQueueService: externalNotificationQueueService,
+		activityQueueService:             activityQueueService,
 	}
 }
 
@@ -161,7 +188,7 @@ func (cs *CommentService) AddComment(ctx context.Context, req *schema.AddComment
 	case constant.AnswerObjectType:
 		activityMsg.ActivityTypeKey = constant.ActAnswerCommented
 	}
-	activity_queue.AddActivity(activityMsg)
+	cs.activityQueueService.Send(ctx, activityMsg)
 	return resp, nil
 }
 
@@ -216,39 +243,34 @@ func (cs *CommentService) RemoveComment(ctx context.Context, req *schema.RemoveC
 
 // UpdateComment update comment
 func (cs *CommentService) UpdateComment(ctx context.Context, req *schema.UpdateCommentReq) (
-	resp *schema.GetCommentResp, err error) {
-	resp = &schema.GetCommentResp{}
-
+	resp *schema.UpdateCommentResp, err error) {
 	old, exist, err := cs.commentCommonRepo.GetComment(ctx, req.CommentID)
-	if err != nil {
-		return
-	}
-	if !exist {
-		return resp, errors.BadRequest(reason.CommentNotFound)
-	}
-
-	// user can edit the comment that was posted by himself before deadline.
-	if !req.IsAdmin && (time.Now().After(old.CreatedAt.Add(constant.CommentEditDeadline))) {
-		return resp, errors.BadRequest(reason.CommentCannotEditAfterDeadline)
-	}
-
-	comment := &entity.Comment{}
-	_ = copier.Copy(comment, req)
-	comment.ID = req.CommentID
-	resp.SetFromComment(comment)
-	resp.MemberActions = permission.GetCommentPermission(ctx, req.UserID, resp.UserID,
-		time.Now(), req.CanEdit, req.CanDelete)
-	userInfo, exist, err := cs.userCommon.GetUserBasicInfoByID(ctx, resp.UserID)
 	if err != nil {
 		return nil, err
 	}
-	if exist {
-		resp.Username = userInfo.Username
-		resp.UserDisplayName = userInfo.DisplayName
-		resp.UserAvatar = userInfo.Avatar
-		resp.UserStatus = userInfo.Status
+	if !exist {
+		return nil, errors.BadRequest(reason.CommentNotFound)
 	}
-	return resp, cs.commentRepo.UpdateComment(ctx, comment)
+	// user can't edit the comment that was posted by others except admin
+	if !req.IsAdmin && req.UserID != old.UserID {
+		return nil, errors.BadRequest(reason.CommentNotFound)
+	}
+
+	// user can edit the comment that was posted by himself before deadline.
+	// admin can edit it at any time
+	if !req.IsAdmin && (time.Now().After(old.CreatedAt.Add(constant.CommentEditDeadline))) {
+		return nil, errors.BadRequest(reason.CommentCannotEditAfterDeadline)
+	}
+
+	if err = cs.commentRepo.UpdateCommentContent(ctx, old.ID, req.OriginalText, req.ParsedText); err != nil {
+		return nil, err
+	}
+	resp = &schema.UpdateCommentResp{
+		CommentID:    old.ID,
+		OriginalText: req.OriginalText,
+		ParsedText:   req.ParsedText,
+	}
+	return resp, nil
 }
 
 // GetComment get comment one
@@ -468,6 +490,7 @@ func (cs *CommentService) notificationQuestionComment(ctx context.Context, quest
 	if questionUserID == commentUserID {
 		return
 	}
+	// send internal notification
 	msg := &schema.NotificationMsg{
 		ReceiverUserID: questionUserID,
 		TriggerUserID:  commentUserID,
@@ -476,8 +499,9 @@ func (cs *CommentService) notificationQuestionComment(ctx context.Context, quest
 	}
 	msg.ObjectType = constant.CommentObjectType
 	msg.NotificationAction = constant.NotificationCommentQuestion
-	notice_queue.AddNotification(msg)
+	cs.notificationQueueService.Send(ctx, msg)
 
+	// send external notification
 	receiverUserInfo, exist, err := cs.userRepo.GetByUserID(ctx, questionUserID)
 	if err != nil {
 		log.Error(err)
@@ -487,39 +511,25 @@ func (cs *CommentService) notificationQuestionComment(ctx context.Context, quest
 		log.Warnf("user %s not found", questionUserID)
 		return
 	}
-	if receiverUserInfo.NoticeStatus == schema.NoticeStatusOff || len(receiverUserInfo.EMail) == 0 {
-		return
-	}
 
+	externalNotificationMsg := &schema.ExternalNotificationMsg{
+		ReceiverUserID: receiverUserInfo.ID,
+		ReceiverEmail:  receiverUserInfo.EMail,
+		ReceiverLang:   receiverUserInfo.Language,
+	}
 	rawData := &schema.NewCommentTemplateRawData{
 		QuestionTitle:   questionTitle,
 		QuestionID:      questionID,
 		CommentID:       commentID,
 		CommentSummary:  commentSummary,
-		UnsubscribeCode: encryption.MD5(receiverUserInfo.Pass),
+		UnsubscribeCode: token.GenerateToken(),
 	}
 	commentUser, _, _ := cs.userCommon.GetUserBasicInfoByID(ctx, commentUserID)
 	if commentUser != nil {
 		rawData.CommentUserDisplayName = commentUser.DisplayName
 	}
-	codeContent := &schema.EmailCodeContent{
-		SourceType: schema.UnsubscribeSourceType,
-		Email:      receiverUserInfo.EMail,
-		UserID:     receiverUserInfo.ID,
-	}
-
-	// If receiver has set language, use it to send email.
-	if len(receiverUserInfo.Language) > 0 {
-		ctx = context.WithValue(ctx, constant.AcceptLanguageFlag, i18n.Language(receiverUserInfo.Language))
-	}
-	title, body, err := cs.emailService.NewCommentTemplate(ctx, rawData)
-	if err != nil {
-		log.Error(err)
-		return
-	}
-
-	go cs.emailService.SendAndSaveCodeWithTime(
-		ctx, receiverUserInfo.EMail, title, body, rawData.UnsubscribeCode, codeContent.ToJSONString(), 7*24*time.Hour)
+	externalNotificationMsg.NewCommentTemplateRawData = rawData
+	cs.externalNotificationQueueService.Send(ctx, externalNotificationMsg)
 }
 
 func (cs *CommentService) notificationAnswerComment(ctx context.Context,
@@ -527,6 +537,8 @@ func (cs *CommentService) notificationAnswerComment(ctx context.Context,
 	if answerUserID == commentUserID {
 		return
 	}
+
+	// Send internal notification.
 	msg := &schema.NotificationMsg{
 		ReceiverUserID: answerUserID,
 		TriggerUserID:  commentUserID,
@@ -535,8 +547,9 @@ func (cs *CommentService) notificationAnswerComment(ctx context.Context,
 	}
 	msg.ObjectType = constant.CommentObjectType
 	msg.NotificationAction = constant.NotificationCommentAnswer
-	notice_queue.AddNotification(msg)
+	cs.notificationQueueService.Send(ctx, msg)
 
+	// Send external notification.
 	receiverUserInfo, exist, err := cs.userRepo.GetByUserID(ctx, answerUserID)
 	if err != nil {
 		log.Error(err)
@@ -546,40 +559,25 @@ func (cs *CommentService) notificationAnswerComment(ctx context.Context,
 		log.Warnf("user %s not found", answerUserID)
 		return
 	}
-	if receiverUserInfo.NoticeStatus == schema.NoticeStatusOff || len(receiverUserInfo.EMail) == 0 {
-		return
+	externalNotificationMsg := &schema.ExternalNotificationMsg{
+		ReceiverUserID: receiverUserInfo.ID,
+		ReceiverEmail:  receiverUserInfo.EMail,
+		ReceiverLang:   receiverUserInfo.Language,
 	}
-
 	rawData := &schema.NewCommentTemplateRawData{
 		QuestionTitle:   questionTitle,
 		QuestionID:      questionID,
 		AnswerID:        answerID,
 		CommentID:       commentID,
 		CommentSummary:  commentSummary,
-		UnsubscribeCode: encryption.MD5(receiverUserInfo.Pass),
+		UnsubscribeCode: token.GenerateToken(),
 	}
 	commentUser, _, _ := cs.userCommon.GetUserBasicInfoByID(ctx, commentUserID)
 	if commentUser != nil {
 		rawData.CommentUserDisplayName = commentUser.DisplayName
 	}
-	codeContent := &schema.EmailCodeContent{
-		SourceType: schema.UnsubscribeSourceType,
-		Email:      receiverUserInfo.EMail,
-		UserID:     receiverUserInfo.ID,
-	}
-
-	// If receiver has set language, use it to send email.
-	if len(receiverUserInfo.Language) > 0 {
-		ctx = context.WithValue(ctx, constant.AcceptLanguageFlag, i18n.Language(receiverUserInfo.Language))
-	}
-	title, body, err := cs.emailService.NewCommentTemplate(ctx, rawData)
-	if err != nil {
-		log.Error(err)
-		return
-	}
-
-	go cs.emailService.SendAndSaveCodeWithTime(
-		ctx, receiverUserInfo.EMail, title, body, rawData.UnsubscribeCode, codeContent.ToJSONString(), 7*24*time.Hour)
+	externalNotificationMsg.NewCommentTemplateRawData = rawData
+	cs.externalNotificationQueueService.Send(ctx, externalNotificationMsg)
 }
 
 func (cs *CommentService) notificationCommentReply(ctx context.Context, replyUserID, commentID, commentUserID string) {
@@ -591,7 +589,7 @@ func (cs *CommentService) notificationCommentReply(ctx context.Context, replyUse
 	}
 	msg.ObjectType = constant.CommentObjectType
 	msg.NotificationAction = constant.NotificationReplyToYou
-	notice_queue.AddNotification(msg)
+	cs.notificationQueueService.Send(ctx, msg)
 }
 
 func (cs *CommentService) notificationMention(
@@ -612,7 +610,7 @@ func (cs *CommentService) notificationMention(
 			}
 			msg.ObjectType = constant.CommentObjectType
 			msg.NotificationAction = constant.NotificationMentionYou
-			notice_queue.AddNotification(msg)
+			cs.notificationQueueService.Send(ctx, msg)
 			alreadyNotifiedUserIDs = append(alreadyNotifiedUserIDs, userInfo.ID)
 		}
 	}

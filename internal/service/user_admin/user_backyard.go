@@ -1,22 +1,50 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package user_admin
 
 import (
 	"context"
 	"fmt"
+	"github.com/apache/incubator-answer/internal/base/constant"
+	"github.com/apache/incubator-answer/internal/base/handler"
+	"github.com/apache/incubator-answer/internal/base/translator"
+	"github.com/apache/incubator-answer/internal/base/validator"
+	answercommon "github.com/apache/incubator-answer/internal/service/answer_common"
+	"github.com/apache/incubator-answer/internal/service/comment_common"
+	"github.com/apache/incubator-answer/internal/service/export"
+	questioncommon "github.com/apache/incubator-answer/internal/service/question_common"
+	"github.com/google/uuid"
 	"net/mail"
 	"strings"
 	"time"
 	"unicode"
 
-	"github.com/answerdev/answer/internal/base/pager"
-	"github.com/answerdev/answer/internal/base/reason"
-	"github.com/answerdev/answer/internal/entity"
-	"github.com/answerdev/answer/internal/schema"
-	"github.com/answerdev/answer/internal/service/activity"
-	"github.com/answerdev/answer/internal/service/auth"
-	"github.com/answerdev/answer/internal/service/role"
-	"github.com/answerdev/answer/internal/service/siteinfo_common"
-	usercommon "github.com/answerdev/answer/internal/service/user_common"
+	"github.com/apache/incubator-answer/internal/base/pager"
+	"github.com/apache/incubator-answer/internal/base/reason"
+	"github.com/apache/incubator-answer/internal/entity"
+	"github.com/apache/incubator-answer/internal/schema"
+	"github.com/apache/incubator-answer/internal/service/activity"
+	"github.com/apache/incubator-answer/internal/service/auth"
+	"github.com/apache/incubator-answer/internal/service/role"
+	"github.com/apache/incubator-answer/internal/service/siteinfo_common"
+	usercommon "github.com/apache/incubator-answer/internal/service/user_common"
 	"github.com/jinzhu/copier"
 	"github.com/segmentfault/pacman/errors"
 	"github.com/segmentfault/pacman/log"
@@ -31,6 +59,7 @@ type UserAdminRepo interface {
 	GetUserPage(ctx context.Context, page, pageSize int, user *entity.User,
 		usernameOrDisplayName string, isStaff bool) (users []*entity.User, total int64, err error)
 	AddUser(ctx context.Context, user *entity.User) (err error)
+	AddUsers(ctx context.Context, users []*entity.User) (err error)
 	UpdateUserPassword(ctx context.Context, userID string, password string) (err error)
 }
 
@@ -41,7 +70,11 @@ type UserAdminService struct {
 	authService           *auth.AuthService
 	userCommonService     *usercommon.UserCommon
 	userActivity          activity.UserActiveActivityRepo
-	siteInfoCommonService *siteinfo_common.SiteInfoCommonService
+	siteInfoCommonService siteinfo_common.SiteInfoCommonService
+	emailService          *export.EmailService
+	questionCommonRepo    questioncommon.QuestionRepo
+	answerCommonRepo      answercommon.AnswerRepo
+	commentCommonRepo     comment_common.CommentCommonRepo
 }
 
 // NewUserAdminService new user admin service
@@ -51,7 +84,11 @@ func NewUserAdminService(
 	authService *auth.AuthService,
 	userCommonService *usercommon.UserCommon,
 	userActivity activity.UserActiveActivityRepo,
-	siteInfoCommonService *siteinfo_common.SiteInfoCommonService,
+	siteInfoCommonService siteinfo_common.SiteInfoCommonService,
+	emailService *export.EmailService,
+	questionCommonRepo questioncommon.QuestionRepo,
+	answerCommonRepo answercommon.AnswerRepo,
+	commentCommonRepo comment_common.CommentCommonRepo,
 ) *UserAdminService {
 	return &UserAdminService{
 		userRepo:              userRepo,
@@ -60,6 +97,10 @@ func NewUserAdminService(
 		userCommonService:     userCommonService,
 		userActivity:          userActivity,
 		siteInfoCommonService: siteInfoCommonService,
+		emailService:          emailService,
+		questionCommonRepo:    questionCommonRepo,
+		answerCommonRepo:      answerCommonRepo,
+		commentCommonRepo:     commentCommonRepo,
 	}
 }
 
@@ -86,7 +127,7 @@ func (us *UserAdminService) UpdateUserStatus(ctx context.Context, req *schema.Up
 	}
 	if req.IsDeleted() {
 		userInfo.Status = entity.UserStatusDeleted
-		userInfo.EMail = fmt.Sprintf("%s.%d", userInfo.EMail, time.Now().UnixNano())
+		userInfo.EMail = fmt.Sprintf("%s.%d", userInfo.EMail, time.Now().Unix())
 	}
 	if req.IsSuspended() {
 		userInfo.Status = entity.UserStatusSuspended
@@ -101,11 +142,29 @@ func (us *UserAdminService) UpdateUserStatus(ctx context.Context, req *schema.Up
 		return err
 	}
 
+	// remove all content that user created, such as question, answer, comment, etc.
+	if req.RemoveAllContent {
+		us.removeAllUserCreatedContent(ctx, userInfo.ID)
+	}
+
 	// if user reputation is zero means this user is inactive, so try to activate this user.
 	if req.IsNormal() && userInfo.Rank == 0 {
 		return us.userActivity.UserActive(ctx, userInfo.ID)
 	}
 	return nil
+}
+
+// removeAllUserCreatedContent remove all user created content
+func (us *UserAdminService) removeAllUserCreatedContent(ctx context.Context, userID string) {
+	if err := us.questionCommonRepo.RemoveAllUserQuestion(ctx, userID); err != nil {
+		log.Errorf("remove all user question error: %v", err)
+	}
+	if err := us.answerCommonRepo.RemoveAllUserAnswer(ctx, userID); err != nil {
+		log.Errorf("remove all user answer error: %v", err)
+	}
+	if err := us.commentCommonRepo.RemoveAllUserComment(ctx, userID); err != nil {
+		log.Errorf("remove all user comment error: %v", err)
+	}
 }
 
 // UpdateUserRole update user role
@@ -157,6 +216,105 @@ func (us *UserAdminService) AddUser(ctx context.Context, req *schema.AddUserReq)
 		return err
 	}
 	return
+}
+
+// AddUsers add users
+func (us *UserAdminService) AddUsers(ctx context.Context, req *schema.AddUsersReq) (
+	resp []*validator.FormErrorField, err error) {
+	resp, err = req.ParseUsers(ctx)
+	if err != nil {
+		return resp, err
+	}
+	errData := us.checkUserDuplicateInner(ctx, req.Users)
+	if errData != nil {
+		return errData.GetErrField(ctx), errors.BadRequest(reason.RequestFormatError)
+	}
+	users, errData, err := us.formatBulkAddUsers(ctx, req)
+	if err != nil {
+		return resp, err
+	}
+	if errData != nil {
+		return errData.GetErrField(ctx), errors.BadRequest(reason.RequestFormatError)
+	}
+	return nil, us.userRepo.AddUsers(ctx, users)
+}
+
+func (us *UserAdminService) checkUserDuplicateInner(ctx context.Context, users []*schema.AddUserReq) (
+	errorData *schema.AddUsersErrorData) {
+	lang := handler.GetLangByCtx(ctx)
+	val := validator.GetValidatorByLang(lang)
+
+	emails := make(map[string]bool)
+	displayNames := make(map[string]bool)
+	for line, user := range users {
+		if errFields, e := val.Check(user); e != nil {
+			errorData = &schema.AddUsersErrorData{}
+			if len(errFields) > 0 {
+				errorData.Field = errFields[0].ErrorField
+				errorData.ExtraMessage = errFields[0].ErrorMsg
+			}
+			errorData.Line = line + 1
+			errorData.Content = fmt.Sprintf("%s, %s, %s", user.DisplayName, user.Email, user.Password)
+			return errorData
+		}
+		if emails[user.Email] {
+			return &schema.AddUsersErrorData{
+				Field:        "email",
+				Line:         line + 1,
+				Content:      user.Email,
+				ExtraMessage: translator.Tr(lang, reason.EmailDuplicate),
+			}
+		}
+		if displayNames[user.DisplayName] {
+			return &schema.AddUsersErrorData{
+				Field:        "name",
+				Line:         line + 1,
+				Content:      user.DisplayName,
+				ExtraMessage: translator.Tr(lang, reason.UsernameDuplicate),
+			}
+		}
+		emails[user.Email] = true
+		displayNames[user.DisplayName] = true
+	}
+	return nil
+}
+
+func (us *UserAdminService) formatBulkAddUsers(ctx context.Context, req *schema.AddUsersReq) (
+	users []*entity.User, errorData *schema.AddUsersErrorData, err error) {
+	lang := handler.GetLangByCtx(ctx)
+	errorData = &schema.AddUsersErrorData{Line: -1}
+	for line, user := range req.Users {
+		_, has, e := us.userRepo.GetUserInfoByEmail(ctx, user.Email)
+		if e != nil {
+			return nil, nil, e
+		}
+		if has {
+			errorData.Field = "email"
+			errorData.Line = line + 1
+			errorData.Content = user.Email
+			errorData.ExtraMessage = translator.Tr(lang, reason.EmailDuplicate)
+			return nil, errorData, nil
+		}
+
+		userInfo := &entity.User{}
+		userInfo.EMail = user.Email
+		userInfo.DisplayName = user.DisplayName
+		hashPwd, _ := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
+		userInfo.Pass = string(hashPwd)
+		userInfo.Username, err = us.userCommonService.MakeUsername(ctx, userInfo.DisplayName)
+		if err != nil {
+			errorData.Field = "name"
+			errorData.Line = line + 1
+			errorData.Content = user.DisplayName
+			errorData.ExtraMessage = translator.Tr(lang, reason.UsernameInvalid)
+			return nil, errorData, nil
+		}
+		userInfo.MailStatus = entity.EmailStatusAvailable
+		userInfo.Status = entity.UserStatusAvailable
+		userInfo.Rank = 1
+		users = append(users, userInfo)
+	}
+	return users, nil, nil
 }
 
 // UpdateUserPassword update user password
@@ -214,6 +372,9 @@ func (us *UserAdminService) GetUserPage(ctx context.Context, req *schema.GetUser
 		user.Status = entity.UserStatusSuspended
 	} else if req.IsDeleted() {
 		user.Status = entity.UserStatusDeleted
+	} else {
+		user.MailStatus = entity.EmailStatusAvailable
+		user.Status = entity.UserStatusAvailable
 	}
 
 	if len(req.Query) > 0 {
@@ -256,15 +417,15 @@ func (us *UserAdminService) GetUserPage(ctx context.Context, req *schema.GetUser
 			Avatar:      avatarMapping[u.ID].GetURL(),
 		}
 		if u.Status == entity.UserStatusDeleted {
-			t.Status = schema.UserDeleted
+			t.Status = constant.UserDeleted
 			t.DeletedAt = u.DeletedAt.Unix()
 		} else if u.Status == entity.UserStatusSuspended {
-			t.Status = schema.UserSuspended
+			t.Status = constant.UserSuspended
 			t.SuspendedAt = u.SuspendedAt.Unix()
 		} else if u.MailStatus == entity.EmailStatusToBeVerified {
-			t.Status = schema.UserInactive
+			t.Status = constant.UserInactive
 		} else {
-			t.Status = schema.UserNormal
+			t.Status = constant.UserNormal
 		}
 		resp = append(resp, t)
 	}
@@ -292,4 +453,62 @@ func (us *UserAdminService) setUserRoleInfo(ctx context.Context, resp []*schema.
 		u.RoleID = r.ID
 		u.RoleName = r.Name
 	}
+}
+
+func (us *UserAdminService) GetUserActivation(ctx context.Context, req *schema.GetUserActivationReq) (
+	resp *schema.GetUserActivationResp, err error) {
+	user, exist, err := us.userRepo.GetUserInfo(ctx, req.UserID)
+	if err != nil {
+		return nil, err
+	}
+	if !exist {
+		return nil, errors.BadRequest(reason.UserNotFound)
+	}
+
+	general, err := us.siteInfoCommonService.GetSiteGeneral(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	data := &schema.EmailCodeContent{
+		Email:  user.EMail,
+		UserID: user.ID,
+	}
+	code := uuid.NewString()
+	us.emailService.SaveCode(ctx, code, data.ToJSONString())
+	resp = &schema.GetUserActivationResp{
+		ActivationURL: fmt.Sprintf("%s/users/account-activation?code=%s", general.SiteUrl, code),
+	}
+	return resp, nil
+}
+
+// SendUserActivation send user activation email
+func (us *UserAdminService) SendUserActivation(ctx context.Context, req *schema.SendUserActivationReq) (err error) {
+	user, exist, err := us.userRepo.GetUserInfo(ctx, req.UserID)
+	if err != nil {
+		return err
+	}
+	if !exist {
+		return errors.BadRequest(reason.UserNotFound)
+	}
+
+	general, err := us.siteInfoCommonService.GetSiteGeneral(ctx)
+	if err != nil {
+		return err
+	}
+
+	data := &schema.EmailCodeContent{
+		Email:  user.EMail,
+		UserID: user.ID,
+	}
+	code := uuid.NewString()
+	us.emailService.SaveCode(ctx, code, data.ToJSONString())
+
+	verifyEmailURL := fmt.Sprintf("%s/users/account-activation?code=%s", general.SiteUrl, code)
+	title, body, err := us.emailService.RegisterTemplate(ctx, verifyEmailURL)
+	if err != nil {
+		return err
+	}
+	go us.emailService.SendAndSaveCode(ctx, user.EMail, title, body, code, data.ToJSONString())
+	return nil
 }

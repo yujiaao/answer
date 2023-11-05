@@ -1,3 +1,22 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package cli
 
 import (
@@ -13,9 +32,9 @@ import (
 	"text/template"
 
 	"github.com/Masterminds/semver/v3"
-	"github.com/answerdev/answer/pkg/dir"
-	"github.com/answerdev/answer/pkg/writer"
-	"github.com/answerdev/answer/ui"
+	"github.com/apache/incubator-answer/pkg/dir"
+	"github.com/apache/incubator-answer/pkg/writer"
+	"github.com/apache/incubator-answer/ui"
 	"github.com/segmentfault/pacman/log"
 	"gopkg.in/yaml.v3"
 )
@@ -24,7 +43,7 @@ const (
 	mainGoTpl = `package main
 
 import (
-	answercmd "github.com/answerdev/answer/cmd"
+	answercmd "github.com/apache/incubator-answer/cmd"
 
   // remote plugins
 	{{- range .remote_plugins}}
@@ -67,7 +86,7 @@ type OriginalAnswerInfo struct {
 }
 
 type pluginInfo struct {
-	// Name of the plugin e.g. github.com/answerdev/github-connector
+	// Name of the plugin e.g. github.com/apache/incubator-answer-plugins/github-connector
 	Name string
 	// Path to the plugin. If path exist, read plugin from local filesystem
 	Path string
@@ -114,7 +133,7 @@ func BuildNewAnswer(outputPath string, plugins []string, originalAnswerInfo Orig
 func formatPlugins(plugins []string) (formatted []*pluginInfo) {
 	for _, plugin := range plugins {
 		plugin = strings.TrimSpace(plugin)
-		// plugin description like this 'github.com/answerdev/github-connector@latest=/local/path'
+		// plugin description like this 'github.com/apache/incubator-answer-plugins/github-connector@latest=/local/path'
 		info := &pluginInfo{}
 		plugin, info.Path, _ = strings.Cut(plugin, "=")
 		info.Name, info.Version, _ = strings.Cut(plugin, "@")
@@ -177,7 +196,7 @@ func createMainGoFile(b *buildingMaterial) (err error) {
 func downloadGoModFile(b *buildingMaterial) (err error) {
 	// If user specify a module replacement, use it. Otherwise, use the latest version.
 	if len(b.answerModuleReplacement) > 0 {
-		replacement := fmt.Sprintf("%s=%s", "github.com/answerdev/answer", b.answerModuleReplacement)
+		replacement := fmt.Sprintf("%s=%s", "github.com/apache/incubator-answer", b.answerModuleReplacement)
 		err = b.newExecCmd("go", "mod", "edit", "-replace", replacement).Run()
 		if err != nil {
 			return err
@@ -198,24 +217,60 @@ func downloadGoModFile(b *buildingMaterial) (err error) {
 
 // copyUIFiles copy ui files from answer module to tmp dir
 func copyUIFiles(b *buildingMaterial) (err error) {
-	goListCmd := b.newExecCmd("go", "list", "-mod=mod", "-m", "-f", "{{.Dir}}", "github.com/answerdev/answer")
+	goListCmd := b.newExecCmd("go", "list", "-mod=mod", "-m", "-f", "{{.Dir}}", "github.com/apache/incubator-answer")
 	buf := new(bytes.Buffer)
 	goListCmd.Stdout = buf
 	if err = goListCmd.Run(); err != nil {
 		return fmt.Errorf("failed to run go list: %w", err)
 	}
 
-	goModUIDir := filepath.Join(strings.TrimSpace(buf.String()), "ui")
-	localUIBuildDir := filepath.Join(b.tmpDir, "vendor/github.com/answerdev/answer/ui/")
-	if err = copyDirEntries(os.DirFS(goModUIDir), ".", localUIBuildDir); err != nil {
+	answerDir := strings.TrimSpace(buf.String())
+	goModUIDir := filepath.Join(answerDir, "ui")
+	localUIBuildDir := filepath.Join(b.tmpDir, "vendor/github.com/apache/incubator-answer/ui/")
+	// The node_modules folder generated during development will interfere packaging, so it needs to be ignored.
+	if err = copyDirEntries(os.DirFS(goModUIDir), ".", localUIBuildDir, "node_modules"); err != nil {
 		return fmt.Errorf("failed to copy ui files: %w", err)
 	}
+
+	pluginsDir := filepath.Join(b.tmpDir, "vendor/github.com/apache/incubator-answer-plugins/")
+	localUIPluginDir := filepath.Join(localUIBuildDir, "src/plugins/")
+
+	// copy plugins dir
+	fmt.Printf("try to copy dir from %s to %s\n", pluginsDir, localUIPluginDir)
+
+	// if plugins dir not exist means no plugins
+	if !dir.CheckDirExist(pluginsDir) {
+		return nil
+	}
+
+	pluginsDirEntries, err := os.ReadDir(pluginsDir)
+	if err != nil {
+		return fmt.Errorf("failed to read plugins dir: %w", err)
+	}
+	for _, entry := range pluginsDirEntries {
+		if !entry.IsDir() {
+			continue
+		}
+		sourcePluginDir := filepath.Join(pluginsDir, entry.Name())
+		// check if plugin is a ui plugin
+		packageJsonPath := filepath.Join(sourcePluginDir, "package.json")
+		fmt.Printf("check if %s is a ui plugin\n", packageJsonPath)
+		if !dir.CheckFileExist(packageJsonPath) {
+			continue
+		}
+		localPluginDir := filepath.Join(localUIPluginDir, entry.Name())
+		fmt.Printf("try to copy dir from %s to %s\n", sourcePluginDir, localPluginDir)
+		if err = copyDirEntries(os.DirFS(sourcePluginDir), ".", localPluginDir); err != nil {
+			return fmt.Errorf("failed to copy ui files: %w", err)
+		}
+	}
+	formatUIPluginsDirName(localUIPluginDir)
 	return nil
 }
 
 // overwriteIndexTs overwrites index.ts file in ui/src/plugins/ dir
 func overwriteIndexTs(b *buildingMaterial) (err error) {
-	localUIPluginDir := filepath.Join(b.tmpDir, "vendor/github.com/answerdev/answer/ui/src/plugins/")
+	localUIPluginDir := filepath.Join(b.tmpDir, "vendor/github.com/apache/incubator-answer/ui/src/plugins/")
 
 	folders, err := getFolders(localUIPluginDir)
 	if err != nil {
@@ -246,18 +301,22 @@ func getFolders(dir string) ([]string, error) {
 
 func generateIndexTsContent(folders []string) string {
 	builder := &strings.Builder{}
-	builder.WriteString("export default null;\n\n")
+	builder.WriteString("export default null;\n")
+	// Line 2:1:  Delete `⏎`  prettier/prettier
+	if len(folders) > 0 {
+		builder.WriteString("\n")
+	}
 	for _, folder := range folders {
-		builder.WriteString(fmt.Sprintf("export { default as %s } from './%s';\n", folder, folder))
+		builder.WriteString(fmt.Sprintf("export { default as %s } from '%s';\n", folder, folder))
 	}
 	return builder.String()
 }
 
 // buildUI run pnpm install and pnpm build commands to build ui
 func buildUI(b *buildingMaterial) (err error) {
-	localUIBuildDir := filepath.Join(b.tmpDir, "vendor/github.com/answerdev/answer/ui")
+	localUIBuildDir := filepath.Join(b.tmpDir, "vendor/github.com/apache/incubator-answer/ui")
 
-	pnpmInstallCmd := b.newExecCmd("pnpm", "install")
+	pnpmInstallCmd := b.newExecCmd("pnpm", "pre-install")
 	pnpmInstallCmd.Dir = localUIBuildDir
 	if err = pnpmInstallCmd.Run(); err != nil {
 		return err
@@ -273,7 +332,7 @@ func buildUI(b *buildingMaterial) (err error) {
 
 func replaceNecessaryFile(b *buildingMaterial) (err error) {
 	fmt.Printf("try to replace ui build directory\n")
-	uiBuildDir := filepath.Join(b.tmpDir, "vendor/github.com/answerdev/answer/ui")
+	uiBuildDir := filepath.Join(b.tmpDir, "vendor/github.com/apache/incubator-answer/ui")
 	err = copyDirEntries(ui.Build, ".", uiBuildDir)
 	return err
 }
@@ -329,7 +388,7 @@ func mergeI18nFiles(b *buildingMaterial) (err error) {
 		}
 	}
 
-	originalI18nDir := filepath.Join(b.tmpDir, "vendor/github.com/answerdev/answer/i18n")
+	originalI18nDir := filepath.Join(b.tmpDir, "vendor/github.com/apache/incubator-answer/i18n")
 	entries, err := os.ReadDir(originalI18nDir)
 	if err != nil {
 		return err
@@ -366,14 +425,26 @@ func mergeI18nFiles(b *buildingMaterial) (err error) {
 	return err
 }
 
-func copyDirEntries(sourceFs fs.FS, sourceDir string, targetDir string) (err error) {
+func copyDirEntries(sourceFs fs.FS, sourceDir, targetDir string, ignoreDir ...string) (err error) {
 	err = dir.CreateDirIfNotExist(targetDir)
 	if err != nil {
 		return err
 	}
+	ignoreThisDir := func(path string) bool {
+		for _, s := range ignoreDir {
+			if strings.HasPrefix(path, s) {
+				return true
+			}
+		}
+		return false
+	}
+
 	err = fs.WalkDir(sourceFs, sourceDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
+		}
+		if ignoreThisDir(path) {
+			return nil
 		}
 
 		// Convert the path to use forward slashes, important because we use embedded FS which always uses forward slashes
@@ -419,10 +490,30 @@ func copyDirEntries(sourceFs fs.FS, sourceDir string, targetDir string) (err err
 	return err
 }
 
+// format plugins dir name from dash to underline
+func formatUIPluginsDirName(dirPath string) {
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		fmt.Printf("read ui plugins dir failed: [%s] %s\n", dirPath, err)
+		return
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() || !strings.Contains(entry.Name(), "-") {
+			continue
+		}
+		newName := strings.ReplaceAll(entry.Name(), "-", "_")
+		if err := os.Rename(filepath.Join(dirPath, entry.Name()), filepath.Join(dirPath, newName)); err != nil {
+			fmt.Printf("rename ui plugins dir failed: [%s] %s\n", dirPath, err)
+		} else {
+			fmt.Printf("rename ui plugins dir success: [%s] -> [%s]\n", entry.Name(), newName)
+		}
+	}
+}
+
 // buildBinary build binary file
 func buildBinary(b *buildingMaterial) (err error) {
 	versionInfo := b.originalAnswerInfo
-	cmdPkg := "github.com/answerdev/answer/cmd"
+	cmdPkg := "github.com/apache/incubator-answer/cmd"
 	ldflags := fmt.Sprintf("-X %s.Version=%s -X %s.Revision=%s -X %s.Time=%s",
 		cmdPkg, versionInfo.Version, cmdPkg, versionInfo.Revision, cmdPkg, versionInfo.Time)
 	err = b.newExecCmd("go", "build",

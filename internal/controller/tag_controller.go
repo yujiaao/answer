@@ -1,16 +1,35 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package controller
 
 import (
 	"strings"
 
-	"github.com/answerdev/answer/internal/base/handler"
-	"github.com/answerdev/answer/internal/base/middleware"
-	"github.com/answerdev/answer/internal/base/reason"
-	"github.com/answerdev/answer/internal/schema"
-	"github.com/answerdev/answer/internal/service/permission"
-	"github.com/answerdev/answer/internal/service/rank"
-	"github.com/answerdev/answer/internal/service/tag"
-	"github.com/answerdev/answer/internal/service/tag_common"
+	"github.com/apache/incubator-answer/internal/base/handler"
+	"github.com/apache/incubator-answer/internal/base/middleware"
+	"github.com/apache/incubator-answer/internal/base/reason"
+	"github.com/apache/incubator-answer/internal/schema"
+	"github.com/apache/incubator-answer/internal/service/permission"
+	"github.com/apache/incubator-answer/internal/service/rank"
+	"github.com/apache/incubator-answer/internal/service/tag"
+	"github.com/apache/incubator-answer/internal/service/tag_common"
 	"github.com/gin-gonic/gin"
 	"github.com/segmentfault/pacman/errors"
 )
@@ -45,7 +64,6 @@ func (tc *TagController) SearchTagLike(ctx *gin.Context) {
 	if handler.BindAndCheck(ctx, req) {
 		return
 	}
-	req.IsAdmin = middleware.GetIsAdminFromContext(ctx)
 	resp, err := tc.tagCommonService.SearchTagLike(ctx, req)
 	handler.HandleResponse(ctx, err, resp)
 }
@@ -168,6 +186,38 @@ func (tc *TagController) UpdateTag(ctx *gin.Context) {
 	}
 }
 
+// RecoverTag recover delete tag
+// @Summary recover delete tag
+// @Description recover delete tag
+// @Tags Tag
+// @Accept json
+// @Produce json
+// @Param data body schema.RecoverTagReq true "tag"
+// @Success 200 {object} handler.RespBody
+// @Router /answer/api/v1/tag/recover [post]
+func (tc *TagController) RecoverTag(ctx *gin.Context) {
+	req := &schema.RecoverTagReq{}
+	if handler.BindAndCheck(ctx, req) {
+		return
+	}
+	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
+
+	canList, err := tc.rankService.CheckOperationPermissions(ctx, req.UserID, []string{
+		permission.TagUnDelete,
+	})
+	if err != nil {
+		handler.HandleResponse(ctx, err, nil)
+		return
+	}
+	if !canList[0] {
+		handler.HandleResponse(ctx, errors.Forbidden(reason.RankFailToMeetTheCondition), nil)
+		return
+	}
+
+	err = tc.tagService.RecoverTag(ctx, req)
+	handler.HandleResponse(ctx, err, nil)
+}
+
 // GetTagInfo get tag one
 // @Summary get tag one
 // @Description get tag one
@@ -188,6 +238,7 @@ func (tc *TagController) GetTagInfo(ctx *gin.Context) {
 	canList, err := tc.rankService.CheckOperationPermissions(ctx, req.UserID, []string{
 		permission.TagEdit,
 		permission.TagDelete,
+		permission.TagUnDelete,
 	})
 	if err != nil {
 		handler.HandleResponse(ctx, err, nil)
@@ -195,6 +246,7 @@ func (tc *TagController) GetTagInfo(ctx *gin.Context) {
 	}
 	req.CanEdit = canList[0]
 	req.CanDelete = canList[1]
+	req.CanRecover = canList[2]
 
 	resp, err := tc.tagService.GetTagInfo(ctx, req)
 	handler.HandleResponse(ctx, err, resp)

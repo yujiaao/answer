@@ -37,7 +37,7 @@
                 "tags": [
                     "admin"
                 ],
-                "summary": "AdminSearchAnswerList",
+                "summary": "AdminAnswerPage admin answer page",
                 "parameters": [
                     {
                         "type": "integer",
@@ -91,7 +91,7 @@
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Status:[available,deleted]",
+                "description": "update answer status",
                 "consumes": [
                     "application/json"
                 ],
@@ -101,15 +101,15 @@
                 "tags": [
                     "admin"
                 ],
-                "summary": "AdminSetAnswerStatus",
+                "summary": "update answer status",
                 "parameters": [
                     {
-                        "description": "AdminSetAnswerStatusRequest",
+                        "description": "AdminUpdateAnswerStatusReq",
                         "name": "data",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/schema.AdminSetAnswerStatusRequest"
+                            "$ref": "#/definitions/schema.AdminUpdateAnswerStatusReq"
                         }
                     }
                 ],
@@ -367,7 +367,7 @@
                 "tags": [
                     "admin"
                 ],
-                "summary": "AdminSearchList",
+                "summary": "AdminQuestionPage admin question page",
                 "parameters": [
                     {
                         "type": "integer",
@@ -416,7 +416,7 @@
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Status:[available,closed,deleted]",
+                "description": "update question status",
                 "consumes": [
                     "application/json"
                 ],
@@ -426,15 +426,15 @@
                 "tags": [
                     "admin"
                 ],
-                "summary": "AdminSetQuestionStatus",
+                "summary": "update question status",
                 "parameters": [
                     {
-                        "description": "AdminSetQuestionStatusRequest",
+                        "description": "AdminUpdateQuestionStatusReq",
                         "name": "data",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/schema.AdminSetQuestionStatusRequest"
+                            "$ref": "#/definitions/schema.AdminUpdateQuestionStatusReq"
                         }
                     }
                 ],
@@ -1566,6 +1566,52 @@
                 }
             }
         },
+        "/answer/admin/api/user/activation": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "get user activation",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "get user activation",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "user id",
+                        "name": "user_id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/handler.RespBody"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/schema.GetUserActivationResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
         "/answer/admin/api/user/password": {
             "put": {
                 "security": [
@@ -1670,6 +1716,81 @@
                         "required": true,
                         "schema": {
                             "$ref": "#/definitions/schema.UpdateUserStatusReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.RespBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/answer/admin/api/users": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "add users",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "add users",
+                "parameters": [
+                    {
+                        "description": "user",
+                        "name": "data",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/schema.AddUsersReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.RespBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/answer/admin/api/users/activation": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "send user activation",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "send user activation",
+                "parameters": [
+                    {
+                        "description": "SendUserActivationReq",
+                        "name": "data",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/schema.SendUserActivationReq"
                         }
                     }
                 ],
@@ -2009,12 +2130,12 @@
                 "summary": "Accepted",
                 "parameters": [
                     {
-                        "description": "AnswerAcceptedReq",
+                        "description": "AcceptAnswerReq",
                         "name": "data",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/schema.AnswerAcceptedReq"
+                            "$ref": "#/definitions/schema.AcceptAnswerReq"
                         }
                     }
                 ],
@@ -2114,6 +2235,45 @@
                         "description": "OK",
                         "schema": {
                             "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/answer/api/v1/answer/recover": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "recover deleted answer",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Answer"
+                ],
+                "summary": "recover answer",
+                "parameters": [
+                    {
+                        "description": "answer",
+                        "name": "data",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/schema.RecoverAnswerReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.RespBody"
                         }
                     }
                 }
@@ -3432,7 +3592,7 @@
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "user's vote",
+                "description": "get user personal votes",
                 "consumes": [
                     "application/json"
                 ],
@@ -3442,7 +3602,7 @@
                 "tags": [
                     "Activity"
                 ],
-                "summary": "user's votes",
+                "summary": "get user personal votes",
                 "parameters": [
                     {
                         "type": "integer",
@@ -3898,6 +4058,45 @@
                 }
             }
         },
+        "/answer/api/v1/question/recover": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "recover deleted question",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Question"
+                ],
+                "summary": "recover deleted question",
+                "parameters": [
+                    {
+                        "description": "question",
+                        "name": "data",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/schema.QuestionRecoverReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.RespBody"
+                        }
+                    }
+                }
+            }
+        },
         "/answer/api/v1/question/reopen": {
             "put": {
                 "security": [
@@ -3944,7 +4143,7 @@
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "add question title like",
+                "description": "fuzzy query similar questions based on title",
                 "consumes": [
                     "application/json"
                 ],
@@ -3954,7 +4153,7 @@
                 "tags": [
                     "Question"
                 ],
-                "summary": "add question title like",
+                "summary": "fuzzy query similar questions based on title",
                 "parameters": [
                     {
                         "type": "string",
@@ -4421,7 +4620,39 @@
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/schema.SearchListResp"
+                                            "$ref": "#/definitions/schema.SearchResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/answer/api/v1/search/desc": {
+            "get": {
+                "description": "get search description",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Search"
+                ],
+                "summary": "get search description",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/handler.RespBody"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/schema.SearchResp"
                                         }
                                     }
                                 }
@@ -4642,6 +4873,40 @@
                         "required": true,
                         "schema": {
                             "$ref": "#/definitions/schema.RemoveTagReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.RespBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/answer/api/v1/tag/recover": {
+            "post": {
+                "description": "recover delete tag",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tag"
+                ],
+                "summary": "recover delete tag",
+                "parameters": [
+                    {
+                        "description": "tag",
+                        "name": "data",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/schema.RecoverTagReq"
                         }
                     }
                 ],
@@ -5001,29 +5266,6 @@
                 }
             }
         },
-        "/answer/api/v1/user/email/notification": {
-            "put": {
-                "description": "unsubscribe email notification",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "User"
-                ],
-                "summary": "unsubscribe email notification",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handler.RespBody"
-                        }
-                    }
-                }
-            }
-        },
         "/answer/api/v1/user/email/verification": {
             "post": {
                 "description": "UserVerifyEmail",
@@ -5312,7 +5554,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/schema.UserEmailLogin"
+                            "$ref": "#/definitions/schema.UserEmailLoginReq"
                         }
                     }
                 ],
@@ -5361,14 +5603,14 @@
                 }
             }
         },
-        "/answer/api/v1/user/notice/set": {
-            "post": {
+        "/answer/api/v1/user/notification/config": {
+            "put": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "UserNoticeSet",
+                "description": "update user's notification config",
                 "consumes": [
                     "application/json"
                 ],
@@ -5378,18 +5620,44 @@
                 "tags": [
                     "User"
                 ],
-                "summary": "UserNoticeSet",
+                "summary": "update user's notification config",
                 "parameters": [
                     {
-                        "description": "UserNoticeSetRequest",
+                        "description": "UpdateUserNotificationConfigReq",
                         "name": "data",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/schema.UserNoticeSetRequest"
+                            "$ref": "#/definitions/schema.UpdateUserNotificationConfigReq"
                         }
                     }
                 ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.RespBody"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "get user's notification config",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "User"
+                ],
+                "summary": "get user's notification config",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -5402,11 +5670,45 @@
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/schema.UserNoticeSetResp"
+                                            "$ref": "#/definitions/schema.GetUserNotificationConfigResp"
                                         }
                                     }
                                 }
                             ]
+                        }
+                    }
+                }
+            }
+        },
+        "/answer/api/v1/user/notification/unsubscribe": {
+            "put": {
+                "description": "unsubscribe notification",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "User"
+                ],
+                "summary": "unsubscribe notification",
+                "parameters": [
+                    {
+                        "description": "UserUnsubscribeNotificationReq",
+                        "name": "data",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/schema.UserUnsubscribeNotificationReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.RespBody"
                         }
                     }
                 }
@@ -6033,6 +6335,15 @@
         }
     },
     "definitions": {
+        "constant.NotificationChannelKey": {
+            "type": "string",
+            "enum": [
+                "email"
+            ],
+            "x-enum-varnames": [
+                "EmailChannel"
+            ]
+        },
         "constant.Privilege": {
             "type": "object",
             "properties": {
@@ -6136,6 +6447,9 @@
                     "type": "string",
                     "maxLength": 30
                 },
+                "login_required": {
+                    "type": "boolean"
+                },
                 "name": {
                     "type": "string",
                     "maxLength": 30
@@ -6162,6 +6476,21 @@
                     "type": "integer"
                 },
                 "list": {}
+            }
+        },
+        "schema.AcceptAnswerReq": {
+            "type": "object",
+            "required": [
+                "question_id"
+            ],
+            "properties": {
+                "answer_id": {
+                    "type": "string"
+                },
+                "question_id": {
+                    "type": "string",
+                    "maxLength": 30
+                }
             }
         },
         "schema.ActObjectInfo": {
@@ -6211,9 +6540,6 @@
                 "created_at": {
                     "type": "integer"
                 },
-                "id": {
-                    "type": "string"
-                },
                 "object_id": {
                     "type": "string"
                 },
@@ -6223,11 +6549,8 @@
                 "revision_id": {
                     "type": "string"
                 },
-                "user_display_name": {
-                    "type": "string"
-                },
-                "username": {
-                    "type": "string"
+                "user_info": {
+                    "$ref": "#/definitions/schema.UserBasicInfo"
                 }
             }
         },
@@ -6252,6 +6575,13 @@
                 "original_text"
             ],
             "properties": {
+                "captcha_code": {
+                    "type": "string"
+                },
+                "captcha_id": {
+                    "description": "captcha_id",
+                    "type": "string"
+                },
                 "mention_username_list": {
                     "description": "@ user id list",
                     "type": "array",
@@ -6282,6 +6612,13 @@
                 "report_type"
             ],
             "properties": {
+                "captcha_code": {
+                    "type": "string"
+                },
+                "captcha_id": {
+                    "description": "captcha_id",
+                    "type": "string"
+                },
                 "content": {
                     "description": "report content",
                     "type": "string",
@@ -6333,7 +6670,8 @@
             "properties": {
                 "display_name": {
                     "type": "string",
-                    "maxLength": 30
+                    "maxLength": 30,
+                    "minLength": 4
                 },
                 "email": {
                     "type": "string",
@@ -6346,36 +6684,51 @@
                 }
             }
         },
-        "schema.AdminSetAnswerStatusRequest": {
+        "schema.AddUsersReq": {
             "type": "object",
+            "properties": {
+                "users": {
+                    "description": "users info line by line",
+                    "type": "string"
+                }
+            }
+        },
+        "schema.AdminUpdateAnswerStatusReq": {
+            "type": "object",
+            "required": [
+                "answer_id",
+                "status"
+            ],
             "properties": {
                 "answer_id": {
                     "type": "string"
                 },
                 "status": {
-                    "type": "string"
+                    "type": "string",
+                    "enum": [
+                        "available",
+                        "deleted"
+                    ]
                 }
             }
         },
-        "schema.AdminSetQuestionStatusRequest": {
+        "schema.AdminUpdateQuestionStatusReq": {
             "type": "object",
+            "required": [
+                "question_id",
+                "status"
+            ],
             "properties": {
                 "question_id": {
                     "type": "string"
                 },
                 "status": {
-                    "type": "string"
-                }
-            }
-        },
-        "schema.AnswerAcceptedReq": {
-            "type": "object",
-            "properties": {
-                "answer_id": {
-                    "type": "string"
-                },
-                "question_id": {
-                    "type": "string"
+                    "type": "string",
+                    "enum": [
+                        "available",
+                        "closed",
+                        "deleted"
+                    ]
                 }
             }
         },
@@ -6385,6 +6738,12 @@
                 "content"
             ],
             "properties": {
+                "captcha_code": {
+                    "type": "string"
+                },
+                "captcha_id": {
+                    "type": "string"
+                },
                 "content": {
                     "type": "string",
                     "maxLength": 65535,
@@ -6401,6 +6760,12 @@
                 "content"
             ],
             "properties": {
+                "captcha_code": {
+                    "type": "string"
+                },
+                "captcha_id": {
+                    "type": "string"
+                },
                 "content": {
                     "type": "string",
                     "maxLength": 65535,
@@ -6831,14 +7196,11 @@
                     "type": "integer"
                 },
                 "have_password": {
+                    "description": "user have password",
                     "type": "boolean"
                 },
                 "id": {
                     "description": "user id",
-                    "type": "string"
-                },
-                "ip_info": {
-                    "description": "ip info",
                     "type": "string"
                 },
                 "language": {
@@ -7070,7 +7432,7 @@
                     }
                 },
                 "selected_level": {
-                    "type": "integer"
+                    "$ref": "#/definitions/schema.PrivilegeLevel"
                 }
             }
         },
@@ -7385,6 +7747,37 @@
                 }
             }
         },
+        "schema.GetUserActivationResp": {
+            "type": "object",
+            "properties": {
+                "activation_url": {
+                    "type": "string"
+                }
+            }
+        },
+        "schema.GetUserNotificationConfigResp": {
+            "type": "object",
+            "properties": {
+                "all_new_question": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/schema.NotificationChannelConfig"
+                    }
+                },
+                "all_new_question_for_following_tags": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/schema.NotificationChannelConfig"
+                    }
+                },
+                "inbox": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/schema.NotificationChannelConfig"
+                    }
+                }
+            }
+        },
         "schema.GetUserPageResp": {
             "type": "object",
             "properties": {
@@ -7496,6 +7889,17 @@
                 }
             }
         },
+        "schema.NotificationChannelConfig": {
+            "type": "object",
+            "properties": {
+                "enable": {
+                    "type": "boolean"
+                },
+                "key": {
+                    "$ref": "#/definitions/constant.NotificationChannelKey"
+                }
+            }
+        },
         "schema.NotificationClearIDRequest": {
             "type": "object",
             "properties": {
@@ -7561,11 +7965,24 @@
                 }
             }
         },
+        "schema.PrivilegeLevel": {
+            "type": "integer",
+            "enum": [
+                1,
+                2,
+                3
+            ],
+            "x-enum-varnames": [
+                "PrivilegeLevel1",
+                "PrivilegeLevel2",
+                "PrivilegeLevel3"
+            ]
+        },
         "schema.PrivilegeOption": {
             "type": "object",
             "properties": {
                 "level": {
-                    "type": "integer"
+                    "$ref": "#/definitions/schema.PrivilegeLevel"
                 },
                 "level_desc": {
                     "type": "string"
@@ -7586,6 +8003,13 @@
                 "title"
             ],
             "properties": {
+                "captcha_code": {
+                    "type": "string"
+                },
+                "captcha_id": {
+                    "description": "captcha_id",
+                    "type": "string"
+                },
                 "content": {
                     "description": "content",
                     "type": "string",
@@ -7621,6 +8045,13 @@
                     "maxLength": 65535,
                     "minLength": 6
                 },
+                "captcha_code": {
+                    "type": "string"
+                },
+                "captcha_id": {
+                    "description": "captcha_id",
+                    "type": "string"
+                },
                 "content": {
                     "description": "content",
                     "type": "string",
@@ -7651,11 +8082,11 @@
         "schema.QuestionPageReq": {
             "type": "object",
             "properties": {
-                "inDays": {
+                "in_days": {
                     "type": "integer",
                     "minimum": 1
                 },
-                "orderCond": {
+                "order": {
                     "type": "string",
                     "enum": [
                         "newest",
@@ -7669,7 +8100,7 @@
                     "type": "integer",
                     "minimum": 1
                 },
-                "pageSize": {
+                "page_size": {
                     "type": "integer",
                     "minimum": 1
                 },
@@ -7768,7 +8199,21 @@
                 "rank": {
                     "type": "integer"
                 },
+                "status": {
+                    "type": "string"
+                },
                 "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "schema.QuestionRecoverReq": {
+            "type": "object",
+            "required": [
+                "question_id"
+            ],
+            "properties": {
+                "question_id": {
                     "type": "string"
                 }
             }
@@ -7782,6 +8227,13 @@
                 "title"
             ],
             "properties": {
+                "captcha_code": {
+                    "type": "string"
+                },
+                "captcha_id": {
+                    "description": "captcha_id",
+                    "type": "string"
+                },
                 "content": {
                     "description": "content",
                     "type": "string",
@@ -7823,6 +8275,13 @@
                 "id"
             ],
             "properties": {
+                "captcha_code": {
+                    "type": "string"
+                },
+                "captcha_id": {
+                    "description": "captcha_id",
+                    "type": "string"
+                },
                 "id": {
                     "type": "string"
                 },
@@ -7834,14 +8293,41 @@
                 }
             }
         },
+        "schema.RecoverAnswerReq": {
+            "type": "object",
+            "required": [
+                "answer_id"
+            ],
+            "properties": {
+                "answer_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "schema.RecoverTagReq": {
+            "type": "object",
+            "required": [
+                "tag_id"
+            ],
+            "properties": {
+                "tag_id": {
+                    "type": "string"
+                }
+            }
+        },
         "schema.RemoveAnswerReq": {
             "type": "object",
             "required": [
                 "id"
             ],
             "properties": {
+                "captcha_code": {
+                    "type": "string"
+                },
+                "captcha_id": {
+                    "type": "string"
+                },
                 "id": {
-                    "description": "answer id",
                     "type": "string"
                 }
             }
@@ -7852,6 +8338,13 @@
                 "comment_id"
             ],
             "properties": {
+                "captcha_code": {
+                    "type": "string"
+                },
+                "captcha_id": {
+                    "description": "captcha_id",
+                    "type": "string"
+                },
                 "comment_id": {
                     "description": "comment id",
                     "type": "string"
@@ -7864,6 +8357,13 @@
                 "id"
             ],
             "properties": {
+                "captcha_code": {
+                    "type": "string"
+                },
+                "captcha_id": {
+                    "description": "captcha_id",
+                    "type": "string"
+                },
                 "id": {
                     "description": "question id",
                     "type": "string"
@@ -7925,24 +8425,6 @@
                 }
             }
         },
-        "schema.SearchListResp": {
-            "type": "object",
-            "properties": {
-                "count": {
-                    "type": "integer"
-                },
-                "extra": {
-                    "description": "extra fields"
-                },
-                "list": {
-                    "description": "search response",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/schema.SearchResp"
-                    }
-                }
-            }
-        },
         "schema.SearchObject": {
             "type": "object",
             "properties": {
@@ -7980,22 +8462,76 @@
                 },
                 "user_info": {
                     "description": "user info",
-                    "$ref": "#/definitions/schema.UserBasicInfo"
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/schema.SearchObjectUser"
+                        }
+                    ]
                 },
                 "vote_count": {
                     "type": "integer"
                 }
             }
         },
+        "schema.SearchObjectUser": {
+            "type": "object",
+            "properties": {
+                "display_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "rank": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
         "schema.SearchResp": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                },
+                "list": {
+                    "description": "search response",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/schema.SearchResult"
+                    }
+                }
+            }
+        },
+        "schema.SearchResult": {
             "type": "object",
             "properties": {
                 "object": {
                     "description": "this object",
-                    "$ref": "#/definitions/schema.SearchObject"
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/schema.SearchObject"
+                        }
+                    ]
                 },
                 "object_type": {
                     "description": "object_type",
+                    "type": "string"
+                }
+            }
+        },
+        "schema.SendUserActivationReq": {
+            "type": "object",
+            "required": [
+                "user_id"
+            ],
+            "properties": {
+                "user_id": {
                     "type": "string"
                 }
             }
@@ -8174,7 +8710,7 @@
                     "type": "string"
                 },
                 "site_seo": {
-                    "$ref": "#/definitions/schema.SiteSeoReq"
+                    "$ref": "#/definitions/schema.SiteSeoResp"
                 },
                 "site_users": {
                     "$ref": "#/definitions/schema.SiteUsersResp"
@@ -8594,6 +9130,13 @@
                 "original_text"
             ],
             "properties": {
+                "captcha_code": {
+                    "type": "string"
+                },
+                "captcha_id": {
+                    "description": "whether user can delete it",
+                    "type": "string"
+                },
                 "comment_id": {
                     "description": "comment id",
                     "type": "string"
@@ -8622,31 +9165,25 @@
             "type": "object",
             "properties": {
                 "avatar": {
-                    "description": "avatar",
                     "$ref": "#/definitions/schema.AvatarInfo"
                 },
                 "bio": {
-                    "description": "bio",
                     "type": "string",
                     "maxLength": 4096
                 },
                 "display_name": {
-                    "description": "display_name",
                     "type": "string",
                     "maxLength": 30
                 },
                 "location": {
-                    "description": "location",
                     "type": "string",
                     "maxLength": 100
                 },
                 "username": {
-                    "description": "username",
                     "type": "string",
                     "maxLength": 30
                 },
                 "website": {
-                    "description": "website",
                     "type": "string",
                     "maxLength": 500
                 }
@@ -8690,9 +9227,13 @@
             ],
             "properties": {
                 "level": {
-                    "type": "integer",
                     "maximum": 3,
-                    "minimum": 1
+                    "minimum": 1,
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/schema.PrivilegeLevel"
+                        }
+                    ]
                 }
             }
         },
@@ -8802,6 +9343,29 @@
                 }
             }
         },
+        "schema.UpdateUserNotificationConfigReq": {
+            "type": "object",
+            "properties": {
+                "all_new_question": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/schema.NotificationChannelConfig"
+                    }
+                },
+                "all_new_question_for_following_tags": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/schema.NotificationChannelConfig"
+                    }
+                },
+                "inbox": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/schema.NotificationChannelConfig"
+                    }
+                }
+            }
+        },
         "schema.UpdateUserPasswordReq": {
             "type": "object",
             "required": [
@@ -8843,6 +9407,9 @@
                 "user_id"
             ],
             "properties": {
+                "remove_all_content": {
+                    "type": "boolean"
+                },
                 "status": {
                     "type": "string",
                     "enum": [
@@ -8861,39 +9428,27 @@
             "type": "object",
             "properties": {
                 "avatar": {
-                    "description": "avatar",
                     "type": "string"
                 },
                 "display_name": {
-                    "description": "display_name",
                     "type": "string"
                 },
                 "id": {
-                    "description": "user_id",
-                    "type": "string"
-                },
-                "ip_info": {
-                    "description": "ip info",
                     "type": "string"
                 },
                 "location": {
-                    "description": "location",
                     "type": "string"
                 },
                 "rank": {
-                    "description": "rank",
                     "type": "integer"
                 },
                 "status": {
-                    "description": "status",
                     "type": "string"
                 },
                 "username": {
-                    "description": "name",
                     "type": "string"
                 },
                 "website": {
-                    "description": "website",
                     "type": "string"
                 }
             }
@@ -8935,7 +9490,7 @@
                 }
             }
         },
-        "schema.UserEmailLogin": {
+        "schema.UserEmailLoginReq": {
             "type": "object",
             "required": [
                 "e_mail",
@@ -8943,20 +9498,16 @@
             ],
             "properties": {
                 "captcha_code": {
-                    "description": "captcha_code",
                     "type": "string"
                 },
                 "captcha_id": {
-                    "description": "captcha_id",
                     "type": "string"
                 },
                 "e_mail": {
-                    "description": "e_mail",
                     "type": "string",
                     "maxLength": 500
                 },
                 "pass": {
-                    "description": "password",
                     "type": "string",
                     "maxLength": 32,
                     "minLength": 8
@@ -9012,10 +9563,6 @@
                 },
                 "id": {
                     "description": "user id",
-                    "type": "string"
-                },
-                "ip_info": {
-                    "description": "ip info",
                     "type": "string"
                 },
                 "language": {
@@ -9094,22 +9641,6 @@
                 }
             }
         },
-        "schema.UserNoticeSetRequest": {
-            "type": "object",
-            "properties": {
-                "notice_switch": {
-                    "type": "boolean"
-                }
-            }
-        },
-        "schema.UserNoticeSetResp": {
-            "type": "object",
-            "properties": {
-                "notice_switch": {
-                    "type": "boolean"
-                }
-            }
-        },
         "schema.UserRankingResp": {
             "type": "object",
             "properties": {
@@ -9166,12 +9697,10 @@
             ],
             "properties": {
                 "code": {
-                    "description": "code",
                     "type": "string",
                     "maxLength": 100
                 },
                 "pass": {
-                    "description": "Password",
                     "type": "string",
                     "maxLength": 32
                 }
@@ -9186,25 +9715,20 @@
             ],
             "properties": {
                 "captcha_code": {
-                    "description": "captcha_code",
                     "type": "string"
                 },
                 "captcha_id": {
-                    "description": "captcha_id",
                     "type": "string"
                 },
                 "e_mail": {
-                    "description": "email",
                     "type": "string",
                     "maxLength": 500
                 },
                 "name": {
-                    "description": "name",
                     "type": "string",
                     "maxLength": 30
                 },
                 "pass": {
-                    "description": "password",
                     "type": "string",
                     "maxLength": 32,
                     "minLength": 8
@@ -9218,15 +9742,24 @@
             ],
             "properties": {
                 "captcha_code": {
-                    "description": "captcha_code",
                     "type": "string"
                 },
                 "captcha_id": {
-                    "description": "captcha_id",
                     "type": "string"
                 },
                 "e_mail": {
-                    "description": "e_mail",
+                    "type": "string",
+                    "maxLength": 500
+                }
+            }
+        },
+        "schema.UserUnsubscribeNotificationReq": {
+            "type": "object",
+            "required": [
+                "code"
+            ],
+            "properties": {
+                "code": {
                     "type": "string",
                     "maxLength": 500
                 }
@@ -9238,6 +9771,13 @@
                 "object_id"
             ],
             "properties": {
+                "captcha_code": {
+                    "type": "string"
+                },
+                "captcha_id": {
+                    "description": "captcha_id",
+                    "type": "string"
+                },
                 "is_cancel": {
                     "description": "is cancel",
                     "type": "boolean"

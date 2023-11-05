@@ -1,13 +1,34 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package htmltext
 
 import (
+	"github.com/Chain-Zhang/pinyin"
+	"github.com/apache/incubator-answer/pkg/checker"
 	"io"
 	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
 
-	"github.com/gosimple/slug"
+	"github.com/Machiel/slugify"
 	strip "github.com/grokify/html-strip-tags-go"
 )
 
@@ -46,14 +67,15 @@ func ClearText(html string) (text string) {
 }
 
 func UrlTitle(title string) (text string) {
-	title = ClearEmoji(title)
-	title = slug.Make(title)
-	// title = strings.ReplaceAll(title, " ", "-")
+	title = convertChinese(title)
+	title = clearEmoji(title)
+	title = slugify.Slugify(title)
 	title = url.QueryEscape(title)
+	title = cutLongTitle(title)
 	return title
 }
 
-func ClearEmoji(s string) string {
+func clearEmoji(s string) string {
 	ret := ""
 	rs := []rune(s)
 	for i := 0; i < len(rs); i++ {
@@ -62,6 +84,25 @@ func ClearEmoji(s string) string {
 		}
 	}
 	return ret
+}
+
+func convertChinese(content string) string {
+	has := checker.IsChinese(content)
+	if !has {
+		return content
+	}
+	str, err := pinyin.New(content).Split("-").Mode(pinyin.WithoutTone).Convert()
+	if err != nil {
+		return content
+	}
+	return str
+}
+
+func cutLongTitle(title string) string {
+	if len(title) > 150 {
+		return title[0:150]
+	}
+	return title
 }
 
 // FetchExcerpt return the excerpt from the HTML string

@@ -1,29 +1,52 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package answercommon
 
 import (
 	"context"
 
-	"github.com/answerdev/answer/internal/entity"
-	"github.com/answerdev/answer/internal/schema"
-	"github.com/answerdev/answer/pkg/htmltext"
+	"github.com/apache/incubator-answer/internal/base/handler"
+	"github.com/apache/incubator-answer/internal/entity"
+	"github.com/apache/incubator-answer/internal/schema"
+	"github.com/apache/incubator-answer/pkg/htmltext"
+	"github.com/apache/incubator-answer/pkg/uid"
 )
 
 type AnswerRepo interface {
 	AddAnswer(ctx context.Context, answer *entity.Answer) (err error)
 	RemoveAnswer(ctx context.Context, id string) (err error)
-	UpdateAnswer(ctx context.Context, answer *entity.Answer, Colar []string) (err error)
+	RecoverAnswer(ctx context.Context, answerID string) (err error)
+	UpdateAnswer(ctx context.Context, answer *entity.Answer, cols []string) (err error)
 	GetAnswer(ctx context.Context, id string) (answer *entity.Answer, exist bool, err error)
 	GetAnswerList(ctx context.Context, answer *entity.Answer) (answerList []*entity.Answer, err error)
 	GetAnswerPage(ctx context.Context, page, pageSize int, answer *entity.Answer) (answerList []*entity.Answer, total int64, err error)
-	UpdateAccepted(ctx context.Context, id string, questionID string) error
-	GetByID(ctx context.Context, id string) (*entity.Answer, bool, error)
+	UpdateAcceptedStatus(ctx context.Context, acceptedAnswerID string, questionID string) error
+	GetByID(ctx context.Context, answerID string) (*entity.Answer, bool, error)
 	GetCountByQuestionID(ctx context.Context, questionID string) (int64, error)
 	GetCountByUserID(ctx context.Context, userID string) (int64, error)
 	GetByUserIDQuestionID(ctx context.Context, userID string, questionID string) (*entity.Answer, bool, error)
 	SearchList(ctx context.Context, search *entity.AnswerSearch) ([]*entity.Answer, int64, error)
-	AdminSearchList(ctx context.Context, search *entity.AdminAnswerSearch) ([]*entity.Answer, int64, error)
-	UpdateAnswerStatus(ctx context.Context, answer *entity.Answer) (err error)
+	AdminSearchList(ctx context.Context, search *schema.AdminAnswerPageReq) ([]*entity.Answer, int64, error)
+	UpdateAnswerStatus(ctx context.Context, answerID string, status int) (err error)
 	GetAnswerCount(ctx context.Context) (count int64, err error)
+	RemoveAllUserAnswer(ctx context.Context, userID string) (err error)
 }
 
 // AnswerCommon user service
@@ -45,11 +68,16 @@ func (as *AnswerCommon) SearchAnswered(ctx context.Context, userID, questionID s
 	return has, nil
 }
 
-func (as *AnswerCommon) AdminSearchList(ctx context.Context, search *entity.AdminAnswerSearch) ([]*entity.Answer, int64, error) {
-	if search.Status == 0 {
-		search.Status = 1
+func (as *AnswerCommon) AdminSearchList(ctx context.Context, req *schema.AdminAnswerPageReq) (
+	resp []*entity.Answer, count int64, err error) {
+	resp, count, err = as.answerRepo.AdminSearchList(ctx, req)
+	if handler.GetEnableShortID(ctx) {
+		for _, item := range resp {
+			item.ID = uid.EnShortID(item.ID)
+			item.QuestionID = uid.EnShortID(item.QuestionID)
+		}
 	}
-	return as.answerRepo.AdminSearchList(ctx, search)
+	return resp, count, err
 }
 
 func (as *AnswerCommon) Search(ctx context.Context, search *entity.AnswerSearch) ([]*entity.Answer, int64, error) {
@@ -76,6 +104,7 @@ func (as *AnswerCommon) ShowFormat(ctx context.Context, data *entity.Answer) *sc
 	info.UserID = data.UserID
 	info.UpdateUserID = data.LastEditUserID
 	info.Status = data.Status
+	info.MemberActions = make([]*schema.PermissionMemberAction, 0)
 	return &info
 }
 

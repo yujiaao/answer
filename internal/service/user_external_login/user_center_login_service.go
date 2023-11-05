@@ -1,3 +1,22 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package user_external_login
 
 import (
@@ -5,19 +24,19 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/answerdev/answer/internal/base/constant"
-	"github.com/answerdev/answer/internal/base/handler"
-	"github.com/answerdev/answer/internal/base/reason"
-	"github.com/answerdev/answer/internal/base/translator"
-	"github.com/answerdev/answer/internal/entity"
-	"github.com/answerdev/answer/internal/schema"
-	"github.com/answerdev/answer/internal/service/activity"
-	"github.com/answerdev/answer/internal/service/siteinfo_common"
-	usercommon "github.com/answerdev/answer/internal/service/user_common"
-	"github.com/answerdev/answer/pkg/checker"
-	"github.com/answerdev/answer/pkg/converter"
-	"github.com/answerdev/answer/pkg/random"
-	"github.com/answerdev/answer/plugin"
+	"github.com/apache/incubator-answer/internal/base/constant"
+	"github.com/apache/incubator-answer/internal/base/handler"
+	"github.com/apache/incubator-answer/internal/base/reason"
+	"github.com/apache/incubator-answer/internal/base/translator"
+	"github.com/apache/incubator-answer/internal/entity"
+	"github.com/apache/incubator-answer/internal/schema"
+	"github.com/apache/incubator-answer/internal/service/activity"
+	"github.com/apache/incubator-answer/internal/service/siteinfo_common"
+	usercommon "github.com/apache/incubator-answer/internal/service/user_common"
+	"github.com/apache/incubator-answer/pkg/checker"
+	"github.com/apache/incubator-answer/pkg/converter"
+	"github.com/apache/incubator-answer/pkg/random"
+	"github.com/apache/incubator-answer/plugin"
 	"github.com/segmentfault/pacman/log"
 )
 
@@ -27,7 +46,7 @@ type UserCenterLoginService struct {
 	userExternalLoginRepo UserExternalLoginRepo
 	userCommonService     *usercommon.UserCommon
 	userActivity          activity.UserActiveActivityRepo
-	siteInfoCommonService *siteinfo_common.SiteInfoCommonService
+	siteInfoCommonService siteinfo_common.SiteInfoCommonService
 }
 
 // NewUserCenterLoginService new user external login service
@@ -36,7 +55,7 @@ func NewUserCenterLoginService(
 	userCommonService *usercommon.UserCommon,
 	userExternalLoginRepo UserExternalLoginRepo,
 	userActivity activity.UserActiveActivityRepo,
-	siteInfoCommonService *siteinfo_common.SiteInfoCommonService,
+	siteInfoCommonService siteinfo_common.SiteInfoCommonService,
 ) *UserCenterLoginService {
 	return &UserCenterLoginService{
 		userRepo:              userRepo,
@@ -156,7 +175,9 @@ func (us *UserCenterLoginService) registerNewUser(ctx context.Context, provider 
 		MetaInfo:   string(metaInfo),
 	}
 	err = us.userExternalLoginRepo.AddUserExternalLogin(ctx, newExternalUserInfo)
-
+	if err != nil {
+		return nil, err
+	}
 	return userInfo, nil
 }
 

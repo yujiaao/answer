@@ -1,3 +1,22 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package tag_common
 
 import (
@@ -7,15 +26,15 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/answerdev/answer/internal/base/constant"
-	"github.com/answerdev/answer/internal/base/reason"
-	"github.com/answerdev/answer/internal/base/validator"
-	"github.com/answerdev/answer/internal/entity"
-	"github.com/answerdev/answer/internal/schema"
-	"github.com/answerdev/answer/internal/service/activity_queue"
-	"github.com/answerdev/answer/internal/service/revision_common"
-	"github.com/answerdev/answer/internal/service/siteinfo_common"
-	"github.com/answerdev/answer/pkg/converter"
+	"github.com/apache/incubator-answer/internal/base/constant"
+	"github.com/apache/incubator-answer/internal/base/reason"
+	"github.com/apache/incubator-answer/internal/base/validator"
+	"github.com/apache/incubator-answer/internal/entity"
+	"github.com/apache/incubator-answer/internal/schema"
+	"github.com/apache/incubator-answer/internal/service/activity_queue"
+	"github.com/apache/incubator-answer/internal/service/revision_common"
+	"github.com/apache/incubator-answer/internal/service/siteinfo_common"
+	"github.com/apache/incubator-answer/pkg/converter"
 	"github.com/segmentfault/pacman/errors"
 	"github.com/segmentfault/pacman/log"
 )
@@ -24,7 +43,7 @@ type TagCommonRepo interface {
 	AddTagList(ctx context.Context, tagList []*entity.Tag) (err error)
 	GetTagListByIDs(ctx context.Context, ids []string) (tagList []*entity.Tag, err error)
 	GetTagBySlugName(ctx context.Context, slugName string) (tagInfo *entity.Tag, exist bool, err error)
-	GetTagListByName(ctx context.Context, name string, hasReserved bool) (tagList []*entity.Tag, err error)
+	GetTagListByName(ctx context.Context, name string, recommend, reserved bool) (tagList []*entity.Tag, err error)
 	GetTagListByNames(ctx context.Context, names []string) (tagList []*entity.Tag, err error)
 	GetTagByID(ctx context.Context, tagID string, includeDeleted bool) (tag *entity.Tag, exist bool, err error)
 	GetTagPage(ctx context.Context, page, pageSize int, tag *entity.Tag, queryCond string) (tagList []*entity.Tag, total int64, err error)
@@ -37,6 +56,8 @@ type TagCommonRepo interface {
 type TagRepo interface {
 	RemoveTag(ctx context.Context, tagID string) (err error)
 	UpdateTag(ctx context.Context, tag *entity.Tag) (err error)
+	RecoverTag(ctx context.Context, tagID string) (err error)
+	MustGetTagByNameOrID(ctx context.Context, tagID, slugName string) (tag *entity.Tag, exist bool, err error)
 	UpdateTagSynonym(ctx context.Context, tagSlugNameList []string, mainTagID int64, mainTagSlugName string) (err error)
 	GetTagSynonymCount(ctx context.Context, tagID string) (count int64, err error)
 	GetTagList(ctx context.Context, tag *entity.Tag) (tagList []*entity.Tag, err error)
@@ -45,6 +66,7 @@ type TagRepo interface {
 type TagRelRepo interface {
 	AddTagRelList(ctx context.Context, tagList []*entity.TagRel) (err error)
 	RemoveTagRelListByObjectID(ctx context.Context, objectID string) (err error)
+	RecoverTagRelListByObjectID(ctx context.Context, objectID string) (err error)
 	ShowTagRelListByObjectID(ctx context.Context, objectID string) (err error)
 	HideTagRelListByObjectID(ctx context.Context, objectID string) (err error)
 	RemoveTagRelListByIDs(ctx context.Context, ids []int64) (err error)
@@ -57,11 +79,12 @@ type TagRelRepo interface {
 
 // TagCommonService user service
 type TagCommonService struct {
-	revisionService *revision_common.RevisionService
-	tagCommonRepo   TagCommonRepo
-	tagRelRepo      TagRelRepo
-	tagRepo         TagRepo
-	siteInfoService *siteinfo_common.SiteInfoCommonService
+	revisionService      *revision_common.RevisionService
+	tagCommonRepo        TagCommonRepo
+	tagRelRepo           TagRelRepo
+	tagRepo              TagRepo
+	siteInfoService      siteinfo_common.SiteInfoCommonService
+	activityQueueService activity_queue.ActivityQueueService
 }
 
 // NewTagCommonService new tag service
@@ -70,20 +93,22 @@ func NewTagCommonService(
 	tagRelRepo TagRelRepo,
 	tagRepo TagRepo,
 	revisionService *revision_common.RevisionService,
-	siteInfoService *siteinfo_common.SiteInfoCommonService,
+	siteInfoService siteinfo_common.SiteInfoCommonService,
+	activityQueueService activity_queue.ActivityQueueService,
 ) *TagCommonService {
 	return &TagCommonService{
-		tagCommonRepo:   tagCommonRepo,
-		tagRelRepo:      tagRelRepo,
-		tagRepo:         tagRepo,
-		revisionService: revisionService,
-		siteInfoService: siteInfoService,
+		tagCommonRepo:        tagCommonRepo,
+		tagRelRepo:           tagRelRepo,
+		tagRepo:              tagRepo,
+		revisionService:      revisionService,
+		siteInfoService:      siteInfoService,
+		activityQueueService: activityQueueService,
 	}
 }
 
 // SearchTagLike get tag list all
 func (ts *TagCommonService) SearchTagLike(ctx context.Context, req *schema.SearchTagLikeReq) (resp []schema.SearchTagLikeResp, err error) {
-	tags, err := ts.tagCommonRepo.GetTagListByName(ctx, req.Tag, req.IsAdmin)
+	tags, err := ts.tagCommonRepo.GetTagListByName(ctx, req.Tag, len(req.Tag) == 0, false)
 	if err != nil {
 		return
 	}
@@ -94,35 +119,39 @@ func (ts *TagCommonService) SearchTagLike(ctx context.Context, req *schema.Searc
 			mainTagId = append(mainTagId, converter.IntToString(tag.MainTagID))
 		}
 	}
-	mainTagList, err := ts.tagCommonRepo.GetTagListByIDs(ctx, mainTagId)
-	if err != nil {
-		return
-	}
 	mainTagMap := make(map[string]*entity.Tag)
-	for _, tag := range mainTagList {
-		mainTagMap[tag.ID] = tag
-	}
-	for _, tag := range tags {
-		if tag.MainTagID != 0 {
-			_, ok := mainTagMap[converter.IntToString(tag.MainTagID)]
-			if ok {
-				tag.SlugName = mainTagMap[converter.IntToString(tag.MainTagID)].SlugName
-				tag.DisplayName = mainTagMap[converter.IntToString(tag.MainTagID)].DisplayName
-				tag.Reserved = mainTagMap[converter.IntToString(tag.MainTagID)].Reserved
-				tag.Recommend = mainTagMap[converter.IntToString(tag.MainTagID)].Recommend
-			}
+	if len(mainTagId) > 0 {
+		mainTagList, err := ts.tagCommonRepo.GetTagListByIDs(ctx, mainTagId)
+		if err != nil {
+			return nil, err
+		}
+		for _, tag := range mainTagList {
+			mainTagMap[tag.ID] = tag
 		}
 	}
-	RepetitiveTag := make(map[string]bool)
 	for _, tag := range tags {
-		if _, ok := RepetitiveTag[tag.SlugName]; !ok {
+		if tag.MainTagID == 0 {
+			continue
+		}
+		mainTagID := converter.IntToString(tag.MainTagID)
+		if _, ok := mainTagMap[mainTagID]; ok {
+			tag.SlugName = mainTagMap[mainTagID].SlugName
+			tag.DisplayName = mainTagMap[mainTagID].DisplayName
+			tag.Reserved = mainTagMap[mainTagID].Reserved
+			tag.Recommend = mainTagMap[mainTagID].Recommend
+		}
+	}
+	resp = make([]schema.SearchTagLikeResp, 0)
+	repetitiveTag := make(map[string]bool)
+	for _, tag := range tags {
+		if _, ok := repetitiveTag[tag.SlugName]; !ok {
 			item := schema.SearchTagLikeResp{}
 			item.SlugName = tag.SlugName
 			item.DisplayName = tag.DisplayName
 			item.Recommend = tag.Recommend
 			item.Reserved = tag.Reserved
 			resp = append(resp, item)
-			RepetitiveTag[tag.SlugName] = true
+			repetitiveTag[tag.SlugName] = true
 		}
 	}
 	return resp, nil
@@ -429,6 +458,9 @@ func (ts *TagCommonService) tagFormatRecommendAndReserved(ctx context.Context, t
 // BatchGetObjectTag batch get object tag
 func (ts *TagCommonService) BatchGetObjectTag(ctx context.Context, objectIds []string) (map[string][]*schema.TagResp, error) {
 	objectIDTagMap := make(map[string][]*schema.TagResp)
+	if len(objectIds) == 0 {
+		return objectIDTagMap, nil
+	}
 	objectTagRelList, err := ts.tagRelRepo.BatchGetObjectTagRelList(ctx, objectIds)
 	if err != nil {
 		return objectIDTagMap, err
@@ -645,7 +677,7 @@ func (ts *TagCommonService) ObjectChangeTag(ctx context.Context, objectTagData *
 			if err != nil {
 				return err
 			}
-			activity_queue.AddActivity(&schema.ActivityMsg{
+			ts.activityQueueService.Send(ctx, &schema.ActivityMsg{
 				UserID:           objectTagData.UserID,
 				ObjectID:         tag.ID,
 				OriginalObjectID: tag.ID,
@@ -701,6 +733,11 @@ func (ts *TagCommonService) RefreshTagCountByQuestionID(ctx context.Context, que
 // RemoveTagRelListByObjectID remove tag relation by object id
 func (ts *TagCommonService) RemoveTagRelListByObjectID(ctx context.Context, objectID string) (err error) {
 	return ts.tagRelRepo.RemoveTagRelListByObjectID(ctx, objectID)
+}
+
+// RecoverTagRelListByObjectID recover tag relation by object id
+func (ts *TagCommonService) RecoverTagRelListByObjectID(ctx context.Context, objectID string) (err error) {
+	return ts.tagRelRepo.RecoverTagRelListByObjectID(ctx, objectID)
 }
 
 func (ts *TagCommonService) HideTagRelListByObjectID(ctx context.Context, objectID string) (err error) {
@@ -845,7 +882,7 @@ func (ts *TagCommonService) UpdateTag(ctx context.Context, req *schema.UpdateTag
 		return err
 	}
 	if canUpdate {
-		activity_queue.AddActivity(&schema.ActivityMsg{
+		ts.activityQueueService.Send(ctx, &schema.ActivityMsg{
 			UserID:           req.UserID,
 			ObjectID:         tagInfo.ID,
 			OriginalObjectID: tagInfo.ID,

@@ -1,13 +1,13 @@
 .PHONY: build clean ui
 
-VERSION=1.1.0
+VERSION=1.2.0
 BIN=answer
 DIR_SRC=./cmd/answer
 DOCKER_CMD=docker
 
 GO_ENV=CGO_ENABLED=0 GO111MODULE=on
 Revision=$(shell git rev-parse --short HEAD)
-GO_FLAGS=-ldflags="-X github.com/answerdev/answer/cmd.Version=$(VERSION) -X 'github.com/answerdev/answer/cmd.Revision=$(Revision)' -X 'github.com/answerdev/answer/cmd.Time=`date +%s`' -extldflags -static"
+GO_FLAGS=-ldflags="-X github.com/apache/incubator-answer/cmd.Version=$(VERSION) -X 'github.com/apache/incubator-answer/cmd.Revision=$(Revision)' -X 'github.com/apache/incubator-answer/cmd.Time=`date +%s`' -extldflags -static"
 GO=$(GO_ENV) $(shell which go)
 
 build: generate
@@ -38,9 +38,9 @@ clean:
 
 install-ui-packages:
 	@corepack enable
-	@corepack prepare pnpm@v7.12.2 --activate
+	@corepack prepare pnpm@latest --activate
 
 ui:
-	@cd ui && pnpm install && pnpm build && cd -
+	@cd ui && pnpm pre-install && pnpm build && cd -
 
 all: clean build

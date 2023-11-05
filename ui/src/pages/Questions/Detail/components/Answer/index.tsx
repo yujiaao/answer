@@ -1,3 +1,22 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import { memo, FC, useEffect, useRef } from 'react';
 import { Button, Alert, Badge } from 'react-bootstrap';
 import { useTranslation } from 'react-i18next';
@@ -16,6 +35,7 @@ import {
 import { scrollToElementTop, bgFadeOut } from '@/utils';
 import { AnswerItem } from '@/common/interface';
 import { acceptanceAnswer } from '@/services';
+import { useRenderHtmlPlugin } from '@/utils/pluginKit';
 
 interface Props {
   data: AnswerItem;
@@ -23,7 +43,6 @@ interface Props {
   aid?: string;
   canAccept: boolean;
   questionTitle: string;
-  slugTitle: string;
   isLogged: boolean;
   callback: (type: string) => void;
 }
@@ -32,7 +51,6 @@ const Index: FC<Props> = ({
   data,
   isLogged,
   questionTitle = '',
-  slugTitle,
   callback,
   canAccept = false,
 }) => {
@@ -41,6 +59,8 @@ const Index: FC<Props> = ({
   });
   const [searchParams] = useSearchParams();
   const answerRef = useRef<HTMLDivElement>(null);
+  useRenderHtmlPlugin(answerRef.current);
+
   const acceptAnswer = () => {
     acceptanceAnswer({
       question_id: data.question_id,
@@ -67,9 +87,11 @@ const Index: FC<Props> = ({
       }, 100);
     }
   }, [data.id, answerRef.current]);
+
   if (!data?.id) {
     return null;
   }
+
   return (
     <div id={data.id} ref={answerRef} className="answer-item py-4">
       {data.status === 10 && (
@@ -130,7 +152,6 @@ const Index: FC<Props> = ({
             type="answer"
             isAccepted={data.accepted === 2}
             title={questionTitle}
-            slugTitle={slugTitle}
             callback={callback}
           />
         </div>

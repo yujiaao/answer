@@ -1,15 +1,36 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package plugin_common
 
 import (
 	"context"
 	"encoding/json"
+	"github.com/apache/incubator-answer/internal/base/data"
+	"github.com/apache/incubator-answer/internal/repo/search_sync"
 
-	"github.com/answerdev/answer/internal/base/constant"
-	"github.com/answerdev/answer/internal/base/reason"
-	"github.com/answerdev/answer/internal/entity"
-	"github.com/answerdev/answer/internal/schema"
-	"github.com/answerdev/answer/internal/service/config"
-	"github.com/answerdev/answer/plugin"
+	"github.com/apache/incubator-answer/internal/base/constant"
+	"github.com/apache/incubator-answer/internal/base/reason"
+	"github.com/apache/incubator-answer/internal/entity"
+	"github.com/apache/incubator-answer/internal/schema"
+	"github.com/apache/incubator-answer/internal/service/config"
+	"github.com/apache/incubator-answer/plugin"
 	"github.com/segmentfault/pacman/errors"
 	"github.com/segmentfault/pacman/log"
 )
@@ -23,12 +44,15 @@ type PluginConfigRepo interface {
 type PluginCommonService struct {
 	configService    *config.ConfigService
 	pluginConfigRepo PluginConfigRepo
+	data             *data.Data
 }
 
 // NewPluginCommonService new report service
 func NewPluginCommonService(
 	pluginConfigRepo PluginConfigRepo,
-	configService *config.ConfigService) *PluginCommonService {
+	configService *config.ConfigService,
+	data *data.Data,
+) *PluginCommonService {
 
 	// init plugin status
 	pluginStatus, err := configService.GetStringValue(context.TODO(), constant.PluginStatus)
@@ -61,6 +85,7 @@ func NewPluginCommonService(
 	return &PluginCommonService{
 		configService:    configService,
 		pluginConfigRepo: pluginConfigRepo,
+		data:             data,
 	}
 }
 
@@ -76,5 +101,16 @@ func (ps *PluginCommonService) UpdatePluginStatus(ctx context.Context) (err erro
 // UpdatePluginConfig update plugin config
 func (ps *PluginCommonService) UpdatePluginConfig(ctx context.Context, req *schema.UpdatePluginConfigReq) (err error) {
 	configValue, _ := json.Marshal(req.ConfigFields)
-	return ps.pluginConfigRepo.SavePluginConfig(ctx, req.PluginSlugName, string(configValue))
+	err = ps.pluginConfigRepo.SavePluginConfig(ctx, req.PluginSlugName, string(configValue))
+	if err != nil {
+		return err
+	}
+
+	_ = plugin.CallSearch(func(search plugin.Search) error {
+		if search.Info().SlugName == req.PluginSlugName {
+			search.RegisterSyncer(ctx, search_sync.NewPluginSyncer(ps.data))
+		}
+		return nil
+	})
+	return nil
 }

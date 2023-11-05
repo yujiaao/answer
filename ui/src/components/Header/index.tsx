@@ -1,3 +1,22 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import { FC, memo, useState, useEffect } from 'react';
 import {
   Navbar,
@@ -45,7 +64,7 @@ const Header: FC = () => {
   const siteInfo = siteInfoStore((state) => state.siteInfo);
   const brandingInfo = brandingStore((state) => state.branding);
   const loginSetting = loginSettingStore((state) => state.login);
-  const { updateReiview, updateVisible } = sideNavStore();
+  const { updateReview, updateVisible } = sideNavStore();
   const { data: redDot } = useQueryNotificationStatus();
   /**
    * Automatically append `tag` information when creating a question
@@ -57,7 +76,7 @@ const Header: FC = () => {
   }
 
   useEffect(() => {
-    updateReiview({
+    updateReview({
       can_revision: Boolean(redDot?.can_revision),
       revision: Number(redDot?.revision),
     });
@@ -82,7 +101,7 @@ const Header: FC = () => {
   };
 
   useEffect(() => {
-    if (q) {
+    if (q && location.pathname === '/search') {
       handleInput(q);
     }
   }, [q]);
@@ -94,6 +113,11 @@ const Header: FC = () => {
       if (toggle) {
         toggle?.click();
       }
+    }
+
+    // clear search input when navigate to other page
+    if (location.pathname !== '/search' && searchStr) {
+      setSearch('');
     }
   }, [location.pathname]);
 
@@ -126,13 +150,13 @@ const Header: FC = () => {
                 <img
                   className="d-none d-lg-block logo me-0"
                   src={brandingInfo.logo}
-                  alt=""
+                  alt={siteInfo.name}
                 />
 
                 <img
                   className="lg-none logo me-0"
                   src={brandingInfo.mobile_logo || brandingInfo.logo}
-                  alt=""
+                  alt={siteInfo.name}
                 />
               </>
             ) : (
@@ -178,6 +202,7 @@ const Header: FC = () => {
               className="w-100 maxw-400"
               onSubmit={handleSearch}>
               <FormControl
+                type="search"
                 placeholder={t('header.search.placeholder')}
                 className="placeholder-search"
                 value={searchStr}

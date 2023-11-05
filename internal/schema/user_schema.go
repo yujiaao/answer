@@ -1,13 +1,32 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package schema
 
 import (
 	"encoding/json"
 
-	"github.com/answerdev/answer/internal/base/constant"
-	"github.com/answerdev/answer/internal/base/validator"
-	"github.com/answerdev/answer/internal/entity"
-	"github.com/answerdev/answer/pkg/checker"
-	"github.com/answerdev/answer/pkg/converter"
+	"github.com/apache/incubator-answer/internal/base/constant"
+	"github.com/apache/incubator-answer/internal/base/validator"
+	"github.com/apache/incubator-answer/internal/entity"
+	"github.com/apache/incubator-answer/pkg/checker"
+	"github.com/apache/incubator-answer/pkg/converter"
 	"github.com/jinzhu/copier"
 )
 
@@ -59,8 +78,6 @@ type UserLoginResp struct {
 	Website string `json:"website"`
 	// location
 	Location string `json:"location"`
-	// ip info
-	IPInfo string `json:"ip_info"`
 	// language
 	Language string `json:"language"`
 	// access token
@@ -71,33 +88,28 @@ type UserLoginResp struct {
 	Status string `json:"status"`
 	// user have password
 	HavePassword bool `json:"have_password"`
+	// visit token
+	VisitToken string `json:"visit_token"`
 }
 
 func (r *UserLoginResp) ConvertFromUserEntity(userInfo *entity.User) {
 	_ = copier.Copy(r, userInfo)
 	r.CreatedAt = userInfo.CreatedAt.Unix()
 	r.LastLoginDate = userInfo.LastLoginDate.Unix()
-	r.Status = UserStatusShow[userInfo.Status]
+	r.Status = constant.ConvertUserStatus(userInfo.Status, userInfo.MailStatus)
 	r.HavePassword = len(userInfo.Pass) > 0
 }
 
 type GetCurrentLoginUserInfoResp struct {
 	*UserLoginResp
-	Avatar       *AvatarInfo `json:"avatar"`
-	HavePassword bool        `json:"have_password"`
+	Avatar *AvatarInfo `json:"avatar"`
 }
 
 func (r *GetCurrentLoginUserInfoResp) ConvertFromUserEntity(userInfo *entity.User) {
 	_ = copier.Copy(r, userInfo)
 	r.CreatedAt = userInfo.CreatedAt.Unix()
 	r.LastLoginDate = userInfo.LastLoginDate.Unix()
-	r.Status = UserStatusShow[userInfo.Status]
-}
-
-// GetUserStatusResp get user status info
-type GetUserStatusResp struct {
-	// user status
-	Status string `json:"status"`
+	r.Status = constant.ConvertUserStatus(userInfo.Status, userInfo.MailStatus)
 }
 
 // GetOtherUserInfoByUsernameResp get user response
@@ -141,10 +153,7 @@ func (r *GetOtherUserInfoByUsernameResp) ConvertFromUserEntity(userInfo *entity.
 	_ = copier.Copy(r, userInfo)
 	r.CreatedAt = userInfo.CreatedAt.Unix()
 	r.LastLoginDate = userInfo.LastLoginDate.Unix()
-	statusShow, ok := UserStatusShow[userInfo.Status]
-	if ok {
-		r.Status = statusShow
-	}
+	r.Status = constant.ConvertUserStatus(userInfo.Status, userInfo.MailStatus)
 	if userInfo.MailStatus == entity.EmailStatusToBeVerified {
 		statusMsgShow, ok := UserStatusShowMsg[11]
 		if ok {
@@ -159,50 +168,33 @@ func (r *GetOtherUserInfoByUsernameResp) ConvertFromUserEntity(userInfo *entity.
 }
 
 const (
-	MailStatePass   = 1
-	MailStateVerifi = 2
-
 	NoticeStatusOn  = 1
 	NoticeStatusOff = 2
-
-	ActionRecordTypeLogin      = "login"
-	ActionRecordTypeEmail      = "e_mail"
-	ActionRecordTypeFindPass   = "find_pass"
-	ActionRecordTypeModifyPass = "modify_pass"
 )
-
-var UserStatusShow = map[int]string{
-	1:  "normal",
-	9:  "forbidden",
-	10: "deleted",
-}
 
 var UserStatusShowMsg = map[int]string{
 	1:  "",
-	9:  "<strong>This user was suspended forever.</strong> This user doesn’t meet a community guideline.",
+	9:  "<strong>This user was suspended forever.</strong> This user doesn't meet a community guideline.",
 	10: "This user was deleted.",
 	11: "This user is inactive.",
 }
 
-// EmailLogin
-type UserEmailLogin struct {
-	Email       string `validate:"required,email,gt=0,lte=500" json:"e_mail"` // e_mail
-	Pass        string `validate:"required,gte=8,lte=32" json:"pass"`         // password
-	CaptchaID   string `json:"captcha_id"`                                    // captcha_id
-	CaptchaCode string `json:"captcha_code"`                                  // captcha_code
+// UserEmailLoginReq user email login request
+type UserEmailLoginReq struct {
+	Email       string `validate:"required,email,gt=0,lte=500" json:"e_mail"`
+	Pass        string `validate:"required,gte=8,lte=32" json:"pass"`
+	CaptchaID   string `json:"captcha_id"`
+	CaptchaCode string `json:"captcha_code"`
 }
 
 // UserRegisterReq user register request
 type UserRegisterReq struct {
-	// name
-	Name string `validate:"required,gt=3,lte=30" json:"name"`
-	// email
-	Email string `validate:"required,email,gt=0,lte=500" json:"e_mail" `
-	// password
+	Name        string `validate:"required,gt=3,lte=30" json:"name"`
+	Email       string `validate:"required,email,gt=0,lte=500" json:"e_mail" `
 	Pass        string `validate:"required,gte=8,lte=32" json:"pass"`
+	CaptchaID   string `json:"captcha_id"`
+	CaptchaCode string `json:"captcha_code"`
 	IP          string `json:"-" `
-	CaptchaID   string `json:"captcha_id"`   // captcha_id
-	CaptchaCode string `json:"captcha_code"` // captcha_code
 }
 
 func (u *UserRegisterReq) Check() (errFields []*validator.FormErrorField, err error) {
@@ -219,10 +211,10 @@ func (u *UserRegisterReq) Check() (errFields []*validator.FormErrorField, err er
 type UserModifyPasswordReq struct {
 	OldPass     string `validate:"omitempty,gte=8,lte=32" json:"old_pass"`
 	Pass        string `validate:"required,gte=8,lte=32" json:"pass"`
-	UserID      string `json:"-"`
-	AccessToken string `json:"-"`
 	CaptchaID   string `validate:"omitempty,gt=0,lte=500" json:"captcha_id"`
 	CaptchaCode string `validate:"omitempty,gt=0,lte=500" json:"captcha_code"`
+	UserID      string `json:"-"`
+	AccessToken string `json:"-"`
 }
 
 func (u *UserModifyPasswordReq) Check() (errFields []*validator.FormErrorField, err error) {
@@ -237,22 +229,15 @@ func (u *UserModifyPasswordReq) Check() (errFields []*validator.FormErrorField, 
 }
 
 type UpdateInfoRequest struct {
-	// display_name
-	DisplayName string `validate:"omitempty,gt=0,lte=30" json:"display_name"`
-	// username
-	Username string `validate:"omitempty,gt=3,lte=30" json:"username"`
-	// avatar
-	Avatar AvatarInfo `json:"avatar"`
-	// bio
-	Bio string `validate:"omitempty,gt=0,lte=4096" json:"bio"`
-	// bio
-	BioHTML string `json:"-"`
-	// website
-	Website string `validate:"omitempty,gt=0,lte=500" json:"website"`
-	// location
-	Location string `validate:"omitempty,gt=0,lte=100" json:"location"`
-	// user id
-	UserID string `json:"-" `
+	DisplayName string     `validate:"omitempty,gt=0,lte=30" json:"display_name"`
+	Username    string     `validate:"omitempty,gt=3,lte=30" json:"username"`
+	Avatar      AvatarInfo `json:"avatar"`
+	Bio         string     `validate:"omitempty,gt=0,lte=4096" json:"bio"`
+	BioHTML     string     `json:"-"`
+	Website     string     `validate:"omitempty,gt=0,lte=500" json:"website"`
+	Location    string     `validate:"omitempty,gt=0,lte=100" json:"location"`
+	UserID      string     `json:"-"`
+	IsAdmin     bool       `json:"-"`
 }
 
 type AvatarInfo struct {
@@ -294,18 +279,18 @@ type UpdateUserInterfaceRequest struct {
 	// language
 	Language string `validate:"required,gt=1,lte=100" json:"language"`
 	// user id
-	UserId string `json:"-" `
+	UserId string `json:"-"`
 }
 
 type UserRetrievePassWordRequest struct {
-	Email       string `validate:"required,email,gt=0,lte=500" json:"e_mail" ` // e_mail
-	CaptchaID   string `json:"captcha_id" `                                    // captcha_id
-	CaptchaCode string `json:"captcha_code" `                                  // captcha_code
+	Email       string `validate:"required,email,gt=0,lte=500" json:"e_mail"`
+	CaptchaID   string `json:"captcha_id"`
+	CaptchaCode string `json:"captcha_code"`
 }
 
 type UserRePassWordRequest struct {
-	Code    string `validate:"required,gt=0,lte=100" json:"code" ` // code
-	Pass    string `validate:"required,gt=0,lte=32" json:"pass" `  // Password
+	Code    string `validate:"required,gt=0,lte=100" json:"code"`
+	Pass    string `validate:"required,gt=0,lte=32" json:"pass"`
 	Content string `json:"-"`
 }
 
@@ -320,19 +305,10 @@ func (u *UserRePassWordRequest) Check() (errFields []*validator.FormErrorField, 
 	return nil, nil
 }
 
-type UserNoticeSetRequest struct {
-	NoticeSwitch bool   `json:"notice_switch"`
-	UserID       string `json:"-"`
-}
-
-type UserNoticeSetResp struct {
-	NoticeSwitch bool `json:"notice_switch"`
-}
-
 type ActionRecordReq struct {
-	// action
-	Action string `validate:"required,oneof=login e_mail find_pass modify_pass" form:"action"`
+	Action string `validate:"required,oneof=email password edit_userinfo question answer comment edit invitation_answer search report delete vote" form:"action"`
 	IP     string `json:"-"`
+	UserID string `json:"-"`
 }
 
 type ActionRecordResp struct {
@@ -342,15 +318,14 @@ type ActionRecordResp struct {
 }
 
 type UserBasicInfo struct {
-	ID          string `json:"id"`           // user_id
-	Username    string `json:"username" `    // name
-	Rank        int    `json:"rank" `        // rank
-	DisplayName string `json:"display_name"` // display_name
-	Avatar      string `json:"avatar" `      // avatar
-	Website     string `json:"website" `     // website
-	Location    string `json:"location" `    // location
-	IPInfo      string `json:"ip_info"`      // ip info
-	Status      string `json:"status"`       // status
+	ID          string `json:"id"`
+	Username    string `json:"username"`
+	Rank        int    `json:"rank"`
+	DisplayName string `json:"display_name"`
+	Avatar      string `json:"avatar"`
+	Website     string `json:"website"`
+	Location    string `json:"location"`
+	Status      string `json:"status"`
 }
 
 type GetOtherUserInfoByUsernameReq struct {
@@ -400,8 +375,8 @@ type UserRankingSimpleInfo struct {
 	Avatar string `json:"avatar"`
 }
 
-// UserUnsubscribeEmailNotificationReq user unsubscribe email notification request
-type UserUnsubscribeEmailNotificationReq struct {
+// UserUnsubscribeNotificationReq user unsubscribe email notification request
+type UserUnsubscribeNotificationReq struct {
 	Code    string `validate:"required,gt=0,lte=500" json:"code"`
 	Content string `json:"-"`
 }

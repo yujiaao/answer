@@ -1,14 +1,32 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package siteinfo_common
 
 import (
 	"context"
 	"encoding/json"
 
-	"github.com/answerdev/answer/internal/base/constant"
-	"github.com/answerdev/answer/internal/entity"
-	"github.com/answerdev/answer/internal/schema"
-	"github.com/answerdev/answer/pkg/gravatar"
-	"github.com/answerdev/answer/pkg/uid"
+	"github.com/apache/incubator-answer/internal/base/constant"
+	"github.com/apache/incubator-answer/internal/entity"
+	"github.com/apache/incubator-answer/internal/schema"
+	"github.com/apache/incubator-answer/pkg/gravatar"
 	"github.com/segmentfault/pacman/log"
 )
 
@@ -18,31 +36,36 @@ type SiteInfoRepo interface {
 	GetByType(ctx context.Context, siteType string) (siteInfo *entity.SiteInfo, exist bool, err error)
 }
 
-// SiteInfoCommonService site info common service
-type SiteInfoCommonService struct {
+// siteInfoCommonService site info common service
+type siteInfoCommonService struct {
 	siteInfoRepo SiteInfoRepo
 }
 
+type SiteInfoCommonService interface {
+	GetSiteGeneral(ctx context.Context) (resp *schema.SiteGeneralResp, err error)
+	GetSiteInterface(ctx context.Context) (resp *schema.SiteInterfaceResp, err error)
+	GetSiteBranding(ctx context.Context) (resp *schema.SiteBrandingResp, err error)
+	GetSiteUsers(ctx context.Context) (resp *schema.SiteUsersResp, err error)
+	FormatAvatar(ctx context.Context, originalAvatarData, email string, userStatus int) *schema.AvatarInfo
+	FormatListAvatar(ctx context.Context, userList []*entity.User) (userID2AvatarMapping map[string]*schema.AvatarInfo)
+	GetSiteWrite(ctx context.Context) (resp *schema.SiteWriteResp, err error)
+	GetSiteLegal(ctx context.Context) (resp *schema.SiteLegalResp, err error)
+	GetSiteLogin(ctx context.Context) (resp *schema.SiteLoginResp, err error)
+	GetSiteCustomCssHTML(ctx context.Context) (resp *schema.SiteCustomCssHTMLResp, err error)
+	GetSiteTheme(ctx context.Context) (resp *schema.SiteThemeResp, err error)
+	GetSiteSeo(ctx context.Context) (resp *schema.SiteSeoResp, err error)
+	GetSiteInfoByType(ctx context.Context, siteType string, resp interface{}) (err error)
+}
+
 // NewSiteInfoCommonService new site info common service
-func NewSiteInfoCommonService(siteInfoRepo SiteInfoRepo) *SiteInfoCommonService {
-	siteInfo := &SiteInfoCommonService{
+func NewSiteInfoCommonService(siteInfoRepo SiteInfoRepo) SiteInfoCommonService {
+	return &siteInfoCommonService{
 		siteInfoRepo: siteInfoRepo,
 	}
-	seoinfo, err := siteInfo.GetSiteSeo(context.Background())
-	if err != nil {
-		log.Error("seoinfo error", err)
-	}
-	if seoinfo.PermaLink == schema.PermaLinkQuestionIDAndTitleByShortID || seoinfo.PermaLink == schema.PermaLinkQuestionIDByShortID {
-		uid.ShortIDSwitch = true
-	} else {
-		uid.ShortIDSwitch = false
-	}
-
-	return siteInfo
 }
 
 // GetSiteGeneral get site info general
-func (s *SiteInfoCommonService) GetSiteGeneral(ctx context.Context) (resp *schema.SiteGeneralResp, err error) {
+func (s *siteInfoCommonService) GetSiteGeneral(ctx context.Context) (resp *schema.SiteGeneralResp, err error) {
 	resp = &schema.SiteGeneralResp{}
 	if err = s.GetSiteInfoByType(ctx, constant.SiteTypeGeneral, resp); err != nil {
 		return nil, err
@@ -51,7 +74,7 @@ func (s *SiteInfoCommonService) GetSiteGeneral(ctx context.Context) (resp *schem
 }
 
 // GetSiteInterface get site info interface
-func (s *SiteInfoCommonService) GetSiteInterface(ctx context.Context) (resp *schema.SiteInterfaceResp, err error) {
+func (s *siteInfoCommonService) GetSiteInterface(ctx context.Context) (resp *schema.SiteInterfaceResp, err error) {
 	resp = &schema.SiteInterfaceResp{}
 	if err = s.GetSiteInfoByType(ctx, constant.SiteTypeInterface, resp); err != nil {
 		return nil, err
@@ -60,7 +83,7 @@ func (s *SiteInfoCommonService) GetSiteInterface(ctx context.Context) (resp *sch
 }
 
 // GetSiteBranding get site info branding
-func (s *SiteInfoCommonService) GetSiteBranding(ctx context.Context) (resp *schema.SiteBrandingResp, err error) {
+func (s *siteInfoCommonService) GetSiteBranding(ctx context.Context) (resp *schema.SiteBrandingResp, err error) {
 	resp = &schema.SiteBrandingResp{}
 	if err = s.GetSiteInfoByType(ctx, constant.SiteTypeBranding, resp); err != nil {
 		return nil, err
@@ -69,7 +92,7 @@ func (s *SiteInfoCommonService) GetSiteBranding(ctx context.Context) (resp *sche
 }
 
 // GetSiteUsers get site info about users
-func (s *SiteInfoCommonService) GetSiteUsers(ctx context.Context) (resp *schema.SiteUsersResp, err error) {
+func (s *siteInfoCommonService) GetSiteUsers(ctx context.Context) (resp *schema.SiteUsersResp, err error) {
 	resp = &schema.SiteUsersResp{}
 	if err = s.GetSiteInfoByType(ctx, constant.SiteTypeUsers, resp); err != nil {
 		return nil, err
@@ -78,38 +101,49 @@ func (s *SiteInfoCommonService) GetSiteUsers(ctx context.Context) (resp *schema.
 }
 
 // FormatAvatar format avatar
-func (s *SiteInfoCommonService) FormatAvatar(ctx context.Context, originalAvatarData, email string) *schema.AvatarInfo {
+func (s *siteInfoCommonService) FormatAvatar(ctx context.Context, originalAvatarData, email string, userStatus int) *schema.AvatarInfo {
 	gravatarBaseURL, defaultAvatar := s.getAvatarDefaultConfig(ctx)
-	return s.selectedAvatar(originalAvatarData, defaultAvatar, gravatarBaseURL, email)
+	return s.selectedAvatar(originalAvatarData, defaultAvatar, gravatarBaseURL, email, userStatus)
 }
 
 // FormatListAvatar format avatar
-func (s *SiteInfoCommonService) FormatListAvatar(ctx context.Context, userList []*entity.User) (
+func (s *siteInfoCommonService) FormatListAvatar(ctx context.Context, userList []*entity.User) (
 	avatarMapping map[string]*schema.AvatarInfo) {
 	gravatarBaseURL, defaultAvatar := s.getAvatarDefaultConfig(ctx)
 	avatarMapping = make(map[string]*schema.AvatarInfo)
 	for _, user := range userList {
-		avatarMapping[user.ID] = s.selectedAvatar(user.Avatar, defaultAvatar, gravatarBaseURL, user.EMail)
+		avatarMapping[user.ID] = s.selectedAvatar(user.Avatar, defaultAvatar, gravatarBaseURL, user.EMail, user.Status)
 	}
 	return avatarMapping
 }
 
-func (s *SiteInfoCommonService) getAvatarDefaultConfig(ctx context.Context) (string, string) {
+func (s *siteInfoCommonService) getAvatarDefaultConfig(ctx context.Context) (string, string) {
 	gravatarBaseURL, defaultAvatar := constant.DefaultGravatarBaseURL, constant.DefaultAvatar
 	usersConfig, err := s.GetSiteUsers(ctx)
 	if err != nil {
 		log.Error(err)
-	} else {
+	}
+	if len(usersConfig.GravatarBaseURL) > 0 {
 		gravatarBaseURL = usersConfig.GravatarBaseURL
+	}
+	if len(usersConfig.DefaultAvatar) > 0 {
 		defaultAvatar = usersConfig.DefaultAvatar
 	}
 	return gravatarBaseURL, defaultAvatar
 }
 
-func (s *SiteInfoCommonService) selectedAvatar(
-	originalAvatarData string, defaultAvatar string, gravatarBaseURL string, email string) *schema.AvatarInfo {
+func (s *siteInfoCommonService) selectedAvatar(
+	originalAvatarData,
+	defaultAvatar, gravatarBaseURL,
+	email string, userStatus int) *schema.AvatarInfo {
 	avatarInfo := &schema.AvatarInfo{}
 	_ = json.Unmarshal([]byte(originalAvatarData), avatarInfo)
+
+	if userStatus == entity.UserStatusDeleted {
+		return &schema.AvatarInfo{
+			Type: constant.DefaultAvatar,
+		}
+	}
 
 	if len(avatarInfo.Type) == 0 && defaultAvatar == constant.AvatarTypeGravatar {
 		avatarInfo.Type = constant.AvatarTypeGravatar
@@ -121,7 +155,7 @@ func (s *SiteInfoCommonService) selectedAvatar(
 }
 
 // GetSiteWrite get site info write
-func (s *SiteInfoCommonService) GetSiteWrite(ctx context.Context) (resp *schema.SiteWriteResp, err error) {
+func (s *siteInfoCommonService) GetSiteWrite(ctx context.Context) (resp *schema.SiteWriteResp, err error) {
 	resp = &schema.SiteWriteResp{}
 	if err = s.GetSiteInfoByType(ctx, constant.SiteTypeWrite, resp); err != nil {
 		return nil, err
@@ -130,7 +164,7 @@ func (s *SiteInfoCommonService) GetSiteWrite(ctx context.Context) (resp *schema.
 }
 
 // GetSiteLegal get site info write
-func (s *SiteInfoCommonService) GetSiteLegal(ctx context.Context) (resp *schema.SiteLegalResp, err error) {
+func (s *siteInfoCommonService) GetSiteLegal(ctx context.Context) (resp *schema.SiteLegalResp, err error) {
 	resp = &schema.SiteLegalResp{}
 	if err = s.GetSiteInfoByType(ctx, constant.SiteTypeLegal, resp); err != nil {
 		return nil, err
@@ -139,7 +173,7 @@ func (s *SiteInfoCommonService) GetSiteLegal(ctx context.Context) (resp *schema.
 }
 
 // GetSiteLogin get site login config
-func (s *SiteInfoCommonService) GetSiteLogin(ctx context.Context) (resp *schema.SiteLoginResp, err error) {
+func (s *siteInfoCommonService) GetSiteLogin(ctx context.Context) (resp *schema.SiteLoginResp, err error) {
 	resp = &schema.SiteLoginResp{}
 	if err = s.GetSiteInfoByType(ctx, constant.SiteTypeLogin, resp); err != nil {
 		return nil, err
@@ -148,7 +182,7 @@ func (s *SiteInfoCommonService) GetSiteLogin(ctx context.Context) (resp *schema.
 }
 
 // GetSiteCustomCssHTML get site custom css html config
-func (s *SiteInfoCommonService) GetSiteCustomCssHTML(ctx context.Context) (resp *schema.SiteCustomCssHTMLResp, err error) {
+func (s *siteInfoCommonService) GetSiteCustomCssHTML(ctx context.Context) (resp *schema.SiteCustomCssHTMLResp, err error) {
 	resp = &schema.SiteCustomCssHTMLResp{}
 	if err = s.GetSiteInfoByType(ctx, constant.SiteTypeCustomCssHTML, resp); err != nil {
 		return nil, err
@@ -157,7 +191,7 @@ func (s *SiteInfoCommonService) GetSiteCustomCssHTML(ctx context.Context) (resp 
 }
 
 // GetSiteTheme get site theme
-func (s *SiteInfoCommonService) GetSiteTheme(ctx context.Context) (resp *schema.SiteThemeResp, err error) {
+func (s *siteInfoCommonService) GetSiteTheme(ctx context.Context) (resp *schema.SiteThemeResp, err error) {
 	resp = &schema.SiteThemeResp{
 		ThemeOptions: schema.GetThemeOptions,
 	}
@@ -169,15 +203,24 @@ func (s *SiteInfoCommonService) GetSiteTheme(ctx context.Context) (resp *schema.
 }
 
 // GetSiteSeo get site seo
-func (s *SiteInfoCommonService) GetSiteSeo(ctx context.Context) (resp *schema.SiteSeoReq, err error) {
-	resp = &schema.SiteSeoReq{}
+func (s *siteInfoCommonService) GetSiteSeo(ctx context.Context) (resp *schema.SiteSeoResp, err error) {
+	resp = &schema.SiteSeoResp{}
 	if err = s.GetSiteInfoByType(ctx, constant.SiteTypeSeo, resp); err != nil {
 		return nil, err
 	}
 	return resp, nil
 }
 
-func (s *SiteInfoCommonService) GetSiteInfoByType(ctx context.Context, siteType string, resp interface{}) (err error) {
+func (s *siteInfoCommonService) EnableShortID(ctx context.Context) (enabled bool) {
+	siteSeo, err := s.GetSiteSeo(ctx)
+	if err != nil {
+		log.Error(err)
+		return false
+	}
+	return siteSeo.IsShortLink()
+}
+
+func (s *siteInfoCommonService) GetSiteInfoByType(ctx context.Context, siteType string, resp interface{}) (err error) {
 	siteInfo, exist, err := s.siteInfoRepo.GetByType(ctx, siteType)
 	if err != nil {
 		return err

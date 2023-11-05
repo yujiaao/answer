@@ -1,16 +1,36 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package user
 
 import (
 	"context"
+	"strings"
 	"time"
 
-	"github.com/answerdev/answer/internal/base/data"
-	"github.com/answerdev/answer/internal/base/reason"
-	"github.com/answerdev/answer/internal/entity"
-	"github.com/answerdev/answer/internal/schema"
-	usercommon "github.com/answerdev/answer/internal/service/user_common"
-	"github.com/answerdev/answer/pkg/converter"
-	"github.com/answerdev/answer/plugin"
+	"github.com/apache/incubator-answer/internal/base/data"
+	"github.com/apache/incubator-answer/internal/base/reason"
+	"github.com/apache/incubator-answer/internal/entity"
+	"github.com/apache/incubator-answer/internal/schema"
+	usercommon "github.com/apache/incubator-answer/internal/service/user_common"
+	"github.com/apache/incubator-answer/pkg/converter"
+	"github.com/apache/incubator-answer/plugin"
 	"github.com/segmentfault/pacman/errors"
 	"github.com/segmentfault/pacman/log"
 	"xorm.io/xorm"
@@ -72,7 +92,7 @@ func (ur *userRepo) IncreaseQuestionCount(ctx context.Context, userID string, am
 func (ur *userRepo) UpdateQuestionCount(ctx context.Context, userID string, count int64) (err error) {
 	user := &entity.User{}
 	user.QuestionCount = int(count)
-	_, err = ur.data.DB.Where("id = ?", userID).Cols("question_count").Update(user)
+	_, err = ur.data.DB.Context(ctx).Where("id = ?", userID).Cols("question_count").Update(user)
 	if err != nil {
 		return errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 	}
@@ -82,7 +102,7 @@ func (ur *userRepo) UpdateQuestionCount(ctx context.Context, userID string, coun
 func (ur *userRepo) UpdateAnswerCount(ctx context.Context, userID string, count int) (err error) {
 	user := &entity.User{}
 	user.AnswerCount = count
-	_, err = ur.data.DB.Where("id = ?", userID).Cols("answer_count").Update(user)
+	_, err = ur.data.DB.Context(ctx).Where("id = ?", userID).Cols("answer_count").Update(user)
 	if err != nil {
 		return errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 	}
@@ -195,7 +215,7 @@ func (ur *userRepo) GetByUsername(ctx context.Context, username string) (userInf
 
 func (ur *userRepo) GetByUsernames(ctx context.Context, usernames []string) ([]*entity.User, error) {
 	list := make([]*entity.User, 0)
-	err := ur.data.DB.Where("status =?", entity.UserStatusAvailable).In("username", usernames).Find(&list)
+	err := ur.data.DB.Context(ctx).Where("status =?", entity.UserStatusAvailable).In("username", usernames).Find(&list)
 	if err != nil {
 		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 		return list, err
@@ -224,18 +244,16 @@ func (ur *userRepo) GetUserCount(ctx context.Context) (count int64, err error) {
 	return
 }
 
-func (ur *userRepo) SearchUserListByName(ctx context.Context, name string) (userList []*entity.User, err error) {
+func (ur *userRepo) SearchUserListByName(ctx context.Context, name string, limit int) (userList []*entity.User, err error) {
 	userList = make([]*entity.User, 0)
-	if name == "" {
-		return userList, nil
-	}
-	session := ur.data.DB.Where("")
-	session.Where("username LIKE LOWER(?) or display_name LIKE ?", name+"%", name+"%").And("status =?", entity.UserStatusAvailable)
-	session.Asc("username")
-	session = session.Limit(5, 0)
-	err = session.OrderBy("id desc").Find(&userList)
+	session := ur.data.DB.Context(ctx)
+	session.Where("status = ?", entity.UserStatusAvailable)
+	session.Where("username LIKE ? OR display_name LIKE ?", strings.ToLower(name)+"%", name+"%")
+	session.OrderBy("username ASC, id DESC")
+	session.Limit(limit)
+	err = session.Find(&userList)
 	if err != nil {
-		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+		return nil, errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 	}
 	tryToDecorateUserListFromUserCenter(ctx, ur.data, userList)
 	return

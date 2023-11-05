@@ -1,14 +1,33 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package tag
 
 import (
 	"context"
-
-	"github.com/answerdev/answer/internal/base/data"
-	"github.com/answerdev/answer/internal/base/reason"
-	"github.com/answerdev/answer/internal/entity"
-	tagcommon "github.com/answerdev/answer/internal/service/tag_common"
-	"github.com/answerdev/answer/internal/service/unique"
-	"github.com/answerdev/answer/pkg/uid"
+	"github.com/apache/incubator-answer/internal/base/data"
+	"github.com/apache/incubator-answer/internal/base/handler"
+	"github.com/apache/incubator-answer/internal/base/reason"
+	"github.com/apache/incubator-answer/internal/entity"
+	tagcommon "github.com/apache/incubator-answer/internal/service/tag_common"
+	"github.com/apache/incubator-answer/internal/service/unique"
+	"github.com/apache/incubator-answer/pkg/uid"
 	"github.com/segmentfault/pacman/errors"
 )
 
@@ -36,8 +55,10 @@ func (tr *tagRelRepo) AddTagRelList(ctx context.Context, tagList []*entity.TagRe
 	if err != nil {
 		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 	}
-	for _, item := range tagList {
-		item.ObjectID = uid.EnShortID(item.ObjectID)
+	if handler.GetEnableShortID(ctx) {
+		for _, item := range tagList {
+			item.ObjectID = uid.EnShortID(item.ObjectID)
+		}
 	}
 	return
 }
@@ -52,9 +73,19 @@ func (tr *tagRelRepo) RemoveTagRelListByObjectID(ctx context.Context, objectID s
 	return
 }
 
+// RecoverTagRelListByObjectID recover tag list
+func (tr *tagRelRepo) RecoverTagRelListByObjectID(ctx context.Context, objectID string) (err error) {
+	objectID = uid.DeShortID(objectID)
+	_, err = tr.data.DB.Context(ctx).Where("object_id = ?", objectID).Update(&entity.TagRel{Status: entity.TagRelStatusAvailable})
+	if err != nil {
+		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+	return
+}
+
 func (tr *tagRelRepo) HideTagRelListByObjectID(ctx context.Context, objectID string) (err error) {
 	objectID = uid.DeShortID(objectID)
-	_, err = tr.data.DB.Where("object_id = ?", objectID).Cols("status").Update(&entity.TagRel{Status: entity.TagRelStatusHide})
+	_, err = tr.data.DB.Context(ctx).Where("object_id = ?", objectID).Cols("status").Update(&entity.TagRel{Status: entity.TagRelStatusHide})
 	if err != nil {
 		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 	}
@@ -63,7 +94,7 @@ func (tr *tagRelRepo) HideTagRelListByObjectID(ctx context.Context, objectID str
 
 func (tr *tagRelRepo) ShowTagRelListByObjectID(ctx context.Context, objectID string) (err error) {
 	objectID = uid.DeShortID(objectID)
-	_, err = tr.data.DB.Where("object_id = ?", objectID).Cols("status").Update(&entity.TagRel{Status: entity.TagRelStatusAvailable})
+	_, err = tr.data.DB.Context(ctx).Where("object_id = ?", objectID).Cols("status").Update(&entity.TagRel{Status: entity.TagRelStatusAvailable})
 	if err != nil {
 		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 	}
@@ -89,8 +120,11 @@ func (tr *tagRelRepo) GetObjectTagRelWithoutStatus(ctx context.Context, objectID
 	exist, err = session.Get(tagRel)
 	if err != nil {
 		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+		return
 	}
-	tagRel.ObjectID = uid.EnShortID(tagRel.ObjectID)
+	if handler.GetEnableShortID(ctx) {
+		tagRel.ObjectID = uid.EnShortID(tagRel.ObjectID)
+	}
 	return
 }
 
@@ -112,9 +146,12 @@ func (tr *tagRelRepo) GetObjectTagRelList(ctx context.Context, objectID string) 
 	err = session.Find(&tagListList)
 	if err != nil {
 		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+		return
 	}
-	for _, item := range tagListList {
-		item.ObjectID = uid.EnShortID(item.ObjectID)
+	if handler.GetEnableShortID(ctx) {
+		for _, item := range tagListList {
+			item.ObjectID = uid.EnShortID(item.ObjectID)
+		}
 	}
 	return
 }
@@ -130,9 +167,12 @@ func (tr *tagRelRepo) BatchGetObjectTagRelList(ctx context.Context, objectIds []
 	err = session.Find(&tagListList)
 	if err != nil {
 		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+		return
 	}
-	for _, item := range tagListList {
-		item.ObjectID = uid.EnShortID(item.ObjectID)
+	if handler.GetEnableShortID(ctx) {
+		for _, item := range tagListList {
+			item.ObjectID = uid.EnShortID(item.ObjectID)
+		}
 	}
 	return
 }

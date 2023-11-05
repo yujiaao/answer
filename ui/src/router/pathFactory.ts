@@ -1,22 +1,39 @@
-import urlcat from 'urlcat';
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
 
 import { seoSettingStore } from '@/stores';
 
 const tagLanding = (slugName: string) => {
-  if (!slugName) {
-    return '/tags';
-  }
-  return urlcat('/tags/:slugName', { slugName });
+  const r = slugName ? `/tags/${slugName}` : '/tags';
+  return r;
 };
+
 const tagInfo = (slugName: string) => {
-  if (!slugName) {
-    return '/tags';
-  }
-  return urlcat('/tags/:slugName/info', { slugName });
+  const r = slugName ? `/tags/${slugName}/info` : '/tags';
+  return r;
 };
+
 const tagEdit = (tagId: string) => {
-  return urlcat('/tags/:tagId/edit', { tagId });
+  const r = `/tags/${tagId}/edit`;
+  return r;
 };
+
 const questionLanding = (questionId: string, slugTitle: string = '') => {
   const { seo } = seoSettingStore.getState();
   if (!questionId) {
@@ -24,14 +41,12 @@ const questionLanding = (questionId: string, slugTitle: string = '') => {
   }
   // @ts-ignore
   if (/[13]/.test(seo.permalink) && slugTitle) {
-    return urlcat('/questions/:questionId/:slugPermalink', {
-      questionId,
-      slugPermalink: slugTitle,
-    });
+    return `/questions/${questionId}/${slugTitle}`;
   }
 
-  return urlcat('/questions/:questionId', { questionId });
+  return `/questions/${questionId}`;
 };
+
 const answerLanding = (params: {
   questionId: string;
   slugTitle?: string;
@@ -41,9 +56,7 @@ const answerLanding = (params: {
     params.questionId,
     params.slugTitle,
   );
-  return urlcat(`${questionLandingUrl}/:answerId`, {
-    answerId: params.answerId,
-  });
+  return `${questionLandingUrl}/${params.answerId}`;
 };
 
 export const pathFactory = {

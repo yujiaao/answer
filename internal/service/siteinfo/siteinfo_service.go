@@ -1,3 +1,22 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package siteinfo
 
 import (
@@ -5,19 +24,18 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/answerdev/answer/internal/base/constant"
-	"github.com/answerdev/answer/internal/base/handler"
-	"github.com/answerdev/answer/internal/base/reason"
-	"github.com/answerdev/answer/internal/base/translator"
-	"github.com/answerdev/answer/internal/entity"
-	"github.com/answerdev/answer/internal/schema"
-	"github.com/answerdev/answer/internal/service/config"
-	"github.com/answerdev/answer/internal/service/export"
-	questioncommon "github.com/answerdev/answer/internal/service/question_common"
-	"github.com/answerdev/answer/internal/service/siteinfo_common"
-	tagcommon "github.com/answerdev/answer/internal/service/tag_common"
-	"github.com/answerdev/answer/pkg/uid"
-	"github.com/answerdev/answer/plugin"
+	"github.com/apache/incubator-answer/internal/base/constant"
+	"github.com/apache/incubator-answer/internal/base/handler"
+	"github.com/apache/incubator-answer/internal/base/reason"
+	"github.com/apache/incubator-answer/internal/base/translator"
+	"github.com/apache/incubator-answer/internal/entity"
+	"github.com/apache/incubator-answer/internal/schema"
+	"github.com/apache/incubator-answer/internal/service/config"
+	"github.com/apache/incubator-answer/internal/service/export"
+	questioncommon "github.com/apache/incubator-answer/internal/service/question_common"
+	"github.com/apache/incubator-answer/internal/service/siteinfo_common"
+	tagcommon "github.com/apache/incubator-answer/internal/service/tag_common"
+	"github.com/apache/incubator-answer/plugin"
 	"github.com/jinzhu/copier"
 	"github.com/segmentfault/pacman/errors"
 	"github.com/segmentfault/pacman/log"
@@ -25,7 +43,7 @@ import (
 
 type SiteInfoService struct {
 	siteInfoRepo          siteinfo_common.SiteInfoRepo
-	siteInfoCommonService *siteinfo_common.SiteInfoCommonService
+	siteInfoCommonService siteinfo_common.SiteInfoCommonService
 	emailService          *export.EmailService
 	tagCommonService      *tagcommon.TagCommonService
 	configService         *config.ConfigService
@@ -34,7 +52,7 @@ type SiteInfoService struct {
 
 func NewSiteInfoService(
 	siteInfoRepo siteinfo_common.SiteInfoRepo,
-	siteInfoCommonService *siteinfo_common.SiteInfoCommonService,
+	siteInfoCommonService siteinfo_common.SiteInfoCommonService,
 	emailService *export.EmailService,
 	tagCommonService *tagcommon.TagCommonService,
 	configService *config.ConfigService,
@@ -280,28 +298,12 @@ func (s *SiteInfoService) GetSeo(ctx context.Context) (resp *schema.SiteSeoReq, 
 }
 
 func (s *SiteInfoService) SaveSeo(ctx context.Context, req schema.SiteSeoReq) (err error) {
-	var (
-		siteType = constant.SiteTypeSeo
-		content  []byte
-	)
-	content, _ = json.Marshal(req)
-
+	content, _ := json.Marshal(req)
 	data := entity.SiteInfo{
-		Type:    siteType,
+		Type:    constant.SiteTypeSeo,
 		Content: string(content),
 	}
-
-	err = s.siteInfoRepo.SaveByType(ctx, siteType, &data)
-	if err != nil {
-		return
-	}
-	if req.PermaLink == schema.PermaLinkQuestionIDAndTitleByShortID || req.PermaLink == schema.PermaLinkQuestionIDByShortID {
-		uid.ShortIDSwitch = true
-	} else {
-		uid.ShortIDSwitch = false
-	}
-	s.questioncommon.SitemapCron(ctx)
-	return
+	return s.siteInfoRepo.SaveByType(ctx, constant.SiteTypeSeo, &data)
 }
 
 func (s *SiteInfoService) GetPrivilegesConfig(ctx context.Context) (resp *schema.GetPrivilegesConfigResp, err error) {
@@ -339,13 +341,7 @@ func (s *SiteInfoService) translatePrivilegeOptions(ctx context.Context) (option
 }
 
 func (s *SiteInfoService) UpdatePrivilegesConfig(ctx context.Context, req *schema.UpdatePrivilegesConfigReq) (err error) {
-	var chooseOption *schema.PrivilegeOption
-	for _, option := range schema.DefaultPrivilegeOptions {
-		if option.Level == req.Level {
-			chooseOption = option
-			break
-		}
-	}
+	chooseOption := schema.DefaultPrivilegeOptions.Choose(req.Level)
 	if chooseOption == nil {
 		return nil
 	}

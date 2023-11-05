@@ -1,12 +1,31 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package controller_admin
 
 import (
-	"github.com/answerdev/answer/internal/base/handler"
-	"github.com/answerdev/answer/internal/base/middleware"
-	"github.com/answerdev/answer/internal/base/reason"
-	"github.com/answerdev/answer/internal/schema"
-	"github.com/answerdev/answer/internal/service/user_admin"
-	"github.com/answerdev/answer/plugin"
+	"github.com/apache/incubator-answer/internal/base/handler"
+	"github.com/apache/incubator-answer/internal/base/middleware"
+	"github.com/apache/incubator-answer/internal/base/reason"
+	"github.com/apache/incubator-answer/internal/schema"
+	"github.com/apache/incubator-answer/internal/service/user_admin"
+	"github.com/apache/incubator-answer/plugin"
 	"github.com/gin-gonic/gin"
 	"github.com/segmentfault/pacman/errors"
 )
@@ -91,6 +110,26 @@ func (uc *UserAdminController) AddUser(ctx *gin.Context) {
 	handler.HandleResponse(ctx, err, nil)
 }
 
+// AddUsers add users
+// @Summary add users
+// @Description add users
+// @Security ApiKeyAuth
+// @Tags admin
+// @Accept json
+// @Produce json
+// @Param data body schema.AddUsersReq true "user"
+// @Success 200 {object} handler.RespBody
+// @Router /answer/admin/api/users [post]
+func (uc *UserAdminController) AddUsers(ctx *gin.Context) {
+	req := &schema.AddUsersReq{}
+	if handler.BindAndCheck(ctx, req) {
+		return
+	}
+
+	resp, err := uc.userService.AddUsers(ctx, req)
+	handler.HandleResponse(ctx, err, resp)
+}
+
 // UpdateUserPassword update user password
 // @Summary update user password
 // @Description update user password
@@ -134,4 +173,42 @@ func (uc *UserAdminController) GetUserPage(ctx *gin.Context) {
 
 	resp, err := uc.userService.GetUserPage(ctx, req)
 	handler.HandleResponse(ctx, err, resp)
+}
+
+// GetUserActivation get user activation
+// @Summary get user activation
+// @Description get user activation
+// @Security ApiKeyAuth
+// @Tags admin
+// @Produce json
+// @Param user_id query string true "user id"
+// @Success 200 {object} handler.RespBody{data=schema.GetUserActivationResp}
+// @Router /answer/admin/api/user/activation [get]
+func (uc *UserAdminController) GetUserActivation(ctx *gin.Context) {
+	req := &schema.GetUserActivationReq{}
+	if handler.BindAndCheck(ctx, req) {
+		return
+	}
+
+	resp, err := uc.userService.GetUserActivation(ctx, req)
+	handler.HandleResponse(ctx, err, resp)
+}
+
+// SendUserActivation send user activation
+// @Summary send user activation
+// @Description send user activation
+// @Security ApiKeyAuth
+// @Tags admin
+// @Produce json
+// @Param data body schema.SendUserActivationReq true "SendUserActivationReq"
+// @Success 200 {object} handler.RespBody
+// @Router /answer/admin/api/users/activation [post]
+func (uc *UserAdminController) SendUserActivation(ctx *gin.Context) {
+	req := &schema.SendUserActivationReq{}
+	if handler.BindAndCheck(ctx, req) {
+		return
+	}
+
+	err := uc.userService.SendUserActivation(ctx, req)
+	handler.HandleResponse(ctx, err, nil)
 }

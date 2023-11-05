@@ -1,3 +1,22 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package uid
 
 import (
@@ -8,9 +27,7 @@ import (
 
 const salt = int64(100)
 
-var ShortIDSwitch = false
-
-// NumToString num to string
+// NumToShortID num to string
 func NumToShortID(id int64) string {
 	sid := strconv.FormatInt(id, 10)
 	if len(sid) < 17 {
@@ -28,10 +45,10 @@ func NumToShortID(id int64) string {
 	}
 	code := utils.EnShortID(id, salt)
 	tcode := utils.EnShortID(typeCode, salt)
-	return string(tcode) + string(code)
+	return tcode + code
 }
 
-// StringToNum string to num
+// ShortIDToNum string to num
 func ShortIDToNum(code string) int64 {
 	if len(code) < 2 {
 		return 0
@@ -45,14 +62,11 @@ func ShortIDToNum(code string) int64 {
 }
 
 func EnShortID(id string) string {
-	if ShortIDSwitch {
-		num, err := strconv.ParseInt(id, 10, 64)
-		if err != nil {
-			return id
-		}
-		return NumToShortID(num)
+	num, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		return id
 	}
-	return id
+	return NumToShortID(num)
 }
 
 func DeShortID(sid string) string {

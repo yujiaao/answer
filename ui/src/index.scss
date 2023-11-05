@@ -1,3 +1,22 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 @import 'common/variable';
 @import '~bootstrap/scss/bootstrap';
 @import '~bootstrap-icons';
@@ -26,6 +45,11 @@ body {
 a {
   text-decoration: none;
 }
+// If the image does not have a `src` attribute, it must break and may not trigger the `onerror` event.
+// With or without the `alt` attribute, it is visually hidden directly.
+img[src=""] {
+  visibility: hidden !important;
+}
 
 .btn-link {
   text-decoration: none;
@@ -33,6 +57,10 @@ a {
 
 .fs-12 {
   font-size: 0.75rem;
+}
+
+.small {
+  font-size: 0.875rem;
 }
 
 .pic-auth-modal {
@@ -132,6 +160,13 @@ a {
   }
 }
 
+.name-ellipsis {
+  display: inline-block;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
 .text-truncate-1,
 .text-truncate-2,
 .text-truncate-3,
@@ -177,9 +212,6 @@ a {
   display: inline-block;
 }
 
-.object-fit-contain {
-  object-fit: contain;
-}
 .fmt {
   width: 100%;
   h1 {
@@ -249,14 +281,6 @@ a {
   flex-grow: 1;
   height: 128px;
 }
-.badge-label {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  padding: 1px 0.5rem 2px;
-  height: 24px;
-}
 
 .review-text-delete {
   color: #842029;
@@ -315,4 +339,8 @@ a {
   height: 16px;
   fill: currentColor;
   vertical-align: -0.125em;
+}
+
+.max-width-200 {
+  max-width: 200px;
 }

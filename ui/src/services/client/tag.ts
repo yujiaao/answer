@@ -1,3 +1,22 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import useSWR from 'swr';
 
 import request from '@/utils/request';
@@ -13,8 +32,13 @@ export const modifyTag = (params) => {
   return request.put('/answer/api/v1/tag', params);
 };
 
-export const useQuerySynonymsTags = (tagId) => {
-  const apiUrl = tagId ? `/answer/api/v1/tag/synonyms?tag_id=${tagId}` : '';
+export const useQuerySynonymsTags = (tagId, status) => {
+  const apiUrl =
+    status === 'deleted'
+      ? ''
+      : tagId
+      ? `/answer/api/v1/tag/synonyms?tag_id=${tagId}`
+      : '';
   return useSWR<{
     synonyms: Type.SynonymsTag[];
     member_actions?: Type.MemberActionItem[];
@@ -47,10 +71,11 @@ export const useTagInfo = ({ id = '', name = '' }) => {
     name = encodeURIComponent(name);
     apiUrl = `/answer/api/v1/tag?name=${name}`;
   }
-  const { data, error } = useSWR<Type.TagInfo>(apiUrl, (url) =>
+  const { data, error, mutate } = useSWR<Type.TagInfo>(apiUrl, (url) =>
     request.get(url, { allow404: true }),
   );
   return {
+    mutate,
     data,
     isLoading: !data && !error,
     error,
@@ -69,4 +94,10 @@ export const getTagsBySlugName = (slugNames: string) => {
 export const createTag = (params: Type.TagBase) => {
   const apiUrl = '/answer/api/v1/tag';
   return request.post<Type.TagInfo>(apiUrl, params);
+};
+
+export const unDeleteTag = (id) => {
+  return request.post('/answer/api/v1/tag/recover', {
+    tag_id: id,
+  });
 };

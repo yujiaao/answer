@@ -1,10 +1,28 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import { useLayoutEffect, useState, useRef } from 'react';
 import { Modal, Button } from 'react-bootstrap';
 import { useTranslation } from 'react-i18next';
 
 import ReactDOM from 'react-dom/client';
 
-import pattern from '@/common/pattern';
 import type * as Type from '@/common/interface';
 import { SchemaForm, JSONSchema, UISchema, initFormData } from '@/components';
 import { handleFormError } from '@/utils';
@@ -18,65 +36,29 @@ interface IProps {
 }
 const useAddUserModal = (props: IProps = {}) => {
   const { t } = useTranslation('translation', {
-    keyPrefix: 'admin.users.user_modal',
+    keyPrefix: 'admin.user_modal',
   });
 
   const { title = t('title'), onConfirm } = props;
   const [visible, setVisibleState] = useState(false);
   const schema: JSONSchema = {
     title: t('title'),
-    required: ['display_name', 'email', 'password'],
+    required: ['users'],
     properties: {
-      display_name: {
+      users: {
         type: 'string',
-        title: t('form.fields.display_name.label'),
-      },
-      email: {
-        type: 'string',
-        title: t('form.fields.email.label'),
-      },
-      password: {
-        type: 'string',
-        title: t('form.fields.password.label'),
+        title: t('form.fields.users.label'),
+        description: t('form.fields.users.text'),
       },
     },
   };
   const uiSchema: UISchema = {
-    display_name: {
+    users: {
+      'ui:widget': 'textarea',
       'ui:options': {
-        validator: (value) => {
-          const MIN_LENGTH = 4;
-          const MAX_LENGTH = 30;
-
-          if (value.length < MIN_LENGTH || value.length > MAX_LENGTH) {
-            return t('form.fields.display_name.msg');
-          }
-          return true;
-        },
-      },
-    },
-    email: {
-      'ui:options': {
-        inputType: 'email',
-        validator: (value) => {
-          if (value && !pattern.email.test(value)) {
-            return t('form.fields.email.msg');
-          }
-          return true;
-        },
-      },
-    },
-    password: {
-      'ui:options': {
-        inputType: 'password',
-        validator: (value) => {
-          const MIN_LENGTH = 8;
-          const MAX_LENGTH = 32;
-          if (value.length < MIN_LENGTH || value.length > MAX_LENGTH) {
-            return t('form.fields.password.msg');
-          }
-          return true;
-        },
+        rows: 7,
+        placeholder: t('form.fields.users.placeholder'),
+        className: 'small',
       },
     },
   };
@@ -107,23 +89,11 @@ const useAddUserModal = (props: IProps = {}) => {
 
     if (onConfirm instanceof Function) {
       onConfirm({
-        display_name: formData.display_name.value,
-        email: formData.email.value,
-        password: formData.password.value,
+        users: formData.users.value,
       })
         .then(() => {
           setFormData({
-            display_name: {
-              value: '',
-              isInvalid: false,
-              errorMsg: '',
-            },
-            email: {
-              value: '',
-              isInvalid: false,
-              errorMsg: '',
-            },
-            password: {
+            users: {
               value: '',
               isInvalid: false,
               errorMsg: '',

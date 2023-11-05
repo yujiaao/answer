@@ -1,18 +1,39 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package usercommon
 
 import (
 	"context"
+	"github.com/apache/incubator-answer/internal/base/constant"
+	"github.com/apache/incubator-answer/pkg/converter"
 	"strings"
 
 	"github.com/Chain-Zhang/pinyin"
-	"github.com/answerdev/answer/internal/base/reason"
-	"github.com/answerdev/answer/internal/entity"
-	"github.com/answerdev/answer/internal/schema"
-	"github.com/answerdev/answer/internal/service/auth"
-	"github.com/answerdev/answer/internal/service/role"
-	"github.com/answerdev/answer/internal/service/siteinfo_common"
-	"github.com/answerdev/answer/pkg/checker"
-	"github.com/answerdev/answer/pkg/random"
+	"github.com/apache/incubator-answer/internal/base/reason"
+	"github.com/apache/incubator-answer/internal/entity"
+	"github.com/apache/incubator-answer/internal/schema"
+	"github.com/apache/incubator-answer/internal/service/auth"
+	"github.com/apache/incubator-answer/internal/service/role"
+	"github.com/apache/incubator-answer/internal/service/siteinfo_common"
+	"github.com/apache/incubator-answer/pkg/checker"
+	"github.com/apache/incubator-answer/pkg/random"
 	"github.com/segmentfault/pacman/errors"
 	"github.com/segmentfault/pacman/log"
 )
@@ -36,7 +57,7 @@ type UserRepo interface {
 	GetByUsernames(ctx context.Context, usernames []string) ([]*entity.User, error)
 	GetByEmail(ctx context.Context, email string) (userInfo *entity.User, exist bool, err error)
 	GetUserCount(ctx context.Context) (count int64, err error)
-	SearchUserListByName(ctx context.Context, name string) (userList []*entity.User, err error)
+	SearchUserListByName(ctx context.Context, name string, limit int) (userList []*entity.User, err error)
 }
 
 // UserCommon user service
@@ -44,14 +65,14 @@ type UserCommon struct {
 	userRepo              UserRepo
 	userRoleService       *role.UserRoleRelService
 	authService           *auth.AuthService
-	siteInfoCommonService *siteinfo_common.SiteInfoCommonService
+	siteInfoCommonService siteinfo_common.SiteInfoCommonService
 }
 
 func NewUserCommon(
 	userRepo UserRepo,
 	userRoleService *role.UserRoleRelService,
 	authService *auth.AuthService,
-	siteInfoCommonService *siteinfo_common.SiteInfoCommonService,
+	siteInfoCommonService siteinfo_common.SiteInfoCommonService,
 ) *UserCommon {
 	return &UserCommon{
 		userRepo:              userRepo,
@@ -68,7 +89,7 @@ func (us *UserCommon) GetUserBasicInfoByID(ctx context.Context, ID string) (
 		return nil, exist, err
 	}
 	info := us.FormatUserBasicInfo(ctx, userInfo)
-	info.Avatar = us.siteInfoCommonService.FormatAvatar(ctx, userInfo.Avatar, userInfo.EMail).GetURL()
+	info.Avatar = us.siteInfoCommonService.FormatAvatar(ctx, userInfo.Avatar, userInfo.EMail, userInfo.Status).GetURL()
 	return info, exist, nil
 }
 
@@ -78,7 +99,7 @@ func (us *UserCommon) GetUserBasicInfoByUserName(ctx context.Context, username s
 		return nil, exist, err
 	}
 	info := us.FormatUserBasicInfo(ctx, userInfo)
-	info.Avatar = us.siteInfoCommonService.FormatAvatar(ctx, userInfo.Avatar, userInfo.EMail).GetURL()
+	info.Avatar = us.siteInfoCommonService.FormatAvatar(ctx, userInfo.Avatar, userInfo.EMail, userInfo.Status).GetURL()
 	return info, exist, nil
 }
 
@@ -105,9 +126,12 @@ func (us *UserCommon) UpdateQuestionCount(ctx context.Context, userID string, nu
 	return us.userRepo.UpdateQuestionCount(ctx, userID, num)
 }
 
-func (us *UserCommon) BatchUserBasicInfoByID(ctx context.Context, IDs []string) (map[string]*schema.UserBasicInfo, error) {
+func (us *UserCommon) BatchUserBasicInfoByID(ctx context.Context, userIDs []string) (map[string]*schema.UserBasicInfo, error) {
 	userMap := make(map[string]*schema.UserBasicInfo)
-	userList, err := us.userRepo.BatchGetByID(ctx, IDs)
+	if len(userIDs) == 0 {
+		return userMap, nil
+	}
+	userList, err := us.userRepo.BatchGetByID(ctx, userIDs)
 	if err != nil {
 		return userMap, err
 	}
@@ -129,11 +153,10 @@ func (us *UserCommon) FormatUserBasicInfo(ctx context.Context, userInfo *entity.
 	userBasicInfo.DisplayName = userInfo.DisplayName
 	userBasicInfo.Website = userInfo.Website
 	userBasicInfo.Location = userInfo.Location
-	userBasicInfo.IPInfo = userInfo.IPInfo
-	userBasicInfo.Status = schema.UserStatusShow[userInfo.Status]
-	if userBasicInfo.Status == schema.UserDeleted {
+	userBasicInfo.Status = constant.ConvertUserStatus(userInfo.Status, userInfo.MailStatus)
+	if userBasicInfo.Status == constant.UserDeleted {
 		userBasicInfo.Avatar = ""
-		userBasicInfo.DisplayName = "Anonymous"
+		userBasicInfo.DisplayName = "user" + converter.DeleteUserDisplay(userInfo.ID)
 	}
 	return userBasicInfo
 }
@@ -151,7 +174,7 @@ func (us *UserCommon) MakeUsername(ctx context.Context, displayName string) (use
 		}
 	}
 
-	username = strings.ReplaceAll(displayName, " ", "_")
+	username = strings.ReplaceAll(displayName, " ", "-")
 	username = strings.ToLower(username)
 	suffix := ""
 
@@ -191,7 +214,7 @@ func (us *UserCommon) CacheLoginUserInfo(ctx context.Context, userID string, use
 		ExternalID:  externalID,
 	}
 
-	accessToken, err = us.authService.SetUserCacheInfo(ctx, userCacheInfo)
+	accessToken, _, err = us.authService.SetUserCacheInfo(ctx, userCacheInfo)
 	if err != nil {
 		return "", nil, err
 	}

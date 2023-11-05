@@ -1,3 +1,22 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { Row, Col, Form, Button, Card } from 'react-bootstrap';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -7,7 +26,7 @@ import dayjs from 'dayjs';
 import classNames from 'classnames';
 
 import { handleFormError, scrollToDocTop } from '@/utils';
-import { usePageTags, usePromptWithUnload } from '@/hooks';
+import { usePageTags, usePromptWithUnload, useCaptchaModal } from '@/hooks';
 import { pathFactory } from '@/router/pathFactory';
 import { Editor, EditorRef, Icon, htmlRender } from '@/components';
 import type * as Type from '@/common/interface';
@@ -16,6 +35,7 @@ import {
   modifyAnswer,
   useQueryRevisions,
 } from '@/services';
+import { useRenderHtmlPlugin } from '@/utils/pluginKit';
 
 import './index.scss';
 
@@ -51,6 +71,7 @@ const Index = () => {
   const [formData, setFormData] = useState<FormDataItem>(initFormData);
   const [immData, setImmData] = useState(initFormData);
   const [contentChanged, setContentChanged] = useState(false);
+  const editCaptcha = useCaptchaModal('edit');
 
   useLayoutEffect(() => {
     if (data?.info?.content) {
@@ -72,6 +93,7 @@ const Index = () => {
   });
 
   const questionContentRef = useRef<HTMLDivElement>(null);
+  useRenderHtmlPlugin(questionContentRef.current);
 
   useEffect(() => {
     if (!questionContentRef?.current) {
@@ -136,36 +158,43 @@ const Index = () => {
 
     event.preventDefault();
     event.stopPropagation();
+
     if (!checkValidated()) {
       return;
     }
 
-    const params: Type.AnswerParams = {
-      content: formData.content.value,
-      html: editorRef.current.getHtml(),
-      question_id: qid,
-      id: aid,
-      edit_summary: formData.description.value,
-    };
-    modifyAnswer(params)
-      .then((res) => {
-        navigate(
-          pathFactory.answerLanding({
-            questionId: qid,
-            slugTitle: data?.question?.url_title,
-            answerId: aid,
-          }),
-          {
-            state: { isReview: res?.wait_for_review },
-          },
-        );
-      })
-      .catch((ex) => {
-        if (ex.isError) {
-          const stateData = handleFormError(ex, formData);
-          setFormData({ ...stateData });
-        }
-      });
+    editCaptcha.check(() => {
+      const params: Type.AnswerParams = {
+        content: formData.content.value,
+        html: editorRef.current.getHtml(),
+        question_id: qid,
+        id: aid,
+        edit_summary: formData.description.value,
+      };
+      editCaptcha.resolveCaptchaReq(params);
+
+      modifyAnswer(params)
+        .then(async (res) => {
+          await editCaptcha.close();
+          navigate(
+            pathFactory.answerLanding({
+              questionId: qid,
+              slugTitle: data?.question?.url_title,
+              answerId: aid,
+            }),
+            {
+              state: { isReview: res?.wait_for_review },
+            },
+          );
+        })
+        .catch((ex) => {
+          if (ex.isError) {
+            editCaptcha.handleCaptchaError(ex.list);
+            const stateData = handleFormError(ex, formData);
+            setFormData({ ...stateData });
+          }
+        });
+    });
   };
   const handleSelectedRevision = (e) => {
     const index = e.target.value;
@@ -198,7 +227,7 @@ const Index = () => {
           <div className="question-content-wrap">
             <div
               ref={questionContentRef}
-              className="content position-absolute top-0 w-100"
+              className="content position-absolute top-0 w-100 bg-white"
               dangerouslySetInnerHTML={{ __html: data?.question.html }}
             />
             <div
@@ -206,7 +235,7 @@ const Index = () => {
               style={{ maxHeight: questionContentRef?.current?.scrollHeight }}
             />
             <div className="line bg-light  d-flex justify-content-center align-items-center">
-              <Icon name="three-dots" />
+              <Icon type="bi" name="grip-horizontal" className="mt-1" />
             </div>
           </div>
 

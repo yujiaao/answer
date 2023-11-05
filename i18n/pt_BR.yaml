@@ -1,3 +1,20 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 #The following fields are used for back-end
 backend:
   base:
@@ -960,7 +977,7 @@ ui:
       You appear to have already installed. To reinstall please clear a sua old database tables first.
     db_failed: Database connection failed
     db_failed_desc: >-
-      This either means that the database information in a sua <1>config.yaml</1> file is incorrect or that contact with the database server could not be established. This could mean a sua host’s database server is down.
+      This either means that the database information in a sua <1>config.yaml</1> file is incorrect or that contact with the database server could not be established. This could mean a sua host's database server is down.
   counts:
     views: visualizações
     Votos: votos
@@ -1116,7 +1133,7 @@ ui:
           fields:
             display_name:
               label: Nome de exibição
-              msg: Nome de exibição deve ser 3-30 caracteres em comprimento.
+              msg: Nome de exibição deve ser 4-30 caracteres em comprimento.
             email:
               label: Email
               msg: Email não é válido.

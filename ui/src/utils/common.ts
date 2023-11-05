@@ -1,9 +1,27 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import i18next from 'i18next';
 
 import pattern from '@/common/pattern';
 import { USER_AGENT_NAMES } from '@/common/constants';
-
-const Diff = require('diff');
+import type * as Type from '@/common/interface';
 
 function thousandthDivision(num) {
   const reg = /\d{1,3}(?=(\d{3})+$)/g;
@@ -112,64 +130,9 @@ function escapeRemove(str: string) {
   temp = null;
   return output;
 }
-function mixColor(color_1, color_2, weight) {
-  function d2h(d) {
-    return d.toString(16);
-  }
-  function h2d(h) {
-    return parseInt(h, 16);
-  }
-
-  weight = typeof weight !== 'undefined' ? weight : 50;
-  let color = '#';
-
-  for (let i = 0; i <= 5; i += 2) {
-    const v1 = h2d(color_1.substr(i, 2));
-    const v2 = h2d(color_2.substr(i, 2));
-    let val = d2h(Math.floor(v2 + (v1 - v2) * (weight / 100.0)));
-
-    while (val.length < 2) {
-      val = `0${val}`;
-    }
-
-    color += val;
-  }
-
-  return color;
-}
-
-function colorRgb(sColor) {
-  sColor = sColor.toLowerCase();
-  const reg = /^#([0-9a-fA-f]{3}|[0-9a-fA-f]{6})$/;
-  if (sColor && reg.test(sColor)) {
-    if (sColor.length === 4) {
-      let sColorNew = '#';
-      for (let i = 1; i < 4; i += 1) {
-        sColorNew += sColor.slice(i, i + 1).concat(sColor.slice(i, i + 1));
-      }
-      sColor = sColorNew;
-    }
-    const sColorChange: number[] = [];
-    for (let i = 1; i < 7; i += 2) {
-      sColorChange.push(parseInt(`0x${sColor.slice(i, i + 2)}`, 16));
-    }
-    return sColorChange.join(',');
-  }
-  return sColor;
-}
-
-function labelStyle(color, hover) {
-  const textColor = mixColor('000000', color.replace('#', ''), 40);
-  const backgroundColor = mixColor('ffffff', color.replace('#', ''), 80);
-  const rgbBackgroundColor = colorRgb(backgroundColor);
-  return {
-    color: textColor,
-    backgroundColor: `rgba(${colorRgb(rgbBackgroundColor)},${hover ? 1 : 0.5})`,
-  };
-}
 
 function handleFormError(
-  error: { list: Array<{ error_field: string; error_msg: string }> },
+  error: { list: Type.FieldError[] },
   data: any,
   keymap?: Array<{ from: string; to: string }>,
 ) {
@@ -202,6 +165,8 @@ function escapeHtml(str: string) {
   };
   return str.replace(/[&<>"'`]/g, (tag) => tagsToReplace[tag] || tag);
 }
+
+const Diff = require('diff');
 
 function diffText(newText: string, oldText?: string): string {
   if (!newText) {
@@ -238,19 +203,21 @@ function diffText(newText: string, oldText?: string): string {
   return result.join('');
 }
 
-function base64ToSvg(base64: string) {
+function base64ToSvg(base64: string, svgClassName?: string) {
   // base64 to svg xml
   const svgxml = atob(base64);
 
-  // svg add class btnSvg
+  // svg add class
   const parser = new DOMParser();
   const doc = parser.parseFromString(svgxml, 'image/svg+xml');
   const parseError = doc.querySelector('parsererror');
   const svg = doc.querySelector('svg');
   let str = '';
   if (svg && !parseError) {
-    svg.classList.add('btnSvg');
-    svg.classList.add('me-2');
+    if (svgClassName) {
+      svg.setAttribute('class', svgClassName);
+    }
+    // svg.classList.add('me-2');
 
     // transform svg to string
     const serializer = new XMLSerializer();
@@ -285,9 +252,6 @@ export {
   parseUserInfo,
   formatUptime,
   escapeRemove,
-  mixColor,
-  colorRgb,
-  labelStyle,
   handleFormError,
   diffText,
   base64ToSvg,

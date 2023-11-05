@@ -1,3 +1,22 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import { FC, memo, useEffect, useState } from 'react';
 import { OverlayTrigger, Tooltip } from 'react-bootstrap';
 import { useTranslation } from 'react-i18next';
@@ -39,10 +58,20 @@ const Index: FC<Props> = ({ data }) => {
     <div className="d-flex flex-column flex-md-row mb-4">
       {data?.status !== 'deleted' ? (
         <Link to={`/users/${data.username}`} reloadDocument>
-          <Avatar avatar={data.avatar} size="160px" searchStr="s=256" />
+          <Avatar
+            avatar={data.avatar}
+            size="160px"
+            searchStr="s=256"
+            alt={data.display_name}
+          />
         </Link>
       ) : (
-        <Avatar avatar={data.avatar} size="160px" searchStr="s=256" />
+        <Avatar
+          avatar={data.avatar}
+          size="160px"
+          searchStr="s=256"
+          alt={data.display_name}
+        />
       )}
 
       <div className="ms-0 ms-md-4 mt-4 mt-md-0">
@@ -123,7 +152,9 @@ const Index: FC<Props> = ({ data }) => {
                 className={classnames('d-flex', 'align-items-center', {
                   'me-3': i < a.length - 1,
                 })}>
-                {b.icon ? <SvgIcon base64={b.icon} /> : null}
+                {b.icon ? (
+                  <SvgIcon base64={b.icon} svgClassName="me-2" />
+                ) : null}
                 {b.url ? (
                   <a className="link-secondary" href={b.url}>
                     {b.label}

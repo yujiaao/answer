@@ -1,3 +1,22 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import { FC, FormEvent } from 'react';
 import { Form, Button } from 'react-bootstrap';
 import { useTranslation } from 'react-i18next';
@@ -28,6 +47,15 @@ const Index: FC<Props> = ({ visible, data, changeCallback, nextCallback }) => {
       };
     }
 
+    if (site_name.value && site_name.value.length > 30) {
+      bol = false;
+      data.site_url = {
+        value: site_name.value,
+        isInvalid: true,
+        errorMsg: t('site_name.msg_max_length'),
+      };
+    }
+
     if (!site_url.value) {
       bol = false;
       data.site_url = {
@@ -36,6 +64,7 @@ const Index: FC<Props> = ({ visible, data, changeCallback, nextCallback }) => {
         errorMsg: t('site_name.msg.empty'),
       };
     }
+
     const reg = /^(http|https):\/\//g;
     if (site_url.value && !site_url.value.match(reg)) {
       bol = false;
@@ -43,6 +72,13 @@ const Index: FC<Props> = ({ visible, data, changeCallback, nextCallback }) => {
         value: site_url.value,
         isInvalid: true,
         errorMsg: t('site_url.msg.incorrect'),
+      };
+    } else if (site_url.value.length > 512) {
+      bol = false;
+      data.site_url = {
+        value: site_url.value,
+        isInvalid: true,
+        errorMsg: t('site_url.msg.max_length'),
       };
     }
 
@@ -78,6 +114,13 @@ const Index: FC<Props> = ({ visible, data, changeCallback, nextCallback }) => {
         isInvalid: true,
         errorMsg: t('admin_name.character'),
       };
+    } else if (data.name.value.length > 30) {
+      bol = false;
+      data.name = {
+        value: data.name.value,
+        isInvalid: true,
+        errorMsg: t('admin_name.msg_max_length'),
+      };
     }
 
     if (!password.value) {
@@ -86,6 +129,24 @@ const Index: FC<Props> = ({ visible, data, changeCallback, nextCallback }) => {
         value: '',
         isInvalid: true,
         errorMsg: t('admin_password.msg'),
+      };
+    }
+
+    if (password.value && password.value.length < 4) {
+      bol = false;
+      data.password = {
+        value: data.password.value,
+        isInvalid: true,
+        errorMsg: t('admin_password.msg_min_length'),
+      };
+    }
+
+    if (password.value && password.value.length > 32) {
+      bol = false;
+      data.password = {
+        value: data.password.value,
+        isInvalid: true,
+        errorMsg: t('admin_password.msg_max_length'),
       };
     }
 
@@ -132,7 +193,6 @@ const Index: FC<Props> = ({ visible, data, changeCallback, nextCallback }) => {
           required
           value={data.site_name.value}
           isInvalid={data.site_name.isInvalid}
-          maxLength={30}
           onChange={(e) => {
             changeCallback({
               site_name: {
@@ -153,7 +213,6 @@ const Index: FC<Props> = ({ visible, data, changeCallback, nextCallback }) => {
           required
           value={data.site_url.value}
           isInvalid={data.site_url.isInvalid}
-          maxLength={512}
           onChange={(e) => {
             changeCallback({
               site_url: {
@@ -192,6 +251,27 @@ const Index: FC<Props> = ({ visible, data, changeCallback, nextCallback }) => {
         </Form.Control.Feedback>
       </Form.Group>
 
+      <Form.Group controlId="login_required" className="mb-3">
+        <Form.Label>{t('login_required.label')}</Form.Label>
+        <Form.Check
+          type="switch"
+          id="login_required"
+          label={t('login_required.switch')}
+          checked={data.login_required.value}
+          onChange={(e) => {
+            console.log(e.target.checked);
+            changeCallback({
+              login_required: {
+                value: e.target.checked,
+                isInvalid: false,
+                errorMsg: '',
+              },
+            });
+          }}
+        />
+        <Form.Text>{t('login_required.text')}</Form.Text>
+      </Form.Group>
+
       <h5>{t('admin_account')}</h5>
       <Form.Group controlId="name" className="mb-3">
         <Form.Label>{t('admin_name.label')}</Form.Label>
@@ -199,7 +279,6 @@ const Index: FC<Props> = ({ visible, data, changeCallback, nextCallback }) => {
           required
           value={data.name.value}
           isInvalid={data.name.isInvalid}
-          maxLength={30}
           onChange={(e) => {
             changeCallback({
               name: {
@@ -220,7 +299,6 @@ const Index: FC<Props> = ({ visible, data, changeCallback, nextCallback }) => {
         <Form.Control
           required
           type="password"
-          maxLength={32}
           value={data.password.value}
           isInvalid={data.password.isInvalid}
           onChange={(e) => {

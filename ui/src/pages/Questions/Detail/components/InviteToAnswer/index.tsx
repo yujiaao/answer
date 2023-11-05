@@ -1,3 +1,22 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import { memo, FC, useState, useEffect } from 'react';
 import { Card, Button } from 'react-bootstrap';
 import { useTranslation } from 'react-i18next';
@@ -8,6 +27,7 @@ import classNames from 'classnames';
 import { Avatar } from '@/components';
 import { getInviteUser, putInviteUser } from '@/services';
 import type * as Type from '@/common/interface';
+import { useCaptchaModal } from '@/hooks';
 
 import PeopleDropdown from './PeopleDropdown';
 
@@ -22,6 +42,7 @@ const Index: FC<Props> = ({ questionId, readOnly = false }) => {
   const MAX_ASK_NUMBER = 5;
   const [editing, setEditing] = useState(false);
   const [users, setUsers] = useState<Type.UserInfoBase[]>();
+  const iaCaptcha = useCaptchaModal('invitation_answer');
 
   const initInviteUsers = () => {
     if (!questionId) {
@@ -60,14 +81,23 @@ const Index: FC<Props> = ({ questionId, readOnly = false }) => {
     const names = users.map((_) => {
       return _.username;
     });
-    putInviteUser(questionId, names)
-      .then(() => {
-        setEditing(false);
-      })
-      .catch((ex) => {
-        console.log('ex: ', ex);
-      });
+    iaCaptcha.check(() => {
+      const imgCode: Type.ImgCodeReq = {};
+      iaCaptcha.resolveCaptchaReq(imgCode);
+      putInviteUser(questionId, names, imgCode)
+        .then(async () => {
+          await iaCaptcha.close();
+          setEditing(false);
+        })
+        .catch((ex) => {
+          if (ex.isError) {
+            iaCaptcha.handleCaptchaError(ex.list);
+          }
+          console.log('ex: ', ex);
+        });
+    });
   };
+
   useEffect(() => {
     initInviteUsers();
   }, [questionId]);
@@ -119,8 +149,9 @@ const Index: FC<Props> = ({ questionId, readOnly = false }) => {
                     avatar={user.avatar}
                     size="20"
                     className="rounded-1"
+                    alt={user.display_name}
                   />
-                  <span className="text-nowrap ms-2">{user.display_name}</span>
+                  <span className="text-break ms-2">{user.display_name}</span>
                   {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events */}
                   <span
                     className="px-1 me-n1"
@@ -135,8 +166,13 @@ const Index: FC<Props> = ({ questionId, readOnly = false }) => {
                 key={user.username}
                 to={`/users/${user.username}`}
                 className="mx-2 my-1 d-inline-flex flex-nowrap">
-                <Avatar avatar={user.avatar} size="24" className="rounded-1" />
-                <small className="text-nowrap ms-2">{user.display_name}</small>
+                <Avatar
+                  avatar={user.avatar}
+                  size="24"
+                  alt={user.display_name}
+                  className="rounded-1"
+                />
+                <small className="ms-2">{user.display_name}</small>
               </Link>
             );
           })}

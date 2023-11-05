@@ -1,4 +1,23 @@
-import { useState, useEffect, useCallback } from 'react';
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+import { useState, useEffect } from 'react';
 import { Button } from 'react-bootstrap';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -8,7 +27,7 @@ import { unionBy } from 'lodash';
 
 import * as Types from '@/common/interface';
 import { Modal } from '@/components';
-import { usePageUsers, useReportModal } from '@/hooks';
+import { usePageUsers, useReportModal, useCaptchaModal } from '@/hooks';
 import {
   matchedUsers,
   parseUserInfo,
@@ -23,6 +42,7 @@ import {
   updateComment,
   postVote,
 } from '@/services';
+import { commentReplyStore } from '@/stores';
 
 import { Form, ActionBar, Reply } from './components';
 
@@ -32,6 +52,8 @@ const Comment = ({ objectId, mode, commentId }) => {
   const pageUsers = usePageUsers();
   const [pageIndex, setPageIndex] = useState(0);
   const [visibleComment, setVisibleComment] = useState(false);
+  const { id: currentReplyId, update: updateCurrentReplyId } =
+    commentReplyStore();
   const pageSize = pageIndex === 0 ? 3 : 15;
   const { data, mutate } = useQueryComments({
     object_id: objectId,
@@ -43,14 +65,27 @@ const Comment = ({ objectId, mode, commentId }) => {
 
   const reportModal = useReportModal();
 
+  const addCaptcha = useCaptchaModal('comment');
+  const editCaptcha = useCaptchaModal('edit');
+  const dCaptcha = useCaptchaModal('delete');
+  const vCaptcha = useCaptchaModal('vote');
+
   const { t } = useTranslation('translation', { keyPrefix: 'comment' });
-  const scrollCallback = useCallback((el, co) => {
-    if (pageIndex === 0 && co.comment_id === commentId) {
+
+  useEffect(() => {
+    if (pageIndex === 0 && commentId) {
+      console.log('scrollCallback');
       setTimeout(() => {
+        const el = document.getElementById(commentId);
+        console.log(el);
         scrollToElementTop(el);
         bgFadeOut(el);
       }, 100);
     }
+
+    return () => {
+      updateCurrentReplyId('');
+    };
   }, []);
 
   useEffect(() => {
@@ -82,14 +117,11 @@ const Comment = ({ objectId, mode, commentId }) => {
     if (!tryNormalLogged(true)) {
       return;
     }
-    setComments(
-      comments.map((item) => {
-        if (item.comment_id === id) {
-          item.showReply = !item.showReply;
-        }
-        return item;
-      }),
-    );
+    comments.forEach((item) => {
+      if (item.comment_id === id) {
+        updateCurrentReplyId(id);
+      }
+    });
   };
 
   const handleEdit = (id) => {
@@ -120,43 +152,79 @@ const Comment = ({ objectId, mode, commentId }) => {
     };
 
     if (item.type === 'edit') {
-      return updateComment({
-        ...params,
-        comment_id: item.comment_id,
-      }).then((res) => {
-        setComments(
-          comments.map((comment) => {
-            if (comment.comment_id === item.comment_id) {
-              comment.showEdit = false;
-              comment.parsed_text = res.parsed_text;
-              comment.original_text = res.original_text;
+      return editCaptcha.check(() => {
+        const up = {
+          ...params,
+          comment_id: item.comment_id,
+          captcha_code: undefined,
+          captcha_id: undefined,
+        };
+        editCaptcha.resolveCaptchaReq(up);
+
+        return updateComment(up)
+          .then(async (res) => {
+            await editCaptcha.close();
+            setComments(
+              comments.map((comment) => {
+                if (comment.comment_id === item.comment_id) {
+                  comment.showEdit = false;
+                  comment.parsed_text = res.parsed_text;
+                  comment.original_text = res.original_text;
+                }
+                return comment;
+              }),
+            );
+          })
+          .catch((err) => {
+            if (err.isError) {
+              editCaptcha.handleCaptchaError(err.list);
             }
-            return comment;
-          }),
-        );
+          });
       });
     }
-    return addComment(params).then((res) => {
-      if (item.type === 'reply') {
-        const index = comments.findIndex(
-          (comment) => comment.comment_id === item.comment_id,
-        );
-        comments[index].showReply = false;
-        comments.splice(index + 1, 0, res);
-        setComments([...comments]);
-      } else {
-        setComments([
-          ...comments.map((comment) => {
-            if (comment.comment_id === item.comment_id) {
-              comment.showReply = false;
-            }
-            return comment;
-          }),
-          res,
-        ]);
-      }
 
-      setVisibleComment(false);
+    return addCaptcha.check(() => {
+      const req = {
+        ...params,
+        captcha_code: undefined,
+        captcha_id: undefined,
+      };
+      addCaptcha.resolveCaptchaReq(req);
+
+      return addComment(req)
+        .then(async (res) => {
+          await addCaptcha.close();
+          if (item.type === 'reply') {
+            const index = comments.findIndex(
+              (comment) => comment.comment_id === item.comment_id,
+            );
+            updateCurrentReplyId('');
+            comments.splice(index + 1, 0, res);
+            setComments([...comments]);
+          } else {
+            setComments([
+              ...comments.map((comment) => {
+                if (comment.comment_id === item.comment_id) {
+                  updateCurrentReplyId('');
+                }
+                return comment;
+              }),
+              res,
+            ]);
+          }
+
+          setVisibleComment(false);
+        })
+        .catch((ex) => {
+          if (ex.isError) {
+            const captchaErr = addCaptcha.handleCaptchaError(ex.list);
+            // If it is not a CAPTCHA error, leave it to the subsequent error handling logic to continue processing.
+            if (!(captchaErr && ex.list.length === 1)) {
+              return Promise.reject(ex);
+            }
+          }
+          return Promise.resolve();
+        });
     });
   };
 
@@ -167,11 +235,23 @@ const Comment = ({ objectId, mode, commentId }) => {
       confirmBtnVariant: 'danger',
       confirmText: t('delete', { keyPrefix: 'btns' }),
       onConfirm: () => {
-        deleteComment(id).then(() => {
-          if (pageIndex === 0) {
-            mutate();
-          }
-          setComments(comments.filter((item) => item.comment_id !== id));
+        dCaptcha.check(() => {
+          const imgCode = { captcha_id: undefined, captcha_code: undefined };
+          dCaptcha.resolveCaptchaReq(imgCode);
+
+          deleteComment(id, imgCode)
+            .then(async () => {
+              await dCaptcha.close();
+              if (pageIndex === 0) {
+                mutate();
+              }
+              setComments(comments.filter((item) => item.comment_id !== id));
+            })
+            .catch((ex) => {
+              if (ex.isError) {
+                dCaptcha.handleCaptchaError(ex.list);
+              }
+            });
         });
       },
     });
@@ -182,24 +262,40 @@ const Comment = ({ objectId, mode, commentId }) => {
       return;
     }
 
-    postVote(
-      {
-        object_id: id,
-        is_cancel,
-      },
-      'up',
-    ).then(() => {
-      setComments(
-        comments.map((item) => {
-          if (item.comment_id === id) {
-            item.vote_count = is_cancel
-              ? item.vote_count - 1
-              : item.vote_count + 1;
-            item.is_vote = !is_cancel;
+    vCaptcha.check(() => {
+      const imgCode: Types.ImgCodeReq = {
+        captcha_id: undefined,
+        captcha_code: undefined,
+      };
+      vCaptcha.resolveCaptchaReq(imgCode);
+
+      postVote(
+        {
+          object_id: id,
+          is_cancel,
+          ...imgCode,
+        },
+        'up',
+      )
+        .then(async () => {
+          await vCaptcha.close();
+          setComments(
+            comments.map((item) => {
+              if (item.comment_id === id) {
+                item.vote_count = is_cancel
+                  ? item.vote_count - 1
+                  : item.vote_count + 1;
+                item.is_vote = !is_cancel;
+              }
+              return item;
+            }),
+          );
+        })
+        .catch((ex) => {
+          if (ex.isError) {
+            vCaptcha.handleCaptchaError(ex.list);
           }
-          return item;
-        }),
-      );
+        });
     });
   };
 
@@ -224,8 +320,8 @@ const Comment = ({ objectId, mode, commentId }) => {
     setComments(
       comments.map((item) => {
         if (item.comment_id === id) {
-          item.showReply = false;
           item.showEdit = false;
+          updateCurrentReplyId('');
         }
         return item;
       }),
@@ -237,9 +333,7 @@ const Comment = ({ objectId, mode, commentId }) => {
         return (
           <div
             key={item.comment_id}
-            ref={(el) => {
-              scrollCallback(el, item);
-            }}
+            id={item.comment_id}
             className={classNames(
               'border-bottom py-2 comment-item',
               index === 0 && 'border-top',
@@ -270,7 +364,7 @@ const Comment = ({ objectId, mode, commentId }) => {
               </div>
             )}
 
-            {item.showReply ? (
+            {currentReplyId === item.comment_id ? (
               <Reply
                 userName={item.user_display_name}
                 mode={mode}
@@ -280,7 +374,7 @@ const Comment = ({ objectId, mode, commentId }) => {
                 onCancel={() => handleCancel(item.comment_id)}
               />
             ) : null}
-            {item.showEdit || item.showReply ? null : (
+            {item.showEdit || currentReplyId === item.comment_id ? null : (
               <ActionBar
                 nickName={item.user_display_name}
                 username={item.username}

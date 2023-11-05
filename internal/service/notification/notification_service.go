@@ -1,20 +1,41 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package notification
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	usercommon "github.com/apache/incubator-answer/internal/service/user_common"
+	"github.com/apache/incubator-answer/pkg/converter"
 
-	"github.com/answerdev/answer/internal/base/constant"
-	"github.com/answerdev/answer/internal/base/data"
-	"github.com/answerdev/answer/internal/base/handler"
-	"github.com/answerdev/answer/internal/base/pager"
-	"github.com/answerdev/answer/internal/base/translator"
-	"github.com/answerdev/answer/internal/entity"
-	"github.com/answerdev/answer/internal/schema"
-	notficationcommon "github.com/answerdev/answer/internal/service/notification_common"
-	"github.com/answerdev/answer/internal/service/revision_common"
-	"github.com/answerdev/answer/pkg/uid"
+	"github.com/apache/incubator-answer/internal/base/constant"
+	"github.com/apache/incubator-answer/internal/base/data"
+	"github.com/apache/incubator-answer/internal/base/handler"
+	"github.com/apache/incubator-answer/internal/base/pager"
+	"github.com/apache/incubator-answer/internal/base/translator"
+	"github.com/apache/incubator-answer/internal/entity"
+	"github.com/apache/incubator-answer/internal/schema"
+	notficationcommon "github.com/apache/incubator-answer/internal/service/notification_common"
+	"github.com/apache/incubator-answer/internal/service/revision_common"
+	"github.com/apache/incubator-answer/pkg/uid"
 	"github.com/jinzhu/copier"
 	"github.com/segmentfault/pacman/log"
 )
@@ -25,6 +46,7 @@ type NotificationService struct {
 	notificationRepo   notficationcommon.NotificationRepo
 	notificationCommon *notficationcommon.NotificationCommon
 	revisionService    *revision_common.RevisionService
+	userRepo           usercommon.UserRepo
 }
 
 func NewNotificationService(
@@ -32,13 +54,14 @@ func NewNotificationService(
 	notificationRepo notficationcommon.NotificationRepo,
 	notificationCommon *notficationcommon.NotificationCommon,
 	revisionService *revision_common.RevisionService,
-
+	userRepo usercommon.UserRepo,
 ) *NotificationService {
 	return &NotificationService{
 		data:               data,
 		notificationRepo:   notificationRepo,
 		notificationCommon: notificationCommon,
 		revisionService:    revisionService,
+		userRepo:           userRepo,
 	}
 }
 
@@ -46,13 +69,13 @@ func (ns *NotificationService) GetRedDot(ctx context.Context, req *schema.GetRed
 	redBot := &schema.RedDot{}
 	inboxKey := fmt.Sprintf("answer_RedDot_%d_%s", schema.NotificationTypeInbox, req.UserID)
 	achievementKey := fmt.Sprintf("answer_RedDot_%d_%s", schema.NotificationTypeAchievement, req.UserID)
-	inboxValue, err := ns.data.Cache.GetInt64(ctx, inboxKey)
+	inboxValue, _, err := ns.data.Cache.GetInt64(ctx, inboxKey)
 	if err != nil {
 		redBot.Inbox = 0
 	} else {
 		redBot.Inbox = inboxValue
 	}
-	achievementValue, err := ns.data.Cache.GetInt64(ctx, achievementKey)
+	achievementValue, _, err := ns.data.Cache.GetInt64(ctx, achievementKey)
 	if err != nil {
 		redBot.Achievement = 0
 	} else {
@@ -146,6 +169,9 @@ func (ns *NotificationService) GetNotificationPage(ctx context.Context, searchCo
 func (ns *NotificationService) formatNotificationPage(ctx context.Context, notifications []*entity.Notification) (
 	resp []*schema.NotificationContent, err error) {
 	lang := handler.GetLangByCtx(ctx)
+	enableShortID := handler.GetEnableShortID(ctx)
+	userIDs := make([]string, 0)
+	userMapping := make(map[string]bool)
 	for _, notificationInfo := range notifications {
 		item := &schema.NotificationContent{}
 		if err := json.Unmarshal([]byte(notificationInfo.Content), item); err != nil {
@@ -163,20 +189,55 @@ func (ns *NotificationService) formatNotificationPage(ctx context.Context, notif
 		item.UpdateTime = notificationInfo.UpdatedAt.Unix()
 		item.IsRead = notificationInfo.IsRead == schema.NotificationRead
 
-		if answerID, ok := item.ObjectInfo.ObjectMap["answer"]; ok {
-			if item.ObjectInfo.ObjectID == answerID {
-				item.ObjectInfo.ObjectID = uid.EnShortID(item.ObjectInfo.ObjectMap["answer"])
+		if enableShortID {
+			if answerID, ok := item.ObjectInfo.ObjectMap["answer"]; ok {
+				if item.ObjectInfo.ObjectID == answerID {
+					item.ObjectInfo.ObjectID = uid.EnShortID(item.ObjectInfo.ObjectMap["answer"])
+				}
+				item.ObjectInfo.ObjectMap["answer"] = uid.EnShortID(item.ObjectInfo.ObjectMap["answer"])
 			}
-			item.ObjectInfo.ObjectMap["answer"] = uid.EnShortID(item.ObjectInfo.ObjectMap["answer"])
-		}
-		if questionID, ok := item.ObjectInfo.ObjectMap["question"]; ok {
-			if item.ObjectInfo.ObjectID == questionID {
-				item.ObjectInfo.ObjectID = uid.EnShortID(item.ObjectInfo.ObjectMap["question"])
+			if questionID, ok := item.ObjectInfo.ObjectMap["question"]; ok {
+				if item.ObjectInfo.ObjectID == questionID {
+					item.ObjectInfo.ObjectID = uid.EnShortID(item.ObjectInfo.ObjectMap["question"])
+				}
+				item.ObjectInfo.ObjectMap["question"] = uid.EnShortID(item.ObjectInfo.ObjectMap["question"])
 			}
-			item.ObjectInfo.ObjectMap["question"] = uid.EnShortID(item.ObjectInfo.ObjectMap["question"])
 		}
 
+		if item.UserInfo != nil && !userMapping[item.UserInfo.ID] {
+			userIDs = append(userIDs, item.UserInfo.ID)
+			userMapping[item.UserInfo.ID] = true
+		}
 		resp = append(resp, item)
+	}
+
+	if len(userIDs) == 0 {
+		return resp, nil
+	}
+
+	users, err := ns.userRepo.BatchGetByID(ctx, userIDs)
+	if err != nil {
+		log.Error(err)
+		return resp, nil
+	}
+	userIDMapping := make(map[string]*entity.User, len(users))
+	for _, user := range users {
+		userIDMapping[user.ID] = user
+	}
+	for _, item := range resp {
+		if item.UserInfo == nil {
+			continue
+		}
+		userInfo, ok := userIDMapping[item.UserInfo.ID]
+		if !ok {
+			continue
+		}
+		if userInfo.Status == entity.UserStatusDeleted {
+			item.UserInfo = &schema.UserBasicInfo{
+				DisplayName: "user" + converter.DeleteUserDisplay(userInfo.ID),
+				Status:      constant.UserDeleted,
+			}
+		}
 	}
 	return resp, nil
 }

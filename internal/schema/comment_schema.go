@@ -1,9 +1,28 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package schema
 
 import (
-	"github.com/answerdev/answer/internal/base/validator"
-	"github.com/answerdev/answer/internal/entity"
-	"github.com/answerdev/answer/pkg/converter"
+	"github.com/apache/incubator-answer/internal/base/validator"
+	"github.com/apache/incubator-answer/internal/entity"
+	"github.com/apache/incubator-answer/pkg/converter"
 	"github.com/jinzhu/copier"
 )
 
@@ -26,7 +45,9 @@ type AddCommentReq struct {
 	// whether user can edit it
 	CanEdit bool `json:"-"`
 	// whether user can delete it
-	CanDelete bool `json:"-"`
+	CanDelete   bool   `json:"-"`
+	CaptchaID   string `json:"captcha_id"` // captcha_id
+	CaptchaCode string `json:"captcha_code"`
 }
 
 func (req *AddCommentReq) Check() (errFields []*validator.FormErrorField, err error) {
@@ -39,7 +60,9 @@ type RemoveCommentReq struct {
 	// comment id
 	CommentID string `validate:"required" json:"comment_id"`
 	// user id
-	UserID string `json:"-"`
+	UserID      string `json:"-"`
+	CaptchaID   string `json:"captcha_id"` // captcha_id
+	CaptchaCode string `json:"captcha_code"`
 }
 
 // UpdateCommentReq update comment request
@@ -54,16 +77,26 @@ type UpdateCommentReq struct {
 	UserID  string `json:"-"`
 	IsAdmin bool   `json:"-"`
 
-	CanAdd bool `json:"-"`
 	// whether user can edit it
 	CanEdit bool `json:"-"`
+
 	// whether user can delete it
-	CanDelete bool `json:"-"`
+	CaptchaID   string `json:"captcha_id"` // captcha_id
+	CaptchaCode string `json:"captcha_code"`
 }
 
 func (req *UpdateCommentReq) Check() (errFields []*validator.FormErrorField, err error) {
 	req.ParsedText = converter.Markdown2HTML(req.OriginalText)
 	return nil, nil
+}
+
+type UpdateCommentResp struct {
+	// comment id
+	CommentID string `json:"comment_id"`
+	// original comment content
+	OriginalText string `json:"original_text"`
+	// parsed comment content
+	ParsedText string `json:"parsed_text"`
 }
 
 // GetCommentListReq get comment list all request

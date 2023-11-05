@@ -1,16 +1,35 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package collection
 
 import (
 	"context"
-
-	"github.com/answerdev/answer/internal/base/constant"
-	"github.com/answerdev/answer/internal/base/data"
-	"github.com/answerdev/answer/internal/base/pager"
-	"github.com/answerdev/answer/internal/base/reason"
-	"github.com/answerdev/answer/internal/entity"
-	collectioncommon "github.com/answerdev/answer/internal/service/collection_common"
-	"github.com/answerdev/answer/internal/service/unique"
-	"github.com/answerdev/answer/pkg/uid"
+	"github.com/apache/incubator-answer/internal/base/constant"
+	"github.com/apache/incubator-answer/internal/base/data"
+	"github.com/apache/incubator-answer/internal/base/handler"
+	"github.com/apache/incubator-answer/internal/base/pager"
+	"github.com/apache/incubator-answer/internal/base/reason"
+	"github.com/apache/incubator-answer/internal/entity"
+	collectioncommon "github.com/apache/incubator-answer/internal/service/collection_common"
+	"github.com/apache/incubator-answer/internal/service/unique"
+	"github.com/apache/incubator-answer/pkg/uid"
 	"github.com/segmentfault/pacman/errors"
 	"xorm.io/xorm"
 )
@@ -142,25 +161,32 @@ func (cr *collectionRepo) GetCollectionPage(ctx context.Context, page, pageSize 
 	session = session.OrderBy("update_time desc")
 
 	total, err = pager.Help(page, pageSize, collectionList, collection, session)
-	err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	if err != nil {
+		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
 	return
 }
 
 // SearchObjectCollected check object is collected or not
 func (cr *collectionRepo) SearchObjectCollected(ctx context.Context, userID string, objectIds []string) (map[string]bool, error) {
-	collectedMap := make(map[string]bool)
-	for k, object_id := range objectIds {
-		objectIds[k] = uid.DeShortID(object_id)
+	for i := 0; i < len(objectIds); i++ {
+		objectIds[i] = uid.DeShortID(objectIds[i])
 	}
+
 	list, err := cr.SearchByObjectIDsAndUser(ctx, userID, objectIds)
 	if err != nil {
-		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
-		return collectedMap, err
+		return nil, errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 	}
+
+	collectedMap := make(map[string]bool)
+	short := handler.GetEnableShortID(ctx)
 	for _, item := range list {
+		if short {
+			item.ObjectID = uid.EnShortID(item.ObjectID)
+		}
 		collectedMap[item.ObjectID] = true
 	}
-	return collectedMap, err
+	return collectedMap, nil
 }
 
 // SearchList

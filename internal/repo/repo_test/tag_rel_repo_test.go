@@ -1,12 +1,34 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package repo_test
 
 import (
 	"context"
+	"log"
 	"sync"
 	"testing"
 
-	"github.com/answerdev/answer/internal/entity"
-	"github.com/answerdev/answer/internal/repo/tag"
+	"github.com/apache/incubator-answer/internal/repo/unique"
+
+	"github.com/apache/incubator-answer/internal/entity"
+	"github.com/apache/incubator-answer/internal/repo/tag"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -14,29 +36,29 @@ var (
 	tagRelOnce     sync.Once
 	testTagRelList = []*entity.TagRel{
 		{
-			ObjectID: "1",
-			TagID:    "1",
+			ObjectID: "10010000000000001",
+			TagID:    "10030000000000001",
 			Status:   entity.TagRelStatusAvailable,
 		},
 		{
-			ObjectID: "2",
-			TagID:    "2",
+			ObjectID: "10010000000000002",
+			TagID:    "10030000000000002",
 			Status:   entity.TagRelStatusAvailable,
 		},
 	}
 )
 
 func addTagRelList() {
-	tagRelRepo := tag.NewTagRelRepo(testDataSource)
+	tagRelRepo := tag.NewTagRelRepo(testDataSource, unique.NewUniqueIDRepo(testDataSource))
 	err := tagRelRepo.AddTagRelList(context.TODO(), testTagRelList)
 	if err != nil {
-		panic(err)
+		log.Fatalf("%+v", err)
 	}
 }
 
 func Test_tagListRepo_BatchGetObjectTagRelList(t *testing.T) {
 	tagRelOnce.Do(addTagRelList)
-	tagRelRepo := tag.NewTagRelRepo(testDataSource)
+	tagRelRepo := tag.NewTagRelRepo(testDataSource, unique.NewUniqueIDRepo(testDataSource))
 	relList, err :=
 		tagRelRepo.BatchGetObjectTagRelList(context.TODO(), []string{testTagRelList[0].ObjectID, testTagRelList[1].ObjectID})
 	assert.NoError(t, err)
@@ -45,15 +67,15 @@ func Test_tagListRepo_BatchGetObjectTagRelList(t *testing.T) {
 
 func Test_tagListRepo_CountTagRelByTagID(t *testing.T) {
 	tagRelOnce.Do(addTagRelList)
-	tagRelRepo := tag.NewTagRelRepo(testDataSource)
-	count, err := tagRelRepo.CountTagRelByTagID(context.TODO(), "1")
+	tagRelRepo := tag.NewTagRelRepo(testDataSource, unique.NewUniqueIDRepo(testDataSource))
+	count, err := tagRelRepo.CountTagRelByTagID(context.TODO(), "10030000000000001")
 	assert.NoError(t, err)
 	assert.Equal(t, int64(1), count)
 }
 
 func Test_tagListRepo_GetObjectTagRelList(t *testing.T) {
 	tagRelOnce.Do(addTagRelList)
-	tagRelRepo := tag.NewTagRelRepo(testDataSource)
+	tagRelRepo := tag.NewTagRelRepo(testDataSource, unique.NewUniqueIDRepo(testDataSource))
 
 	relList, err :=
 		tagRelRepo.GetObjectTagRelList(context.TODO(), testTagRelList[0].ObjectID)
@@ -63,7 +85,7 @@ func Test_tagListRepo_GetObjectTagRelList(t *testing.T) {
 
 func Test_tagListRepo_GetObjectTagRelWithoutStatus(t *testing.T) {
 	tagRelOnce.Do(addTagRelList)
-	tagRelRepo := tag.NewTagRelRepo(testDataSource)
+	tagRelRepo := tag.NewTagRelRepo(testDataSource, unique.NewUniqueIDRepo(testDataSource))
 
 	relList, err :=
 		tagRelRepo.BatchGetObjectTagRelList(context.TODO(), []string{testTagRelList[0].ObjectID, testTagRelList[1].ObjectID})
@@ -74,7 +96,7 @@ func Test_tagListRepo_GetObjectTagRelWithoutStatus(t *testing.T) {
 	err = tagRelRepo.RemoveTagRelListByIDs(context.TODO(), ids)
 	assert.NoError(t, err)
 
-	count, err := tagRelRepo.CountTagRelByTagID(context.TODO(), "1")
+	count, err := tagRelRepo.CountTagRelByTagID(context.TODO(), "10030000000000001")
 	assert.NoError(t, err)
 	assert.Equal(t, int64(0), count)
 
@@ -85,7 +107,7 @@ func Test_tagListRepo_GetObjectTagRelWithoutStatus(t *testing.T) {
 	err = tagRelRepo.EnableTagRelByIDs(context.TODO(), ids)
 	assert.NoError(t, err)
 
-	count, err = tagRelRepo.CountTagRelByTagID(context.TODO(), "1")
+	count, err = tagRelRepo.CountTagRelByTagID(context.TODO(), "10030000000000001")
 	assert.NoError(t, err)
 	assert.Equal(t, int64(1), count)
 }

@@ -1,3 +1,22 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import { FC, memo } from 'react';
 import { Nav, Dropdown } from 'react-bootstrap';
 import { useTranslation } from 'react-i18next';
@@ -10,7 +29,7 @@ import { userCenterStore } from '@/stores';
 
 interface Props {
   redDot: Type.NotificationStatus | undefined;
-  userInfo;
+  userInfo: Type.UserInfoRes;
   logOut: () => void;
 }
 
@@ -32,18 +51,30 @@ const Index: FC<Props> = ({ redDot, userInfo, logOut }) => {
         <Nav.Link
           as={NavLink}
           to="/users/notifications/inbox"
+          title={t('inbox', { keyPrefix: 'notifications' })}
           className="icon-link d-flex align-items-center justify-content-center p-0 me-3 position-relative">
           <Icon name="bell-fill" className="fs-4" />
-          {(redDot?.inbox || 0) > 0 && <div className="unread-dot bg-danger" />}
+          {(redDot?.inbox || 0) > 0 && (
+            <div className="unread-dot bg-danger">
+              <span className="visually-hidden">
+                {t('new_alerts', { keyPrefix: 'notifications' })}
+              </span>
+            </div>
+          )}
         </Nav.Link>
 
         <Nav.Link
           as={NavLink}
           to="/users/notifications/achievement"
+          title={t('achievement', { keyPrefix: 'notifications' })}
           className="icon-link d-flex align-items-center justify-content-center p-0 me-3 position-relative">
           <Icon name="trophy-fill" className="fs-4" />
           {(redDot?.achievement || 0) > 0 && (
-            <div className="unread-dot bg-danger" />
+            <div className="unread-dot bg-danger">
+              <span className="visually-hidden">
+                {t('new_alerts', { keyPrefix: 'notifications' })}
+              </span>
+            </div>
           )}
         </Nav.Link>
       </Nav>
@@ -53,8 +84,14 @@ const Index: FC<Props> = ({ redDot, userInfo, logOut }) => {
           variant="success"
           id="dropdown-basic"
           as="a"
+          role="button"
           className="no-toggle pointer">
-          <Avatar size="36px" avatar={userInfo?.avatar} searchStr="s=96" />
+          <Avatar
+            size="36px"
+            avatar={userInfo?.avatar}
+            alt={userInfo?.display_name}
+            searchStr="s=96"
+          />
         </Dropdown.Toggle>
 
         <Dropdown.Menu>

@@ -1,3 +1,22 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import { FC, useEffect, useState } from 'react';
 import { Row, Col, Button } from 'react-bootstrap';
 import {
@@ -10,7 +29,7 @@ import { useTranslation } from 'react-i18next';
 
 import { usePageTags } from '@/hooks';
 import * as Type from '@/common/interface';
-import { FollowingTags, CustomSidebar } from '@/components';
+import { FollowingTags, CustomSidebar, Icon } from '@/components';
 import {
   useTagInfo,
   useFollow,
@@ -47,7 +66,10 @@ const Index: FC = () => {
   const { data: tagResp, isLoading } = useTagInfo({ name: curTagName });
   const { data: listData, isLoading: listLoading } = useQuestionList(reqParams);
   const { data: followResp } = useFollow(tagFollow);
-  const { data: synonymsRes } = useQuerySynonymsTags(tagInfo?.tag_id);
+  const { data: synonymsRes } = useQuerySynonymsTags(
+    tagInfo?.tag_id,
+    tagInfo?.status,
+  );
   const toggleFollow = () => {
     if (!guard.tryNormalLogged(true)) {
       return;
@@ -108,7 +130,7 @@ const Index: FC = () => {
   return (
     <Row className="pt-4 mb-5">
       <Col className="page-main flex-auto">
-        {isLoading || listLoading ? (
+        {isLoading ? (
           <div className="tag-box mb-5 placeholder-glow">
             <div className="mb-3 h3 placeholder" style={{ width: '120px' }} />
             <p
@@ -141,9 +163,16 @@ const Index: FC = () => {
 
             <div className="box-ft">
               {tagInfo.is_follower ? (
-                <Button variant="primary" onClick={() => toggleFollow()}>
-                  {t('button_following')}
-                </Button>
+                <div>
+                  <Button variant="primary" onClick={() => toggleFollow()}>
+                    {t('button_following')}
+                  </Button>
+                  <Link
+                    className="btn btn-outline-secondary ms-2"
+                    to="/users/settings/notify">
+                    <Icon name="bell-fill" />
+                  </Link>
+                </div>
               ) : (
                 <Button
                   variant="outline-primary"

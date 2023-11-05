@@ -1,3 +1,20 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 #The following fields are used for back-end
 backend:
   base:
@@ -13,6 +30,8 @@ backend:
       other: Chyba dátového servera.
     forbidden_error:
       other: Forbidden.
+    duplicate_request_error:
+      other: Duplicate submission.
   action:
     report:
       other: Flag
@@ -36,6 +55,8 @@ backend:
       other: List
     invite_someone_to_answer:
       other: Edit
+    undelete:
+      other: Undelete
   role:
     name:
       user:
@@ -107,8 +128,12 @@ backend:
       other: Manage tag synonyms
   email:
     other: E-mail
+  e_mail:
+    other: Email
   password:
     other: Heslo
+  pass:
+    other: Password
   email_or_password_wrong_error:
     other: E-mail a heslo sa nezhodujú.
   error:
@@ -182,7 +207,7 @@ backend:
         other: Žiadne povolenie na aktualizáciu.
     rank:
       fail_to_meet_the_condition:
-        other: Poradie nespĺňa podmienku.
+        other: Reputation rank fail to meet the condition.
       vote_fail_to_meet_the_condition:
         other: Thanks for the feedback. You need at least {{.Rank}} reputation to cast a vote.
       no_enough_rank_to_operate:
@@ -198,7 +223,7 @@ backend:
       not_found:
         other: Značka sa nenašla.
       recommend_tag_not_found:
-        other: Značka Odporúčania neexistuje
+        other: Recommend tag is not exist.
       recommend_tag_enter:
         other: Zadajte aspoň jednu požadovanú značku.
       not_contain_synonym_tags:
@@ -206,12 +231,12 @@ backend:
       cannot_update:
         other: Žiadne povolenie na aktualizáciu.
       is_used_cannot_delete:
-        other: Zadajte e-mailovú adresu, na ktorú sa budú odosielať testy
+        other: You cannot delete a tag that is in use.
       cannot_set_synonym_as_itself:
         other: Synonymum aktuálnej značky nemôžete nastaviť ako samotnú.
     smtp:
       config_from_name_cannot_be_email:
-        other: Meno odosielateľa nemôže byť e-mailová adresa.
+        other: The from name cannot be a email address.
     theme:
       not_found:
         other: Téma sa nenašla.
@@ -219,7 +244,7 @@ backend:
       review_underway:
         other: Momentálne nie je možné upravovať, vo fronte na kontrolu je verzia.
       no_permission:
-        other: Žiadne povolenie na revíziu.
+        other: No permission to revise.
     user:
       external_login_missing_user_id:
         other: The third-party platform does not provide a unique UserID, so you cannot login, please contact the website administrator.
@@ -241,11 +266,15 @@ backend:
       cannot_update_your_role:
         other: Svoju rolu nemôžete zmeniť.
       not_allowed_registration:
-        other: V súčasnosti nie je stránka otvorená na registráciu
+        other: Currently the site is not open for registration.
       access_denied:
         other: Access denied
       page_access_denied:
         other: You do not have access to this page.
+      add_bulk_users_format_error:
+        other: "Error {{.Field}} format near '{{.Content}}' at line {{.Line}}. {{.ExtraMessage}}"
+      add_bulk_users_amount_error:
+        other: "The number of users you add at once should be in the range of 1-{{.MaxAmount}}."
     config:
       read_config_failed:
         other: Read Config zlyhal
@@ -302,7 +331,7 @@ backend:
       name:
         other: a community-specific reason
       desc:
-        other: This question doesn’t meet a community guideline.
+        other: This question doesn't meet a community guideline.
     not_clarity:
       name:
         other: needs details or clarity
@@ -310,7 +339,7 @@ backend:
         other: This question currently includes multiple questions in one. It should focus on one problem only.
     looks_ok:
       name:
-        other: looks ok
+        other: looks OK
       desc:
         other: This post is good as-is and not low quality.
     needs_edit:
@@ -322,7 +351,7 @@ backend:
       name:
         other: needs close
       desc:
-        other: A closed question can’t answer, but still can edit, vote and comment.
+        other: A closed question can't answer, but still can edit, vote and comment.
     needs_delete:
       name:
         other: needs delete
@@ -402,32 +431,37 @@ backend:
       title:
         other: "[{{.SiteName}}] Confirm your new email address"
       body:
-        other: "Confirm your new email address for {{.SiteName}}  by clicking on the following link:<br><br>\n\n<a href='{{.ChangeEmailUrl}}' target='_blank'>{{.ChangeEmailUrl}}</a><br><br>\n\nIf you did not request this change, please ignore this email.\n"
+        other: "Confirm your new email address for {{.SiteName}} by clicking on the following link:<br>\n<a href='{{.ChangeEmailUrl}}' target='_blank'>{{.ChangeEmailUrl}}</a><br><br>\n\nIf you did not request this change, please ignore this email.\n"
     new_answer:
       title:
         other: "[{{.SiteName}}] {{.DisplayName}} answered your question"
       body:
-        other: "<strong><a href='{{.AnswerUrl}}'>{{.QuestionTitle}}</a></strong><br><br>\n\n<small>{{.DisplayName}}:</small><br>\n<blockquote>{{.AnswerSummary}}</blockquote><br>\n<a href='{{.AnswerUrl}}'>View it on {{.SiteName}}</a><br><br>\n\n<small>You are receiving this because you authored the thread. <a href='{{.UnsubscribeUrl}}'>Unsubscribe</a></small>"
+        other: "<a href='{{.AnswerUrl}}'>{{.QuestionTitle}}</a><br><br>\n\n{{.DisplayName}}:<br>\n<blockquote>{{.AnswerSummary}}</blockquote><br>\n<a href='{{.AnswerUrl}}'>View it on {{.SiteName}}</a><br><br>\n\n--<br>\n<small><a href='{{.UnsubscribeUrl}}'>Unsubscribe</a></small>"
     invited_you_to_answer:
       title:
         other: "[{{.SiteName}}] {{.DisplayName}} invited you to answer"
       body:
-        other: "<strong><a href='{{.InviteUrl}}'>{{.QuestionTitle}}</a></strong><br><br>\n\n<small>{{.DisplayName}}:</small><br>\n<blockquote>I think you may know the answer.</blockquote><br>\n<a href='{{.InviteUrl}}'>View it on {{.SiteName}}</a><br><br>\n\n<small>You are receiving this because you authored the thread. <a href='{{.UnsubscribeUrl}}'>Unsubscribe</a></small>"
+        other: "<a href='{{.InviteUrl}}'>{{.QuestionTitle}}</a><br><br>\n\n{{.DisplayName}}:<br>\n<blockquote>I think you may know the answer.</blockquote><br>\n<a href='{{.InviteUrl}}'>View it on {{.SiteName}}</a><br><br>\n\n--<br>\n<small><a href='{{.UnsubscribeUrl}}'>Unsubscribe</a></small>"
     new_comment:
       title:
         other: "[{{.SiteName}}] {{.DisplayName}} commented on your post"
       body:
-        other: "<strong><a href='{{.CommentUrl}}'>{{.QuestionTitle}}</a></strong><br><br>\n\n<small>{{.DisplayName}}:</small><br>\n<blockquote>{{.CommentSummary}}</blockquote><br>\n<a href='{{.CommentUrl}}'>View it on {{.SiteName}}</a><br><br>\n\n<small>You are receiving this because you authored the thread. <a href='{{.UnsubscribeUrl}}'>Unsubscribe</a></small>"
+        other: "<a href='{{.CommentUrl}}'>{{.QuestionTitle}}</a><br><br>\n\n{{.DisplayName}}:<br>\n<blockquote>{{.CommentSummary}}</blockquote><br>\n<a href='{{.CommentUrl}}'>View it on {{.SiteName}}</a><br><br>\n\n--<br>\n<small><a href='{{.UnsubscribeUrl}}'>Unsubscribe</a></small>"
+    new_question:
+      title:
+        other: "[{{.SiteName}}] New question: {{.QuestionTitle}}"
+      body:
+        other: "<a href='{{.QuestionUrl}}'>{{.QuestionTitle}}</a><br>\n<small>{{.Tags}}</small><br><br>\n\n--<br>\n<small><a href='{{.UnsubscribeUrl}}'>Unsubscribe</a></small>"
     pass_reset:
       title:
         other: "[{{.SiteName }}] Password reset"
       body:
-        other: "Somebody asked to reset your password on [{{.SiteName}}].<br><br>\n\nIf it was not you, you can safely ignore this email.<br><br>\n\nClick the following link to choose a new password:<br>\n<a href='{{.PassResetUrl}}' target='_blank'>{{.PassResetUrl}}</a>\n"
+        other: "Somebody asked to reset your password on {{.SiteName}}.<br><br>\n\nIf it was not you, you can safely ignore this email.<br><br>\n\nClick the following link to choose a new password:<br>\n<a href='{{.PassResetUrl}}' target='_blank'>{{.PassResetUrl}}</a>\n"
     register:
       title:
         other: "[{{.SiteName}}] Confirm your new account"
       body:
-        other: "Welcome to {{.SiteName}}<br><br>\n\nClick the following link to confirm and activate your new account:<br>\n<a href='{{.RegisterUrl}}' target='_blank'>{{.RegisterUrl}}</a><br><br>\n\nIf the above link is not clickable, try copying and pasting it into the address bar of your web browser.\n"
+        other: "Welcome to {{.SiteName}}!<br><br>\n\nClick the following link to confirm and activate your new account:<br>\n<a href='{{.RegisterUrl}}' target='_blank'>{{.RegisterUrl}}</a><br><br>\n\nIf the above link is not clickable, try copying and pasting it into the address bar of your web browser.\n"
     test:
       title:
         other: "[{{.SiteName}}] Test Email"
@@ -490,6 +524,7 @@ ui:
     title: Oznámenia
     inbox: Doručená pošta
     achievement: Úspechy
+    new_alerts: New alerts
     all_read: Označiť všetko ako prečítané
     show_more: Zobraziť viac
     someone: Someone
@@ -550,7 +585,7 @@ ui:
     help:
       text: Pomoc
     hr:
-      text: Horizontal Rule
+      text: Horizontal rule
     image:
       text: Obrázok
       add_image: Pridať obrázok
@@ -558,7 +593,7 @@ ui:
       form_image:
         fields:
           file:
-            label: Obrázkový súbor
+            label: Image file
             btn: Vyberte obrázok
             msg:
               empty: Názov súboru nemôže byť prázdny.
@@ -598,9 +633,9 @@ ui:
       btn_cancel: Zrušiť
       btn_confirm: Pridať
     ordered_list:
-      text: Očíslovaný zoznam
+      text: Numbered list
     unordered_list:
-      text: Bulleted List
+      text: Bulleted list
     table:
       text: Table
       heading: Heading
@@ -630,12 +665,12 @@ ui:
     form:
       fields:
         display_name:
-          label: Zobrazovaný názov
+          label: Display name
           msg:
             empty: Zobrazovaný názov nemôže byť prázdny.
             range: Zobrazovaný názov do 35 znakov.
         slug_name:
-          label: URL Slug
+          label: URL slug
           desc: URL slug do 35 znakov.
           msg:
             empty: URL slug nemôže byť prázdny.
@@ -674,14 +709,14 @@ ui:
         revision:
           label: Revízia
         display_name:
-          label: Zobrazovaný názov
+          label: Display name
         slug_name:
-          label: URL Slug
+          label: URL slug
           info: 'Musíte použiť znakovú sadu "a-z", "0-9", "+ # - ."'
         desc:
           label: Opis
         edit_summary:
-          label: Zhrnutie
+          label: Edit summary
           placeholder: >-
             Stručne vysvetlite svoje zmeny (opravený pravopis, opravená gramatika, vylepšené formátovanie)
     btn_save_edits: Uložiť úpravy
@@ -723,7 +758,7 @@ ui:
           feedback:
             characters: Obsah musí mať dĺžku najmenej 6 znakov.
         edit_summary:
-          label: Upraviť zhrnutie
+          label: Edit summary
           placeholder: >-
             Stručne vysvetlite svoje zmeny (opravený pravopis, opravená gramatika, vylepšené formátovanie)
     btn_save_edits: Uložiť úpravy
@@ -733,7 +768,7 @@ ui:
     sort_buttons:
       popular: Populárne
       name: názov
-      newest: najnovšie
+      newest: Newest
     button_follow: Sledovať
     button_following: Sledované
     tag_label: otázky
@@ -768,7 +803,7 @@ ui:
           msg:
             empty: Odpoveď nemôže byť prázdna.
         edit_summary:
-          label: Upraviť zhrnutie
+          label: Edit summary
           placeholder: >-
             Stručne vysvetlite svoje zmeny (opravený pravopis, opravená gramatika, vylepšené formátovanie)
     btn_post_question: Uverejnite svoju otázku
@@ -817,6 +852,9 @@ ui:
     change_btn_name: Zmeniť e-mail
     msg:
       empty: Nemôže byť prázdny.
+    resend_email:
+      url_label: Are you sure you want to resend the activation email?
+      url_text: You can also give the activation link above to the user.
   login:
     login_to_continue: Pre pokračovanie sa prihláste
     info_sign: Nemáte účet? <1>Sign up</1>
@@ -853,7 +891,7 @@ ui:
     send_success: >-
       Ak sa účet zhoduje s <strong>{{mail}}</strong>, tak by ste mali čoskoro dostať e-mail s pokynmi, ako resetovať svoje heslo.
     email:
-      label: Nový e-mail
+      label: New email
       msg:
         empty: E-mail nemôže byť prázdny.
   oauth:
@@ -885,10 +923,10 @@ ui:
         length: Dĺžka musí byť medzi 8 a 32
         different: Heslá zadané na oboch stranách sú nekonzistentné
     password_confirm:
-      label: Potvrďte nové heslo
+      label: Confirm new password
   settings:
     page_title: Nastavenia
-    goto_modify: Go to Modify
+    goto_modify: Go to modify
     nav:
       profile: Profil
       notification: Oznámenia
@@ -898,7 +936,7 @@ ui:
       heading: Profil
       btn_name: Uložiť
       display_name:
-        label: Zobrazované meno
+        label: Display name
         msg: Zobrazované meno nemôže byť prázdne.
         msg_range: Zobrazované meno nesmie mať viac ako 30 znakov.
       username:
@@ -908,16 +946,15 @@ ui:
         msg_range: Používateľské meno nesmie mať viac ako 30 znakov.
         character: 'Musíte použiť znakovú sadu "a-z", "0-9", "- . _"'
       avatar:
-        label: Profilová fotka
+        label: Profile image
         gravatar: Gravatar
         gravatar_text: You can change image on
         custom: Vlastný
-        btn_refresh: Obnoviť
         custom_text: Môžete nahrať svoj obrázok.
         default: Systém
         msg: Nahrajte avatara prosím
       bio:
-        label: O mne
+        label: About me
       website:
         label: Webová stránka
         placeholder: "https://priklad.com"
@@ -927,9 +964,16 @@ ui:
         placeholder: "Mesto, Krajina"
     notification:
       heading: Oznámenia
-      email:
-        label: E-mailové upozornenia
-        radio: "Odpovede na vaše otázky, komentáre a ďalšie"
+      email: Email
+      inbox:
+        label: Email notifications
+        description: Answers to your questions, comments, invites, and more.
+      all_new_question:
+        label: All new questions
+        description: Get notified of all new questions. Up to 50 questions per week.
+      all_new_question_for_following_tags:
+        label: All new questions for following tags
+        description: Get notified of new questions for following tags.
     account:
       heading: Účet
       change_email_btn: Zmeniť e-mail
@@ -937,31 +981,31 @@ ui:
       change_email_info: >-
         Na túto adresu sme poslali e-mail. Postupujte podľa pokynov na potvrdenie.
       email:
-        label: New Email
-        msg: New Email cannot be empty.
+        label: New email
+        msg: New email cannot be empty.
       pass:
-        label: Current Password
+        label: Current password
         msg: Password cannot be empty.
       password_title: Heslo
       current_pass:
-        label: Aktuálne heslo
+        label: Current password
         msg:
-          empty: Aktuálne heslo nemôže byť prázdne.
+          empty: Current password cannot be empty.
           length: Dĺžka musí byť medzi 8 a 32.
           different: Dve zadané heslá sa nezhodujú.
       new_pass:
-        label: Nové heslo
+        label: New password
       pass_confirm:
-        label: Potvrďiť nové heslo
+        label: Confirm new password
     interface:
       heading: Rozhranie
       lang:
-        label: Jazyk rozhrania
+        label: Interface language
         text: Jazyk používateľského rozhrania. Zmení sa pri obnove stránky.
     my_logins:
-      title: My Logins
+      title: My logins
       label: Log in or sign up on this site using these accounts.
-      modal_title: Remove Login
+      modal_title: Remove login
       modal_content: Are you sure you want to remove this login from your account?
       modal_confirm_btn: Remove
       remove_success: Removed successfully
@@ -971,12 +1015,12 @@ ui:
     flag_success: Ďakujeme za nahlásenie.
     forbidden_operate_self: Zakázané operovať seba
     review: Vaša revízia sa zobrazí po preskúmaní.
+    sent_success: Sent successfully
   related_question:
     title: Súvisiace otázky
-    btn: Pridať otázku
     answers: odpovede
   invite_to_answer:
-    title: People asked
+    title: People Asked
     desc: Invite people who you think might know the answer.
     invite: Invite to answer
     add: Add people
@@ -997,6 +1041,7 @@ ui:
     useful: Useful
     question_useful: It is useful and clear
     question_un_useful: It is unclear or not useful
+    question_bookmark: Bookmark this question
     answer_useful: It is useful
     answer_un_useful: It is not useful
     answers:
@@ -1037,12 +1082,15 @@ ui:
       <p>Neodporúčame <strong>odstránenie akceptovanej odpovede</strong> pretože týmto oberáte budúcich čitateľov o tieto vedomostí.</p>Opakované mazanie akceptovaných odpovedí môže mať za následok zablokovanie možnosti odpovedať z vášho účtu. Ste si istí, že chcete odstrániť odpoveď?
     other: Ste si istí, že ju chcete odstrániť?
     tip_answer_deleted: Táto odpoveď bola odstránená
+    undelete_title: Undelete this post
+    undelete_desc: Are you sure you wish to undelete?
   btns:
     confirm: Potvrdiť
     cancel: Zrušiť
     edit: Edit
     save: Uložiť
     delete: Vymazať
+    undelete: Undelete
     login: Prihlásiť sa
     signup: Registrovať sa
     logout: Odhlásiť sa
@@ -1057,6 +1105,15 @@ ui:
     question: Question
     answer: Answer
     comment: Comment
+    refresh: Refresh
+    resend: Resend
+    deactivate: Deactivate
+    active: Active
+    suspend: Suspend
+    unsuspend: Unsuspend
+    close: Close
+    reopen: Reopen
+    ok: OK
   search:
     title: Výsledky vyhľadávania
     keywords: Kľúčové slová
@@ -1087,7 +1144,7 @@ ui:
     copied: Skopírované
     facebook: Zdieľať na Facebooku
     twitter: Zdieľať na Twitteri
-  cannot_vote_for_self: Nemôžete hlasovať za svoj vlastný príspevok
+  cannot_vote_for_self: You can't vote for your own post.
   modal_confirm:
     title: Chyba...
   account_result:
@@ -1137,7 +1194,7 @@ ui:
     votes: Hlasovanie
     newest: Najnovšie
     score: Skóre
-    edit_profile: Upraviť profil
+    edit_profile: Edit profile
     visited_x_days: "Navštívené {{ count }} dni"
     viewed: Videné
     joined: Pripojené
@@ -1152,7 +1209,7 @@ ui:
     answered: zodpovedané
     asked: opýtané
     downvoted: downvoted
-    mod_short: mod
+    mod_short: MOD
     mod_long: Moderátori
     x_reputation: reputácia
     x_votes: prijatých hlasov
@@ -1164,9 +1221,9 @@ ui:
     done: Hotový
     config_yaml_error: Nie je možné vytvoriť súbor config.yaml.
     lang:
-      label: Vyberte jazyk
+      label: Please choose a language
     db_type:
-      label: Databázový engine
+      label: Database engine
     db_username:
       label: Užívateľské meno
       placeholder: super užívateľ
@@ -1176,17 +1233,17 @@ ui:
       placeholder: super užívateľ
       msg: Heslo nemôže byť prázdne.
     db_host:
-      label: Hostiteľ databázy
+      label: Database host
       placeholder: "db:3306"
-      msg: Hostiteľ databázy nemôže byť prázdny.
+      msg: Database host cannot be empty.
     db_name:
-      label: Názov databázy
+      label: Database name
       placeholder: odpoveď
-      msg: Názov databázy nemôže byť prázdny.
+      msg: Database name cannot be empty.
     db_file:
-      label: Súbor databázy
+      label: Database file
       placeholder: /data/answer.db
-      msg: Databázový súbor nemôže byť prázdny.
+      msg: Database file cannot be empty.
     config_yaml:
       title: Vytvoriť config.yaml
       label: Vytvorený súbor Config.yaml.
@@ -1196,36 +1253,45 @@ ui:
     site_information: Informácie o stránke
     admin_account: Správca
     site_name:
-      label: Názov stránky
-      msg: Názov stránky nemôže byť prázdny.
+      label: Site name
+      msg: Site name cannot be empty.
+      msg_max_length: Site name must be at maximum 30 characters in length.
     site_url:
       label: URL stránky
       text: Adresa vašej stránky.
       msg:
         empty: URL stránky nemôže byť prázdny.
         incorrect: Nesprávny formát adresy URL.
+        max_length: Site URL must be at maximum 512 characters in length.
     contact_email:
-      label: kontaktný e-mail
+      label: Contact email
       text: E-mailová adresa kontaktu zodpovedného za túto stránku.
       msg:
-        empty: Kontaktný e-mail nemôže byť prázdny.
-        incorrect: Nesprávny formát kontaktného e-mailu.
+        empty: Contact email cannot be empty.
+        incorrect: Contact email incorrect format.
+    login_required:
+      label: Private
+      switch: Login required
+      text: Only logged in users can access this community.
     admin_name:
       label: Meno
       msg: Meno nemôže byť prázdne.
       character: 'Must use the character set "a-z", "0-9", " - . _"'
+      msg_max_length: Name must be at maximum 30 characters in length.
     admin_password:
       label: Heslo
       text: >-
         Na prihlásenie budete potrebovať toto heslo. Uložte si ho na bezpečné miesto.
       msg: Heslo nemôže byť prázdne.
+      msg_min_length: Password must be at least 8 characters in length.
+      msg_max_length: Password must be at maximum 32 characters in length.
     admin_email:
       label: E-mail
       text: Na prihlásenie budete potrebovať tento e-mail.
       msg:
         empty: E-mail nemôže byť prázdny.
         incorrect: Nesprávny formát e-mailu
-    ready_title: Vaša odpoveď je pripravená!
+    ready_title: Your Answer is ready!
     ready_desc: >-
       Ak niekedy budete chcieť zmeniť viac nastavení, navštívte stránku <1>admin section</1>; Nájdete ju v ponuke stránok.
     good_luck: "„Bavte sa a veľa šťastia!“"
@@ -1238,7 +1304,7 @@ ui:
       Zdá sa, že ste už aplikáciu answer nainštalovali. Ak chcete aplikáciu preinštalovať, najprv vymažte staré tabuľky z databázy.
     db_failed: Databázové pripojenie zlyhalo
     db_failed_desc: >-
-      To buď znamená, že informácie o databáze vo vašom súbore <1>config.yaml</1> sú nesprávne, alebo že sa nepodarilo nadviazať kontakt s databázovým serverom. Môže to znamenať, že databázový server vášho hostiteľa nefunguje.
+      This either means that the database information in your <1>config.yaml</1> file is incorrect or that contact with the database server could not be established. This could mean your host's database server is down.
   counts:
     views: názory
     votes: hlasy
@@ -1246,7 +1312,7 @@ ui:
     accepted: prijaté
   page_error:
     http_error: HTTP Error {{ code }}
-    desc_403: You don’t have permission to access this page.
+    desc_403: You don't have permission to access this page.
     desc_404: Unfortunately, this page doesn't exist.
     desc_50X: The server encountered an error and could not complete your request.
     back_home: Back to homepage
@@ -1327,38 +1393,40 @@ ui:
       created: Vytvorené
       action: Akcia
       review: Preskúmanie
-    change_modal:
-      title: Zmeňte stav používateľa na...
-      btn_cancel: Zrušiť
-      btn_submit: Odovzdať
-      normal_name: normálne
-      normal_desc: Normálny používateľ môže klásť a odpovedať na otázky.
-      suspended_name: pozastavené
-      suspended_desc: Pozastavený používateľ sa nemôže prihlásiť.
-      deleted_name: vymazané
-      deleted_desc: "Odstrániť profil, autentifikačné združenia."
-      inactive_name: neaktívne
-      inactive_desc: Neaktívny užívateľ musí znovu overiť svoj e-mail.
-      confirm_title: Odstráňte tohto používateľa
-      confirm_content: Ste si istí, že chcete tohto používateľa odstrániť? Táto akcia sa nedá zmeniť
-      confirm_btn: Vymazať
-      msg:
-        empty: Vyberte dôvod.
-    status_modal:
-      title: "Zmena {{ type }}  stav na..."
-      normal_name: normálne
-      normal_desc: Normálny príspevok dostupný pre každého.
-      closed_name: Uzavreté
-      closed_desc: "Na uzavretú otázku nemôžete odpovedať, ale stále ju môžete upravovať, hlasovať a komentovať."
-      deleted_name: Vymazané
-      deleted_desc: This post will be deleted.
-      btn_cancel: Zrušiť
-      btn_submit: Odovdať
-      btn_next: Ďalšie
     user_role_modal:
       title: Zmeňte rolu používateľa na...
       btn_cancel: Zrušiť
       btn_submit: Odovzdať
+    new_password_modal:
+      title: Set new password
+      form:
+        fields:
+          password:
+            label: Password
+            text: The user will be logged out and need to login again.
+            msg: Password must be at 8-32 characters in length.
+      btn_cancel: Cancel
+      btn_submit: Submit
+    user_modal:
+      title: Add new user
+      form:
+        fields:
+          users:
+            label: Bulk add user
+            placeholder: "John Smith, john@example.com, BUSYopr2\nAlice, alice@example.com, fpDntV8q"
+            text: Separate “name, email, password” with commas. One user per line.
+            msg: "Please enter the user's email, one per line."
+          display_name:
+            label: Display name
+            msg: Display name must be at 4-30 characters in length.
+          email:
+            label: Email
+            msg: Email is not valid.
+          password:
+            label: Password
+            msg: Password must be at 8-32 characters in length.
+      btn_cancel: Cancel
+      btn_submit: Submit
     users:
       title: Používatelia
       name: Meno
@@ -1373,6 +1441,7 @@ ui:
       change: Zmena
       all: Všetko
       staff: Personál
+      more: More
       inactive: Neaktívne
       suspended: Pozastavené
       deleted: Vymazané
@@ -1387,31 +1456,18 @@ ui:
       change_role: Zmeniť rolu
       show_logs: Zobraziť protokoly
       add_user: Pridať používateľa
-      new_password_modal:
-        title: Nastaviť nové heslo
-        form:
-          fields:
-            password:
-              label: Heslo
-              text: Používateľ bude odhlásený a bude sa musieť znova prihlásiť.
-              msg: Heslo musí mať dĺžku 8-32 znakov.
-        btn_cancel: Zrušiť
-        btn_submit: Odovzdať
-      user_modal:
-        title: Pridať nového používateľa
-        form:
-          fields:
-            display_name:
-              label: Zobraziť meno
-              msg: Zobrazené meno musí mať dlhú dĺžku 3-30 znakov.
-            email:
-              label: E-mail
-              msg: E-mail nie je platný.
-            password:
-              label: Heslo
-              msg: Heslo musí mať dĺžku 8-32 znakov.
-        btn_cancel: Zrušiť
-        btn_submit: Odovzdať
+      deactivate_user:
+        title: Deactivate user
+        content: An inactive user must re-validate their email.
+      delete_user:
+        title: Delete this user
+        content: Are you sure you want to delete this user? This is permanent!
+        remove: Remove their content
+        label: Remove all questions, answers, comments, etc.
+        text: Don’t check this if you wish to only delete the user’s account.
+      suspend_user:
+        title: Suspend this user
+        content: A suspended user can't log in.
     questions:
       page_title: Otázky
       normal: Normalne
@@ -1441,7 +1497,7 @@ ui:
     general:
       page_title: Všeobecné
       name:
-        label: Názov stránky
+        label: Site name
         msg: Názov stránky nemôže byť prázdny.
         text: "Názov tejto lokality, ako sa používa v značke názvu."
       site_url:
@@ -1450,22 +1506,22 @@ ui:
         validate: Prosím uveďte platnú webovú adresu.
         text: Adresa vašej stránky.
       short_desc:
-        label: Krátky popis stránky
+        label: Short site description
         msg: Krátky popis stránky nemôže byť prázdny.
         text: "Krátky popis, ako sa používa v značke názvu na domovskej stránke."
       desc:
-        label: Popis stránky
+        label: Site description
         msg: Popis stránky nemôže byť prázdny.
         text: "Opíšte túto stránku jednou vetou, ako sa používa v značke meta description."
       contact_email:
-        label: Kontaktný e-mail
+        label: Contact email
         msg: Kontaktný e-mail nemôže byť prázdny.
         validate: Kontaktný e-mail je neplatný.
         text: E-mailová adresa kontaktu zodpovedného za túto stránku.
     interface:
       page_title: Rozhranie
       language:
-        label: Jazyk rozhrania
+        label: Interface language
         msg: Jazyk rozhrania nemôže byť prázdny.
         text: Jazyk používateľského rozhrania. Zmení sa, keď stránku obnovíte.
       time_zone:
@@ -1475,15 +1531,15 @@ ui:
     smtp:
       page_title: SMTP
       from_email:
-        label: E-mail odosielateľa
+        label: From email
         msg: Z e-mailu nemôže byť prázdne.
         text: E-mailová adresa, z ktorej sa odosielajú e-maily.
       from_name:
-        label: Meno odosielateľa
+        label: From name
         msg: Názov od nemôže byť prázdny.
         text: Meno, z ktorého sa odosielajú e-maily.
       smtp_host:
-        label: Hostiteľ SMTP
+        label: SMTP host
         msg: Hostiteľ SMTP nemôže byť prázdny.
         text: Váš mailový server.
       encryption:
@@ -1493,22 +1549,22 @@ ui:
         ssl: SSL
         none: Žiadne
       smtp_port:
-        label: SMTP Port
+        label: SMTP port
         msg: Port SMTP musí byť číslo 1 ~ 65535.
         text: Port na váš poštový server.
       smtp_username:
-        label: Uživatelské Meno SMTP
+        label: SMTP username
         msg: Používateľské meno SMTP nemôže byť prázdne.
       smtp_password:
-        label: Heslo SMTP
+        label: SMTP password
         msg: Heslo SMTP nemôže byť prázdne.
       test_email_recipient:
-        label: Testovať príjemcov e-mailov
+        label: Test email recipients
         text: Zadajte e-mailovú adresu, na ktorú sa budú odosielať testy.
         msg: Príjemcovia testovacieho e-mailu sú neplatní
       smtp_authentication:
         label: Povoliť autentifikáciu
-        title: Overenie SMTP
+        title: SMTP authentication
         msg: Overenie SMTP nemôže byť prázdne.
         "yes": "Áno"
         "no": "Nie"
@@ -1519,10 +1575,10 @@ ui:
         msg: Logo nemôže byť prázdne.
         text: Obrázok loga v ľavej hornej časti vašej stránky. Použite široký obdĺžnikový obrázok s výškou 56 a pomerom strán väčším ako 3:1. Ak ho ponecháte prázdne, zobrazí sa text názvu stránky.
       mobile_logo:
-        label: Logo mobilu
+        label: Mobile logo
         text: Logo použité na mobilnej verzii vášho webu. Použite široký obdĺžnikový obrázok s výškou 56. Ak pole ponecháte prázdne, použije sa obrázok z nastavenia „logo“.
       square_icon:
-        label: Štvorcová ikona
+        label: Square icon
         msg: Ikona štvorca nemôže byť prázdna.
         text: Obrázok použitý ako základ pre ikony metadát. V ideálnom prípade by mal byť väčšií ako 512 x 512.
       favicon:
@@ -1531,22 +1587,22 @@ ui:
     legal:
       page_title: Legálne
       terms_of_service:
-        label: Podmienky služby
+        label: Terms of service
         text: "Tu môžete pridať obsah zmluvných podmienok. Ak už máte dokument umiestnený inde, uveďte tu celú URL adresu."
       privacy_policy:
-        label: Zásady ochrany osobných údajov
+        label: Privacy policy
         text: "Tu môžete pridať obsah zásad ochrany osobných údajov. Ak už máte dokument umiestnený inde, uveďte tu celú URL adresu."
     write:
       page_title: Písať
       recommend_tags:
-        label: Odporučiť značky
+        label: Recommend tags
         text: "Vyššie zadajte tag slug, jednu značku na riadok."
       required_tag:
-        title: Povinný štítok
+        title: Required tag
         label: Nastavte odporúčanú značku podľa potreby
         text: "Každá nová otázka musí mať aspoň jedenu odporúčaciu značku."
       reserved_tags:
-        label: Vyhradené značky
+        label: Reserved tags
         text: "Vyhradené štítky môže k príspevku pridať iba moderátor."
     seo:
       page_title: SEO
@@ -1571,16 +1627,19 @@ ui:
       page_title: CSS a HTML
       custom_css:
         label: Vlastné CSS
-        text: Toto sa vloží ako <link>
+        text: >
+
       head:
         label: Head
-        text: Toto sa vloží pred </head>
+        text: >
+
       header:
         label: Hlavička
-        text: Toto sa vloží po <body>
+        text: >
+
       footer:
         label: Päta
-        text: Toto sa vloží pred </html>.
+        text: This will insert before &lt;/body>.
       sidebar:
         label: Sidebar
         text: This will insert in sidebar.
@@ -1603,6 +1662,7 @@ ui:
         text: Do tejto komunity majú prístup iba prihlásení používatelia
     installed_plugins:
       title: Installed Plugins
+      plugin_link: Plugins extend and expand the functionality of Answer. You may find plugins in the <1>Answer Plugin Repository</1>.
       filter:
         all: All
         active: Active
@@ -1621,13 +1681,13 @@ ui:
     settings_users:
       title: Users
       avatar:
-        label: Default Avatar
+        label: Default avatar
         text: For users without a custom avatar of their own.
       gravatar_base_url:
         label: Gravatar Base URL
-        text: URL of the Gravatar provider’s API base. Ignored when empty.
+        text: URL of the Gravatar provider's API base. Ignored when empty.
       profile_editable:
-        title: Profile Editable
+        title: Profile editable
       allow_update_display_name:
         label: Allow users to change their display name
       allow_update_username:

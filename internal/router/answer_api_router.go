@@ -1,9 +1,28 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package router
 
 import (
-	"github.com/answerdev/answer/internal/base/middleware"
-	"github.com/answerdev/answer/internal/controller"
-	"github.com/answerdev/answer/internal/controller_admin"
+	"github.com/apache/incubator-answer/internal/base/middleware"
+	"github.com/apache/incubator-answer/internal/controller"
+	"github.com/apache/incubator-answer/internal/controller_admin"
 	"github.com/gin-gonic/gin"
 )
 
@@ -26,7 +45,7 @@ type AnswerAPIRouter struct {
 	reasonController       *controller.ReasonController
 	themeController        *controller_admin.ThemeController
 	siteInfoController     *controller_admin.SiteInfoController
-	siteinfoController     *controller.SiteinfoController
+	siteinfoController     *controller.SiteInfoController
 	notificationController *controller.NotificationController
 	dashboardController    *controller.DashboardController
 	uploadController       *controller.UploadController
@@ -55,7 +74,7 @@ func NewAnswerAPIRouter(
 	reasonController *controller.ReasonController,
 	themeController *controller_admin.ThemeController,
 	siteInfoController *controller_admin.SiteInfoController,
-	siteinfoController *controller.SiteinfoController,
+	siteinfoController *controller.SiteInfoController,
 	notificationController *controller.NotificationController,
 	dashboardController *controller.DashboardController,
 	uploadController *controller.UploadController,
@@ -94,7 +113,7 @@ func NewAnswerAPIRouter(
 	}
 }
 
-func (a *AnswerAPIRouter) RegisterMustUnAuthAnswerAPIRouter(r *gin.RouterGroup) {
+func (a *AnswerAPIRouter) RegisterMustUnAuthAnswerAPIRouter(authUserMiddleware *middleware.AuthUserMiddleware, r *gin.RouterGroup) {
 	// i18n
 	r.GET("/language/config", a.langController.GetLangMapping)
 	r.GET("/language/options", a.langController.GetUserLangOptions)
@@ -105,16 +124,19 @@ func (a *AnswerAPIRouter) RegisterMustUnAuthAnswerAPIRouter(r *gin.RouterGroup) 
 
 	// user
 	r.GET("/user/info", a.userController.GetUserInfoByUserID)
+	r.GET("/user/action/record", authUserMiddleware.Auth(), a.userController.ActionRecord)
 	routerGroup := r.Group("", middleware.BanAPIForUserCenter)
 	routerGroup.POST("/user/login/email", a.userController.UserEmailLogin)
 	routerGroup.POST("/user/register/email", a.userController.UserRegisterByEmail)
 	routerGroup.GET("/user/register/captcha", a.userController.UserRegisterCaptcha)
 	routerGroup.POST("/user/email/verification", a.userController.UserVerifyEmail)
 	routerGroup.PUT("/user/email", a.userController.UserChangeEmailVerify)
-	routerGroup.GET("/user/action/record", a.userController.ActionRecord)
 	routerGroup.POST("/user/password/reset", a.userController.RetrievePassWord)
 	routerGroup.POST("/user/password/replacement", a.userController.UseRePassWord)
-	routerGroup.PUT("/user/email/notification", a.userController.UserUnsubscribeEmailNotification)
+	routerGroup.PUT("/user/notification/unsubscribe", a.userController.UserUnsubscribeNotification)
+
+	// plugins
+	r.GET("/plugin/status", a.pluginController.GetAllPluginStatus)
 }
 
 func (a *AnswerAPIRouter) RegisterUnAuthAnswerAPIRouter(r *gin.RouterGroup) {
@@ -155,6 +177,7 @@ func (a *AnswerAPIRouter) RegisterUnAuthAnswerAPIRouter(r *gin.RouterGroup) {
 
 	//search
 	r.GET("/search", a.searchController.Search)
+	r.GET("/search/desc", a.searchController.SearchDesc)
 
 	//rank
 	r.GET("/personal/rank/page", a.rankController.GetRankPersonalWithPage)
@@ -186,6 +209,7 @@ func (a *AnswerAPIRouter) RegisterAnswerAPIRouter(r *gin.RouterGroup) {
 	r.GET("/question/tags", a.tagController.SearchTagLike)
 	r.POST("/tag", a.tagController.AddTag)
 	r.PUT("/tag", a.tagController.UpdateTag)
+	r.POST("/tag/recover", a.tagController.RecoverTag)
 	r.DELETE("/tag", a.tagController.RemoveTag)
 	r.PUT("/tag/synonym", a.tagController.UpdateTagSynonym)
 
@@ -202,19 +226,22 @@ func (a *AnswerAPIRouter) RegisterAnswerAPIRouter(r *gin.RouterGroup) {
 	r.PUT("/question/status", a.questionController.CloseQuestion)
 	r.PUT("/question/operation", a.questionController.OperationQuestion)
 	r.PUT("/question/reopen", a.questionController.ReopenQuestion)
-	r.GET("/question/similar", a.questionController.SearchByTitleLike)
+	r.GET("/question/similar", a.questionController.GetSimilarQuestions)
+	r.POST("/question/recover", a.questionController.QuestionRecover)
 
 	// answer
 	r.POST("/answer", a.answerController.Add)
 	r.PUT("/answer", a.answerController.Update)
 	r.POST("/answer/acceptance", a.answerController.Accepted)
 	r.DELETE("/answer", a.answerController.RemoveAnswer)
+	r.POST("/answer/recover", a.answerController.RecoverAnswer)
 
 	// user
 	r.PUT("/user/password", middleware.BanAPIForUserCenter, a.userController.UserModifyPassWord)
 	r.PUT("/user/info", a.userController.UserUpdateInfo)
 	r.PUT("/user/interface", a.userController.UserUpdateInterface)
-	r.POST("/user/notice/set", a.userController.UserNoticeSet)
+	r.GET("/user/notification/config", a.userController.GetUserNotificationConfig)
+	r.PUT("/user/notification/config", a.userController.UpdateUserNotificationConfig)
 	r.GET("/user/info/search", a.userController.SearchUserListByName)
 
 	// vote
@@ -244,10 +271,10 @@ func (a *AnswerAPIRouter) RegisterAnswerAPIRouter(r *gin.RouterGroup) {
 }
 
 func (a *AnswerAPIRouter) RegisterAnswerAdminAPIRouter(r *gin.RouterGroup) {
-	r.GET("/question/page", a.questionController.AdminSearchList)
-	r.PUT("/question/status", a.questionController.AdminSetQuestionStatus)
-	r.GET("/answer/page", a.questionController.AdminSearchAnswerList)
-	r.PUT("/answer/status", a.answerController.AdminSetAnswerStatus)
+	r.GET("/question/page", a.questionController.AdminQuestionPage)
+	r.PUT("/question/status", a.questionController.AdminUpdateQuestionStatus)
+	r.GET("/answer/page", a.questionController.AdminAnswerPage)
+	r.PUT("/answer/status", a.answerController.AdminUpdateAnswerStatus)
 
 	// report
 	r.GET("/reports/page", a.adminReportController.ListReportPage)
@@ -257,7 +284,10 @@ func (a *AnswerAPIRouter) RegisterAnswerAdminAPIRouter(r *gin.RouterGroup) {
 	r.GET("/users/page", a.adminUserController.GetUserPage)
 	r.PUT("/user/status", a.adminUserController.UpdateUserStatus)
 	r.PUT("/user/role", a.adminUserController.UpdateUserRole)
+	r.GET("/user/activation", a.adminUserController.GetUserActivation)
+	r.POST("/user/activation", a.adminUserController.SendUserActivation)
 	r.POST("/user", a.adminUserController.AddUser)
+	r.POST("/users", a.adminUserController.AddUsers)
 	r.PUT("/user/password", a.adminUserController.UpdateUserPassword)
 
 	// reason

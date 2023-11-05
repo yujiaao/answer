@@ -1,3 +1,22 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 export interface FormValue<T = any> {
   value: T;
   isInvalid: boolean;
@@ -7,6 +26,11 @@ export interface FormValue<T = any> {
 
 export interface FormDataType {
   [prop: string]: FormValue;
+}
+
+export interface FieldError {
+  error_field: string;
+  error_msg: string;
 }
 
 export interface Paging {
@@ -51,8 +75,9 @@ export interface TagInfo extends TagBase {
   updated_at?;
   main_tag_slug_name?: string;
   excerpt?;
+  status: string;
 }
-export interface QuestionParams {
+export interface QuestionParams extends ImgCodeReq {
   title: string;
   url_title?: string;
   content: string;
@@ -68,7 +93,7 @@ export interface ListResult<T = any> {
   list: T[];
 }
 
-export interface AnswerParams {
+export interface AnswerParams extends ImgCodeReq {
   content: string;
   html: string;
   question_id: string;
@@ -127,9 +152,7 @@ export interface UserInfoBase {
   website: string;
   location: string;
   ip_info?: string;
-  /** 'forbidden' | 'normal' | 'delete'
-   */
-  status?: string;
+  status?: 'normal' | 'suspended' | 'deleted' | 'inactive';
   /** roles */
   role_id?: RoleId;
 }
@@ -169,9 +192,28 @@ export interface PasswordResetReq extends ImgCodeReq {
   e_mail: string;
 }
 
-export interface CheckImgReq {
-  action: 'login' | 'e_mail' | 'find_pass' | 'modify_pass';
+export interface PasswordReplaceReq extends ImgCodeReq {
+  code: string;
+  pass: string;
 }
+
+export interface CaptchaReq extends ImgCodeReq {
+  verify: ImgCodeRes['verify'];
+}
+
+export type CaptchaKey =
+  | 'email'
+  | 'password'
+  | 'edit_userinfo'
+  | 'question'
+  | 'answer'
+  | 'comment'
+  | 'edit'
+  | 'invitation_answer'
+  | 'search'
+  | 'report'
+  | 'delete'
+  | 'vote';
 
 export interface SetNoticeReq {
   notice_switch: boolean;
@@ -222,7 +264,7 @@ export interface AnswerItem {
   [prop: string]: any;
 }
 
-export interface PostAnswerReq {
+export interface PostAnswerReq extends ImgCodeReq {
   content: string;
   html?: string;
   question_id: string;
@@ -274,7 +316,7 @@ export type AdminAnswerStatus = 'available' | 'deleted';
  * @description interface for Users
  */
 export type UserFilterBy =
-  | 'all'
+  | 'normal'
   | 'staff'
   | 'inactive'
   | 'suspended'
@@ -425,7 +467,7 @@ export interface FollowParams {
 /**
  * @description search request params
  */
-export interface SearchParams {
+export interface SearchParams extends ImgCodeReq {
   q: string;
   order: string;
   page: number;
@@ -487,13 +529,12 @@ export interface TimelineItem {
   revision_id: number;
   created_at: number;
   activity_type: string;
-  username: string;
-  user_display_name: string;
   comment: string;
   object_id: string;
   object_type: string;
   cancelled: boolean;
   cancelled_at: any;
+  user_info: UserInfoBase;
 }
 
 export interface TimelineObject {
@@ -566,4 +607,19 @@ export interface UserOauthConnectorItem {
   link: string;
   binding: boolean;
   external_id: string;
+}
+
+export interface NotificationConfigItem {
+  enable: boolean;
+  key: string;
+}
+export interface NotificationConfig {
+  all_new_question: NotificationConfigItem[];
+  all_new_question_for_following_tags: NotificationConfigItem[];
+  inbox: NotificationConfigItem[];
+}
+
+export interface ActivatedPlugin {
+  name: string;
+  slug_name: string;
 }

@@ -1,172 +1,225 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-  ForwardRefRenderFunction,
-  forwardRef,
-  useImperativeHandle,
-} from 'react';
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
 
-import classNames from 'classnames';
+import { useEffect, useState } from 'react';
 
-import {
-  BlockQuote,
-  Bold,
-  Chart,
-  Code,
-  Formula,
-  Heading,
-  Help,
-  Hr,
-  Image,
-  Indent,
-  Italice,
-  Link,
-  OL,
-  Outdent,
-  Table,
-  UL,
-} from './ToolBars';
-import { createEditorUtils, htmlRender } from './utils';
-import Viewer from './Viewer';
-import { CodeMirrorEditor, IEditorContext } from './types';
-import { EditorContext } from './EditorContext';
-import Editor from './Editor';
+import type { Editor, Position } from 'codemirror';
+import type CodeMirror from 'codemirror';
+import 'codemirror/lib/codemirror.css';
 
-import './index.scss';
+export function createEditorUtils(
+  codemirror: typeof CodeMirror,
+  editor: Editor,
+) {
+  editor.wrapText = (before: string, after = before, defaultText) => {
+    const range = editor.somethingSelected()
+      ? editor.listSelections()[0]
+      : editor.findWordAt(editor.getCursor());
 
-export interface EditorRef {
-  getHtml: () => string;
+    const from = range.from();
+    const to = range.to();
+    const text = editor.getRange(from, to) || defaultText;
+    const fromBefore = codemirror.Pos(from.line, from.ch - before.length);
+    const toAfter = codemirror.Pos(to.line, to.ch + after.length);
+
+    if (
+      editor.getRange(fromBefore, from) === before &&
+      editor.getRange(to, toAfter) === after
+    ) {
+      editor.replaceRange(text, fromBefore, toAfter);
+      editor.setSelection(
+        fromBefore,
+        codemirror.Pos(fromBefore.line, fromBefore.ch + text.length),
+      );
+    } else {
+      editor.replaceRange(before + text + after, from, to);
+      const cursor = editor.getCursor();
+
+      editor.setSelection(
+        codemirror.Pos(cursor.line, cursor.ch - after.length - text.length),
+        codemirror.Pos(cursor.line, cursor.ch - after.length),
+      );
+    }
+  };
+  editor.replaceLines = (
+    replace: Parameters<Array<string>['map']>[0],
+    symbolLen = 0,
+  ) => {
+    const [selection] = editor.listSelections();
+
+    const range = [
+      codemirror.Pos(selection.from().line, 0),
+      codemirror.Pos(selection.to().line),
+    ] as const;
+    const lines = editor.getRange(...range).split('\n');
+
+    editor.replaceRange(lines.map(replace).join('\n'), ...range);
+    const newRange = range;
+
+    if (symbolLen > 0) {
+      newRange[0].ch = symbolLen;
+    }
+    editor.setSelection(...newRange);
+  };
+  editor.appendBlock = (content: string): Position => {
+    const cursor = editor.getCursor();
+
+    let emptyLine = -1;
+
+    for (let i = cursor.line; i < editor.lineCount(); i += 1) {
+      if (!editor.getLine(i).trim()) {
+        emptyLine = i;
+        break;
+      }
+    }
+    if (emptyLine === -1) {
+      editor.replaceRange('\n', codemirror.Pos(editor.lineCount()));
+      emptyLine = editor.lineCount();
+    }
+
+    editor.replaceRange(`\n${content}`, codemirror.Pos(emptyLine));
+    return codemirror.Pos(emptyLine + 1, 0);
+  };
 }
 
-interface EventRef {
-  onChange?(value: string): void;
-  onFocus?(): void;
-  onBlur?(): void;
-}
+export function htmlRender(el: HTMLElement | null) {
+  if (!el) return;
+  // Replace all br tags with newlines
+  // Fixed an issue where the BR tag in the editor block formula HTML caused rendering errors.
+  el.querySelectorAll('p').forEach((p) => {
+    if (p.innerHTML.startsWith('$$') && p.innerHTML.endsWith('$$')) {
+      const str = p.innerHTML.replace(/<br>/g, '\n');
+      p.innerHTML = str;
+    }
+  });
 
-interface Props extends EventRef {
-  editorPlaceholder?;
-  className?;
-  value;
-  autoFocus?: boolean;
-}
+  // change table style
 
-const MDEditor: ForwardRefRenderFunction<EditorRef, Props> = (
-  {
-    editorPlaceholder = '',
-    className = '',
-    value,
-    onChange,
-    onFocus,
-    onBlur,
-    autoFocus = false,
-  },
-  ref,
-) => {
-  const [markdown, setMarkdown] = useState<string>(value || '');
-  const previewRef = useRef<{ getHtml } | null>(null);
-  const [editor, setEditor] = useState<CodeMirrorEditor | null>(null);
-  const [context, setContext] = useState<IEditorContext | null>(null);
-  const eventRef = useRef<EventRef>();
-
-  useEffect(() => {
-    if (!editor) {
+  el.querySelectorAll('table').forEach((table) => {
+    if (
+      (table.parentNode as HTMLDivElement)?.classList.contains(
+        'table-responsive',
+      )
+    ) {
       return;
     }
 
-    import('codemirror').then(({ default: codemirror }) => {
-      setContext({
-        editor,
-        ...createEditorUtils(codemirror, editor),
-      });
+    table.classList.add('table', 'table-bordered');
+    const div = document.createElement('div');
+    div.className = 'table-responsive';
+    table.parentNode?.replaceChild(div, table);
+    div.appendChild(table);
+  });
+
+  // add rel nofollow for link not inlcludes domain
+  el.querySelectorAll('a').forEach((a) => {
+    const base = window.location.origin;
+    const targetUrl = new URL(a.href, base);
+
+    if (targetUrl.origin !== base) {
+      a.rel = 'nofollow';
+    }
+  });
+}
+
+export const useEditor = ({
+                            editorRef,
+                            placeholder,
+                            autoFocus,
+                            onChange,
+                            onFocus,
+                            onBlur,
+                          }) => {
+  const [editor, setEditor] = useState<CodeMirror.Editor | null>(null);
+  const [value, setValue] = useState<string>('');
+
+  const onEnter = (cm) => {
+    const cursor = cm.getCursor();
+    const text = cm.getLine(cursor.line);
+    const doc = cm.getDoc();
+
+    const olRegexData = text.match(/^(\s{0,})(\d+)\.\s/);
+    const ulRegexData = text.match(/^(\s{0,})(-|\*)\s/);
+    const blockquoteData = text.match(/^>\s+?/g);
+
+    if (olRegexData && text !== olRegexData[0]) {
+      const num = olRegexData[2];
+
+      doc.replaceSelection(`\n${olRegexData[1]}${Number(num) + 1}. `);
+    } else if (ulRegexData && text !== ulRegexData[0]) {
+      doc.replaceSelection(`\n${ulRegexData[1]}${ulRegexData[2]} `);
+    } else if (blockquoteData && text !== blockquoteData[0]) {
+      doc.replaceSelection(`\n> `);
+    } else if (
+      text.trim() === '>' ||
+      text.trim().match(/^\d{1,}\.$/) ||
+      text.trim().match(/^(\*|-)$/)
+    ) {
+      doc.replaceRange(`\n`, { ...cursor, ch: 0 }, cursor);
+    } else {
+      doc.replaceSelection(`\n`);
+    }
+  };
+
+  const init = async () => {
+    const { default: codeMirror } = await import('codemirror');
+    await import('codemirror/mode/markdown/markdown');
+    await import('codemirror/addon/display/placeholder');
+
+    const cm = codeMirror(editorRef?.current, {
+      mode: 'markdown',
+      lineWrapping: true,
+      placeholder,
+      focus: autoFocus,
     });
-  }, [editor]);
+
+    setEditor(cm);
+    createEditorUtils(codeMirror, cm);
+
+    cm.on('change', (e) => {
+      const newValue = e.getValue();
+      setValue(newValue);
+    });
+
+    cm.on('focus', () => {
+      onFocus?.();
+    });
+    cm.on('blur', () => {
+      onBlur?.();
+    });
+    cm.setSize('100%', '100%');
+    cm.addKeyMap({
+      Enter: onEnter,
+    });
+    return cm;
+  };
 
   useEffect(() => {
-    if (value !== markdown) {
-      setMarkdown(value);
-    }
+    onChange?.(value);
   }, [value]);
 
   useEffect(() => {
-    eventRef.current = {
-      onChange,
-      onFocus,
-      onBlur,
-    };
-  }, [onChange, onFocus, onBlur]);
+    if (!(editorRef.current instanceof HTMLElement)) {
+      return;
+    }
+    init();
+  }, [editorRef]);
 
-  const getEditorInstance = (cm) => {
-    setEditor(cm);
-  };
-
-  const getHtml = () => {
-    return previewRef.current?.getHtml();
-  };
-
-  const handleChange = (val) => {
-    setMarkdown(val);
-    eventRef.current?.onChange?.(val);
-  };
-
-  const handleFocus = () => {
-    eventRef.current?.onFocus?.();
-  };
-
-  const handleBlur = () => {
-    eventRef.current?.onBlur?.();
-  };
-
-  useImperativeHandle(ref, () => ({
-    getHtml,
-  }));
-
-  return (
-    <>
-      <div className={classNames('md-editor-wrap rounded', className)}>
-        <EditorContext.Provider value={context}>
-          {context && (
-            <div className="toolbar-wrap px-3 d-flex align-items-center flex-wrap">
-              <Heading {...context} />
-              <Bold {...context} />
-              <Italice {...context} />
-              <div className="toolbar-divider" />
-              <Code {...context} />
-              <Link {...context} />
-              <BlockQuote {...context} />
-              <Image {...context} />
-              <div className="toolbar-divider" />
-              <Table {...context} />
-              <Formula {...context} />
-              <Chart {...context} />
-              <div className="toolbar-divider" />
-              <OL {...context} />
-              <UL {...context} />
-              <Indent {...context} />
-              <Outdent {...context} />
-              <Hr {...context} />
-              <div className="toolbar-divider" />
-              <Help />
-            </div>
-          )}
-        </EditorContext.Provider>
-
-        <div className="content-wrap">
-          <Editor
-            value={markdown}
-            autoFocus={autoFocus}
-            onChange={handleChange}
-            onFocus={handleFocus}
-            onBlur={handleBlur}
-            editorPlaceholder={editorPlaceholder}
-            getEditorInstance={getEditorInstance}
-          />
-        </div>
-      </div>
-      <Viewer ref={previewRef} value={markdown} />
-    </>
-  );
+  return editor;
 };
-export { htmlRender };
-export default forwardRef(MDEditor);

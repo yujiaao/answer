@@ -1,3 +1,22 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package server
 
 import (
@@ -5,10 +24,10 @@ import (
 	"io/fs"
 
 	brotli "github.com/anargu/gin-brotli"
-	"github.com/answerdev/answer/internal/base/middleware"
-	"github.com/answerdev/answer/internal/router"
-	"github.com/answerdev/answer/plugin"
-	"github.com/answerdev/answer/ui"
+	"github.com/apache/incubator-answer/internal/base/middleware"
+	"github.com/apache/incubator-answer/internal/router"
+	"github.com/apache/incubator-answer/plugin"
+	"github.com/apache/incubator-answer/ui"
 	"github.com/gin-gonic/gin"
 )
 
@@ -20,6 +39,7 @@ func NewHTTPServer(debug bool,
 	viewRouter *router.UIRouter,
 	authUserMiddleware *middleware.AuthUserMiddleware,
 	avatarMiddleware *middleware.AvatarMiddleware,
+	shortIDMiddleware *middleware.ShortIDMiddleware,
 	templateRouter *router.TemplateRouter,
 	pluginAPIRouter *router.PluginAPIRouter,
 ) *gin.Engine {
@@ -30,7 +50,7 @@ func NewHTTPServer(debug bool,
 		gin.SetMode(gin.ReleaseMode)
 	}
 	r := gin.New()
-	r.Use(brotli.Brotli(brotli.DefaultCompression), middleware.ExtractAndSetAcceptLanguage)
+	r.Use(brotli.Brotli(brotli.DefaultCompression), middleware.ExtractAndSetAcceptLanguage, shortIDMiddleware.SetShortIDFlag())
 	r.GET("/healthz", func(ctx *gin.Context) { ctx.String(200, "OK") })
 
 	html, _ := fs.Sub(ui.Template, "template")
@@ -42,12 +62,12 @@ func NewHTTPServer(debug bool,
 	rootGroup := r.Group("")
 	swaggerRouter.Register(rootGroup)
 	static := r.Group("")
-	static.Use(avatarMiddleware.AvatarThumb())
+	static.Use(avatarMiddleware.AvatarThumb(), authUserMiddleware.VisitAuth())
 	staticRouter.RegisterStaticRouter(static)
 
 	// The route must be available without logging in
 	mustUnAuthV1 := r.Group("/answer/api/v1")
-	answerRouter.RegisterMustUnAuthAnswerAPIRouter(mustUnAuthV1)
+	answerRouter.RegisterMustUnAuthAnswerAPIRouter(authUserMiddleware, mustUnAuthV1)
 
 	// register api that no need to login
 	unAuthV1 := r.Group("/answer/api/v1")

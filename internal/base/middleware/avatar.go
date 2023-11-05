@@ -1,3 +1,22 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package middleware
 
 import (
@@ -8,9 +27,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/answerdev/answer/internal/service/service_config"
-	"github.com/answerdev/answer/internal/service/uploader"
-	"github.com/answerdev/answer/pkg/converter"
+	"github.com/apache/incubator-answer/internal/service/service_config"
+	"github.com/apache/incubator-answer/internal/service/uploader"
+	"github.com/apache/incubator-answer/pkg/converter"
 	"github.com/gin-gonic/gin"
 	"github.com/segmentfault/pacman/log"
 )
@@ -32,31 +51,28 @@ func NewAvatarMiddleware(serviceConfig *service_config.ServiceConfig,
 
 func (am *AvatarMiddleware) AvatarThumb() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		u := ctx.Request.RequestURI
-		if strings.Contains(u, "/uploads/avatar/") {
-			sizeStr := ctx.Query("s")
-			size := converter.StringToInt(sizeStr)
-			uUrl, err := url.Parse(u)
+		uri := ctx.Request.RequestURI
+		if strings.Contains(uri, "/uploads/avatar/") {
+			size := converter.StringToInt(ctx.Query("s"))
+			uriWithoutQuery, _ := url.Parse(uri)
+			filename := filepath.Base(uriWithoutQuery.Path)
+			filePath := fmt.Sprintf("%s/avatar/%s", am.serviceConfig.UploadPath, filename)
+			var err error
+			if size != 0 {
+				filePath, err = am.uploaderService.AvatarThumbFile(ctx, filename, size)
+				if err != nil {
+					log.Error(err)
+					ctx.Abort()
+				}
+			}
+			avatarFile, err := os.ReadFile(filePath)
 			if err != nil {
-				ctx.Next()
+				log.Error(err)
+				ctx.Abort()
 				return
 			}
-			_, urlfileName := filepath.Split(uUrl.Path)
-			uploadPath := am.serviceConfig.UploadPath
-			filePath := fmt.Sprintf("%s/avatar/%s", uploadPath, urlfileName)
-			var avatarfile []byte
-			if size == 0 {
-				avatarfile, err = os.ReadFile(filePath)
-			} else {
-				avatarfile, err = am.uploaderService.AvatarThumbFile(ctx, uploadPath, urlfileName, size)
-			}
-			if err != nil {
-				ctx.Next()
-				return
-			}
-			ext := strings.ToLower(path.Ext(filePath)[1:])
-			ctx.Header("content-type", fmt.Sprintf("image/%s", ext))
-			_, err = ctx.Writer.WriteString(string(avatarfile))
+			ctx.Header("content-type", fmt.Sprintf("image/%s", strings.TrimLeft(path.Ext(filePath), ".")))
+			_, err = ctx.Writer.Write(avatarFile)
 			if err != nil {
 				log.Error(err)
 			}
@@ -64,15 +80,12 @@ func (am *AvatarMiddleware) AvatarThumb() gin.HandlerFunc {
 			return
 
 		} else {
-			uUrl, err := url.Parse(u)
+			urlInfo, err := url.Parse(uri)
 			if err != nil {
 				ctx.Next()
 				return
 			}
-			_, urlfileName := filepath.Split(uUrl.Path)
-			uploadPath := am.serviceConfig.UploadPath
-			filePath := fmt.Sprintf("%s/%s", uploadPath, urlfileName)
-			ext := strings.ToLower(path.Ext(filePath)[1:])
+			ext := strings.TrimPrefix(filepath.Ext(urlInfo.Path), ".")
 			ctx.Header("content-type", fmt.Sprintf("image/%s", ext))
 		}
 		ctx.Next()

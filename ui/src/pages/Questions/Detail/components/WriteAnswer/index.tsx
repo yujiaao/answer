@@ -1,3 +1,22 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import { memo, useState, FC, useEffect } from 'react';
 import { Form, Button, Alert } from 'react-bootstrap';
 import { useTranslation, Trans } from 'react-i18next';
@@ -5,9 +24,9 @@ import { useTranslation, Trans } from 'react-i18next';
 import { marked } from 'marked';
 import classNames from 'classnames';
 
-import { usePromptWithUnload } from '@/hooks';
+import { usePromptWithUnload, useCaptchaModal } from '@/hooks';
 import { Editor, Modal, TextArea } from '@/components';
-import { FormDataType } from '@/common/interface';
+import { FormDataType, PostAnswerReq } from '@/common/interface';
 import { postAnswer } from '@/services';
 import { guard, handleFormError, SaveDraft, storageExpires } from '@/utils';
 import { DRAFT_ANSWER_STORAGE_KEY } from '@/common/constants';
@@ -41,6 +60,7 @@ const Index: FC<Props> = ({ visible = false, data, callback }) => {
   const [editorFocusState, setEditorFocusState] = useState(false);
   const [hasDraft, setHasDraft] = useState(false);
   const [showTips, setShowTips] = useState(data.loggedUserRank < 100);
+  const aCaptcha = useCaptchaModal('answer');
 
   usePromptWithUnload({
     when: Boolean(formData.content.value),
@@ -135,29 +155,40 @@ const Index: FC<Props> = ({ visible = false, data, callback }) => {
     if (!checkValidated()) {
       return;
     }
-    postAnswer({
-      question_id: data?.qid,
-      content: formData.content.value,
-      html: marked.parse(formData.content.value),
-    })
-      .then((res) => {
-        setShowEditor(false);
-        setFormData({
-          content: {
-            value: '',
-            isInvalid: false,
-            errorMsg: '',
-          },
+
+    aCaptcha.check(() => {
+      const params: PostAnswerReq = {
+        question_id: data?.qid,
+        content: formData.content.value,
+        html: marked.parse(formData.content.value),
+      };
+      const imgCode = aCaptcha.getCaptcha();
+      if (imgCode.verify) {
+        params.captcha_code = imgCode.captcha_code;
+        params.captcha_id = imgCode.captcha_id;
+      }
+      postAnswer(params)
+        .then(async (res) => {
+          await aCaptcha.close();
+          setShowEditor(false);
+          setFormData({
+            content: {
+              value: '',
+              isInvalid: false,
+              errorMsg: '',
+            },
+          });
+          removeDraft();
+          callback?.(res.info);
+        })
+        .catch((ex) => {
+          if (ex.isError) {
+            aCaptcha.handleCaptchaError(ex.list);
+            const stateData = handleFormError(ex, formData);
+            setFormData({ ...stateData });
+          }
         });
-        removeDraft();
-        callback?.(res.info);
-      })
-      .catch((ex) => {
-        if (ex.isError) {
-          const stateData = handleFormError(ex, formData);
-          setFormData({ ...stateData });
-        }
-      });
+    });
   };
 
   const clickBtn = () => {

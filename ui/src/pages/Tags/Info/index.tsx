@@ -1,5 +1,24 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import { useState, useEffect } from 'react';
-import { Row, Col, Button, Card } from 'react-bootstrap';
+import { Alert, Row, Col, Button, Card } from 'react-bootstrap';
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
@@ -13,6 +32,7 @@ import {
   saveSynonymsTags,
   deleteTag,
   editCheck,
+  unDeleteTag,
 } from '@/services';
 import { pathFactory } from '@/router/pathFactory';
 import { loggedUserInfoStore, toastStore } from '@/stores';
@@ -23,10 +43,15 @@ const TagIntroduction = () => {
   const isLogged = Boolean(userInfo?.access_token);
   const [isEdit, setEditState] = useState(false);
   const { tagName } = useParams();
-  const { data: tagInfo } = useTagInfo({ name: tagName });
+  const { data: tagInfo, mutate: refreshTagInfo } = useTagInfo({
+    name: tagName,
+  });
   const { t } = useTranslation('translation', { keyPrefix: 'tag_info' });
   const navigate = useNavigate();
-  const { data: synonymsData, mutate } = useQuerySynonymsTags(tagInfo?.tag_id);
+  const { data: synonymsData, mutate } = useQuerySynonymsTags(
+    tagInfo?.tag_id,
+    tagInfo?.status,
+  );
   let pageTitle = '';
   if (tagInfo) {
     pageTitle = `'${tagInfo.display_name}' ${t('tag_wiki', {
@@ -126,14 +151,35 @@ const TagIntroduction = () => {
   const onAction = (params) => {
     if (params.action === 'edit') {
       handleEditTag();
-    } else if (params.action === 'delete') {
+    }
+    if (params.action === 'delete') {
       handleDeleteTag();
+    }
+    if (params.action === 'undelete') {
+      Modal.confirm({
+        title: t('undelete_title', { keyPrefix: 'delete' }),
+        content: t('undelete_desc', { keyPrefix: 'delete' }),
+        cancelBtnVariant: 'link',
+        confirmBtnVariant: 'danger',
+        confirmText: t('undelete', { keyPrefix: 'btns' }),
+        onConfirm: () => {
+          unDeleteTag(tagInfo.tag_id).then(() => {
+            // undo
+            refreshTagInfo();
+          });
+        },
+      });
     }
   };
 
   return (
     <Row className="pt-4 mb-5">
       <Col className="page-main flex-auto">
+        {tagInfo?.status === 'deleted' && (
+          <Alert variant="danger" className="mb-4">
+            {t('post_deleted', { keyPrefix: 'messages' })}
+          </Alert>
+        )}
         <h3 className="mb-3">
           <Link
             to={pathFactory.tagLanding(tagInfo.slug_name)}

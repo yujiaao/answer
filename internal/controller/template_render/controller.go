@@ -1,16 +1,35 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package templaterender
 
 import (
+	questioncommon "github.com/apache/incubator-answer/internal/service/question_common"
 	"math"
 
-	"github.com/answerdev/answer/internal/base/data"
-	"github.com/answerdev/answer/internal/service/comment"
-	"github.com/answerdev/answer/internal/service/siteinfo_common"
-
-	"github.com/answerdev/answer/internal/schema"
-	"github.com/answerdev/answer/internal/service"
-	"github.com/answerdev/answer/internal/service/tag"
+	"github.com/apache/incubator-answer/internal/service/comment"
+	"github.com/apache/incubator-answer/internal/service/siteinfo_common"
 	"github.com/google/wire"
+
+	"github.com/apache/incubator-answer/internal/schema"
+	"github.com/apache/incubator-answer/internal/service"
+	"github.com/apache/incubator-answer/internal/service/tag"
 )
 
 // ProviderSetTemplateRenderController is template render controller providers.
@@ -24,8 +43,8 @@ type TemplateRenderController struct {
 	tagService      *tag.TagService
 	answerService   *service.AnswerService
 	commentService  *comment.CommentService
-	data            *data.Data
-	siteInfoService *siteinfo_common.SiteInfoCommonService
+	siteInfoService siteinfo_common.SiteInfoCommonService
+	questionRepo    questioncommon.QuestionRepo
 }
 
 func NewTemplateRenderController(
@@ -34,9 +53,8 @@ func NewTemplateRenderController(
 	tagService *tag.TagService,
 	answerService *service.AnswerService,
 	commentService *comment.CommentService,
-	data *data.Data,
-	siteInfoService *siteinfo_common.SiteInfoCommonService,
-
+	siteInfoService siteinfo_common.SiteInfoCommonService,
+	questionRepo questioncommon.QuestionRepo,
 ) *TemplateRenderController {
 	return &TemplateRenderController{
 		questionService: questionService,
@@ -44,7 +62,7 @@ func NewTemplateRenderController(
 		tagService:      tagService,
 		answerService:   answerService,
 		commentService:  commentService,
-		data:            data,
+		questionRepo:    questionRepo,
 		siteInfoService: siteInfoService,
 	}
 }

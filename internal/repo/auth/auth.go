@@ -1,14 +1,33 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package auth
 
 import (
 	"context"
 	"encoding/json"
+	"github.com/apache/incubator-answer/internal/service/auth"
 
-	"github.com/answerdev/answer/internal/base/constant"
-	"github.com/answerdev/answer/internal/base/data"
-	"github.com/answerdev/answer/internal/base/reason"
-	"github.com/answerdev/answer/internal/entity"
-	"github.com/answerdev/answer/internal/service/auth"
+	"github.com/apache/incubator-answer/internal/base/constant"
+	"github.com/apache/incubator-answer/internal/base/data"
+	"github.com/apache/incubator-answer/internal/base/reason"
+	"github.com/apache/incubator-answer/internal/entity"
 	"github.com/segmentfault/pacman/errors"
 	"github.com/segmentfault/pacman/log"
 )
@@ -18,22 +37,31 @@ type authRepo struct {
 	data *data.Data
 }
 
+// NewAuthRepo new repository
+func NewAuthRepo(data *data.Data) auth.AuthRepo {
+	return &authRepo{
+		data: data,
+	}
+}
+
 // GetUserCacheInfo get user cache info
 func (ar *authRepo) GetUserCacheInfo(ctx context.Context, accessToken string) (userInfo *entity.UserCacheInfo, err error) {
-	userInfoCache, err := ar.data.Cache.GetString(ctx, constant.UserTokenCacheKey+accessToken)
+	userInfoCache, exist, err := ar.data.Cache.GetString(ctx, constant.UserTokenCacheKey+accessToken)
 	if err != nil {
 		return nil, errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+	if !exist {
+		return nil, nil
 	}
 	userInfo = &entity.UserCacheInfo{}
-	err = json.Unmarshal([]byte(userInfoCache), userInfo)
-	if err != nil {
-		return nil, errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
-	}
+	_ = json.Unmarshal([]byte(userInfoCache), userInfo)
 	return userInfo, nil
 }
 
 // SetUserCacheInfo set user cache info
-func (ar *authRepo) SetUserCacheInfo(ctx context.Context, accessToken string, userInfo *entity.UserCacheInfo) (err error) {
+func (ar *authRepo) SetUserCacheInfo(ctx context.Context,
+	accessToken, visitToken string, userInfo *entity.UserCacheInfo) (err error) {
+	userInfo.VisitToken = visitToken
 	userInfoCache, err := json.Marshal(userInfo)
 	if err != nil {
 		return err
@@ -46,12 +74,40 @@ func (ar *authRepo) SetUserCacheInfo(ctx context.Context, accessToken string, us
 	if err := ar.AddUserTokenMapping(ctx, userInfo.UserID, accessToken); err != nil {
 		log.Error(err)
 	}
+	if len(visitToken) == 0 {
+		return nil
+	}
+	if err := ar.data.Cache.SetString(ctx, constant.UserVisitTokenCacheKey+visitToken,
+		accessToken, constant.UserTokenCacheTime); err != nil {
+		log.Error(err)
+	}
 	return nil
+}
+
+// GetUserVisitCacheInfo get user visit cache info
+func (ar *authRepo) GetUserVisitCacheInfo(ctx context.Context, visitToken string) (accessToken string, err error) {
+	accessToken, exist, err := ar.data.Cache.GetString(ctx, constant.UserVisitTokenCacheKey+visitToken)
+	if err != nil {
+		return "", errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+	if !exist {
+		return "", nil
+	}
+	return accessToken, nil
 }
 
 // RemoveUserCacheInfo remove user cache info
 func (ar *authRepo) RemoveUserCacheInfo(ctx context.Context, accessToken string) (err error) {
 	err = ar.data.Cache.Del(ctx, constant.UserTokenCacheKey+accessToken)
+	if err != nil {
+		return errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+	return nil
+}
+
+// RemoveUserVisitCacheInfo remove visit token cache
+func (ar *authRepo) RemoveUserVisitCacheInfo(ctx context.Context, visitToken string) (err error) {
+	err = ar.data.Cache.Del(ctx, constant.UserVisitTokenCacheKey+visitToken)
 	if err != nil {
 		return errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 	}
@@ -74,15 +130,15 @@ func (ar *authRepo) SetUserStatus(ctx context.Context, userID string, userInfo *
 
 // GetUserStatus get user status
 func (ar *authRepo) GetUserStatus(ctx context.Context, userID string) (userInfo *entity.UserCacheInfo, err error) {
-	userInfoCache, err := ar.data.Cache.GetString(ctx, constant.UserStatusChangedCacheKey+userID)
+	userInfoCache, exist, err := ar.data.Cache.GetString(ctx, constant.UserStatusChangedCacheKey+userID)
 	if err != nil {
 		return nil, errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+	if !exist {
+		return nil, nil
 	}
 	userInfo = &entity.UserCacheInfo{}
-	err = json.Unmarshal([]byte(userInfoCache), userInfo)
-	if err != nil {
-		return nil, errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
-	}
+	_ = json.Unmarshal([]byte(userInfoCache), userInfo)
 	return userInfo, nil
 }
 
@@ -97,16 +153,16 @@ func (ar *authRepo) RemoveUserStatus(ctx context.Context, userID string) (err er
 
 // GetAdminUserCacheInfo get admin user cache info
 func (ar *authRepo) GetAdminUserCacheInfo(ctx context.Context, accessToken string) (userInfo *entity.UserCacheInfo, err error) {
-	userInfoCache, err := ar.data.Cache.GetString(ctx, constant.AdminTokenCacheKey+accessToken)
+	userInfoCache, exist, err := ar.data.Cache.GetString(ctx, constant.AdminTokenCacheKey+accessToken)
 	if err != nil {
 		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 		return
 	}
-	userInfo = &entity.UserCacheInfo{}
-	err = json.Unmarshal([]byte(userInfoCache), userInfo)
-	if err != nil {
-		return nil, err
+	if !exist {
+		return nil, nil
 	}
+	userInfo = &entity.UserCacheInfo{}
+	_ = json.Unmarshal([]byte(userInfoCache), userInfo)
 	return userInfo, nil
 }
 
@@ -137,7 +193,10 @@ func (ar *authRepo) RemoveAdminUserCacheInfo(ctx context.Context, accessToken st
 // AddUserTokenMapping add user token mapping
 func (ar *authRepo) AddUserTokenMapping(ctx context.Context, userID, accessToken string) (err error) {
 	key := constant.UserTokenMappingCacheKey + userID
-	resp, _ := ar.data.Cache.GetString(ctx, key)
+	resp, _, err := ar.data.Cache.GetString(ctx, key)
+	if err != nil {
+		return err
+	}
 	mapping := make(map[string]bool, 0)
 	if len(resp) > 0 {
 		_ = json.Unmarshal([]byte(resp), &mapping)
@@ -150,7 +209,10 @@ func (ar *authRepo) AddUserTokenMapping(ctx context.Context, userID, accessToken
 // RemoveUserTokens Log out all users under this user id
 func (ar *authRepo) RemoveUserTokens(ctx context.Context, userID string, remainToken string) {
 	key := constant.UserTokenMappingCacheKey + userID
-	resp, _ := ar.data.Cache.GetString(ctx, key)
+	resp, _, err := ar.data.Cache.GetString(ctx, key)
+	if err != nil {
+		return
+	}
 	mapping := make(map[string]bool, 0)
 	if len(resp) > 0 {
 		_ = json.Unmarshal([]byte(resp), &mapping)
@@ -172,12 +234,5 @@ func (ar *authRepo) RemoveUserTokens(ctx context.Context, userID string, remainT
 	}
 	if err := ar.data.Cache.Del(ctx, key); err != nil {
 		log.Error(err)
-	}
-}
-
-// NewAuthRepo new repository
-func NewAuthRepo(data *data.Data) auth.AuthRepo {
-	return &authRepo{
-		data: data,
 	}
 }

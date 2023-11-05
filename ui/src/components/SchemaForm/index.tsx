@@ -1,3 +1,22 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import React, {
   ForwardRefRenderFunction,
   forwardRef,
@@ -239,6 +258,7 @@ const SchemaForm: ForwardRefRenderFunction<FormRef, FormProps> = (
           uiSchema?.[key] || {};
         formData ||= {};
         const fieldState = formData[key];
+
         const uiSimplify = widget === 'legend' || uiOpt?.simplify;
         let groupClassName: BaseUIOptions['fieldClassName'] = uiOpt?.simplify
           ? 'mb-2'
@@ -249,7 +269,9 @@ const SchemaForm: ForwardRefRenderFunction<FormRef, FormProps> = (
         if (uiOpt?.fieldClassName) {
           groupClassName = uiOpt.fieldClassName;
         }
+
         const readOnly = uiOpt?.readOnly || false;
+
         return (
           <Form.Group
             key={title}
@@ -314,6 +336,9 @@ const SchemaForm: ForwardRefRenderFunction<FormRef, FormProps> = (
                 onChange={onChange}
                 formData={formData}
                 readOnly={readOnly}
+                imgClassNames={
+                  uiOpt && 'className' in uiOpt ? uiOpt.className : ''
+                }
               />
             ) : null}
             {widget === 'textarea' ? (
@@ -359,7 +384,7 @@ const SchemaForm: ForwardRefRenderFunction<FormRef, FormProps> = (
               {fieldState?.errorMsg}
             </Form.Control.Feedback>
             {description ? (
-              <Form.Text className="text-muted">{description}</Form.Text>
+              <Form.Text dangerouslySetInnerHTML={{ __html: description }} />
             ) : null}
           </Form.Group>
         );
@@ -377,8 +402,13 @@ export const initFormData = (schema: JSONSchema): Type.FormDataType => {
   const props: JSONSchema['properties'] = schema?.properties || {};
   Object.keys(props).forEach((key) => {
     const prop = props[key];
-    const defaultVal = prop?.default;
-
+    let defaultVal: any = '';
+    if (Array.isArray(prop.default) && prop.enum && prop.enum.length > 0) {
+      // for checkbox default values
+      defaultVal = prop.enum;
+    } else {
+      defaultVal = prop?.default;
+    }
     formData[key] = {
       value: defaultVal,
       isInvalid: false,
