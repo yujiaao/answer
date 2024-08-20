@@ -42,6 +42,7 @@ func NewHTTPServer(debug bool,
 	shortIDMiddleware *middleware.ShortIDMiddleware,
 	templateRouter *router.TemplateRouter,
 	pluginAPIRouter *router.PluginAPIRouter,
+	uiConf *UI,
 ) *gin.Engine {
 
 	if debug {
@@ -57,7 +58,7 @@ func NewHTTPServer(debug bool,
 	htmlTemplate := template.Must(template.New("").Funcs(funcMap).ParseFS(html, "*"))
 	r.SetHTMLTemplate(htmlTemplate)
 	r.Use(middleware.HeadersByRequestURI())
-	viewRouter.Register(r)
+	viewRouter.Register(r, uiConf.BaseURL)
 
 	rootGroup := r.Group("")
 	swaggerRouter.Register(rootGroup)
@@ -74,16 +75,21 @@ func NewHTTPServer(debug bool,
 	unAuthV1.Use(authUserMiddleware.Auth(), authUserMiddleware.EjectUserBySiteInfo())
 	answerRouter.RegisterUnAuthAnswerAPIRouter(unAuthV1)
 
+	// register api that must be authenticated but no need to check account status
+	authWithoutStatusV1 := r.Group("/answer/api/v1")
+	authWithoutStatusV1.Use(authUserMiddleware.MustAuthWithoutAccountAvailable())
+	answerRouter.RegisterAuthUserWithAnyStatusAnswerAPIRouter(authWithoutStatusV1)
+
 	// register api that must be authenticated
 	authV1 := r.Group("/answer/api/v1")
-	authV1.Use(authUserMiddleware.MustAuth())
+	authV1.Use(authUserMiddleware.MustAuthAndAccountAvailable())
 	answerRouter.RegisterAnswerAPIRouter(authV1)
 
 	adminauthV1 := r.Group("/answer/admin/api")
 	adminauthV1.Use(authUserMiddleware.AdminAuth())
 	answerRouter.RegisterAnswerAdminAPIRouter(adminauthV1)
 
-	templateRouter.RegisterTemplateRouter(rootGroup)
+	templateRouter.RegisterTemplateRouter(rootGroup, uiConf.BaseURL)
 
 	// plugin routes
 	pluginAPIRouter.RegisterUnAuthConnectorRouter(mustUnAuthV1)

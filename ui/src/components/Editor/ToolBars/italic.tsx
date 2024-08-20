@@ -27,9 +27,9 @@ let context: IEditorContext;
 const Italic = () => {
   const { t } = useTranslation('translation', { keyPrefix: 'editor' });
   const item = {
-    label: 'italic',
-    keyMap: ['Ctrl-I'],
-    tip: `${t('italic.text')} (Ctrl+I)`,
+    label: 'type-italic',
+    keyMap: ['Ctrl-i'],
+    tip: `${t('italic.text')} (Ctrl+i)`,
   };
   const DEFAULTTEXT = t('italic.text');
 

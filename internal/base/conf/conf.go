@@ -21,6 +21,7 @@ package conf
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 
 	"github.com/apache/incubator-answer/internal/base/data"
@@ -42,6 +43,21 @@ type AllConfig struct {
 	I18n          *translator.I18n              `json:"i18n" mapstructure:"i18n" yaml:"i18n"`
 	ServiceConfig *service_config.ServiceConfig `json:"service_config" mapstructure:"service_config" yaml:"service_config"`
 	Swaggerui     *router.SwaggerConfig         `json:"swaggerui" mapstructure:"swaggerui" yaml:"swaggerui"`
+	UI            *server.UI                    `json:"ui" mapstructure:"ui" yaml:"ui"`
+}
+
+type envConfigOverrides struct {
+	SwaggerHost        string
+	SwaggerAddressPort string
+	SiteAddr           string
+}
+
+func loadEnvs() (envOverrides *envConfigOverrides) {
+	return &envConfigOverrides{
+		SwaggerHost:        os.Getenv("SWAGGER_HOST"),
+		SwaggerAddressPort: os.Getenv("SWAGGER_ADDRESS_PORT"),
+		SiteAddr:           os.Getenv("SITE_ADDR"),
+	}
 }
 
 type PathIgnore struct {
@@ -59,6 +75,26 @@ type Data struct {
 	Cache    *data.CacheConf `json:"cache" mapstructure:"cache" yaml:"cache"`
 }
 
+// SetDefault set default config
+func (c *AllConfig) SetDefault() {
+	if c.UI == nil {
+		c.UI = &server.UI{}
+	}
+}
+
+func (c *AllConfig) SetEnvironmentOverrides() {
+	envs := loadEnvs()
+	if envs.SiteAddr != "" {
+		c.Server.HTTP.Addr = envs.SiteAddr
+	}
+	if envs.SwaggerHost != "" {
+		c.Swaggerui.Host = envs.SwaggerHost
+	}
+	if envs.SwaggerAddressPort != "" {
+		c.Swaggerui.Address = envs.SwaggerAddressPort
+	}
+}
+
 // ReadConfig read config
 func ReadConfig(configFilePath string) (c *AllConfig, err error) {
 	if len(configFilePath) == 0 {
@@ -72,6 +108,8 @@ func ReadConfig(configFilePath string) (c *AllConfig, err error) {
 	if err = config.Parse(&c); err != nil {
 		return nil, err
 	}
+	c.SetDefault()
+	c.SetEnvironmentOverrides()
 	return c, nil
 }
 

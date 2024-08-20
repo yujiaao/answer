@@ -17,16 +17,18 @@
  * under the License.
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Row, Col, Form, Button, Card } from 'react-bootstrap';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 import dayjs from 'dayjs';
 import classNames from 'classnames';
-import { isEqual } from 'lodash';
+import isEqual from 'lodash/isEqual';
+import debounce from 'lodash/debounce';
+import fm from 'front-matter';
 
-import { usePageTags, usePromptWithUnload, useCaptchaModal } from '@/hooks';
+import { usePageTags, usePromptWithUnload } from '@/hooks';
 import { Editor, EditorRef, TagSelector } from '@/components';
 import type * as Type from '@/common/interface';
 import { DRAFT_QUESTION_STORAGE_KEY } from '@/common/constants';
@@ -35,12 +37,18 @@ import {
   questionDetail,
   modifyQuestion,
   useQueryRevisions,
-  useQueryQuestionByTitle,
+  queryQuestionByTitle,
   getTagsBySlugName,
   saveQuestionWithAnswer,
 } from '@/services';
-import { handleFormError, SaveDraft, storageExpires } from '@/utils';
+import {
+  handleFormError,
+  SaveDraft,
+  storageExpires,
+  scrollToElementTop,
+} from '@/utils';
 import { pathFactory } from '@/router/pathFactory';
+import { useCaptchaPlugin } from '@/utils/pluginKit';
 
 import SearchQuestion from './components/SearchQuestion';
 
@@ -86,7 +94,7 @@ const Ask = () => {
   const [formData, setFormData] = useState<FormDataItem>(initFormData);
   const [immData, setImmData] = useState<FormDataItem>(initFormData);
   const [checked, setCheckState] = useState(false);
-  const contentChangedRef = useRef(false);
+  const [blockState, setBlockState] = useState(false);
   const [focusType, setForceType] = useState('');
   const [hasDraft, setHasDraft] = useState(false);
   const resetForm = () => {
@@ -94,6 +102,7 @@ const Ask = () => {
     setCheckState(false);
     setForceType('');
   };
+  const [similarQuestions, setSimilarQuestions] = useState([]);
 
   const editorRef = useRef<EditorRef>({
     getHtml: () => '',
@@ -105,24 +114,17 @@ const Ask = () => {
   const { qid } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const initQueryTags = () => {
-    const queryTags = searchParams.get('tags');
-    if (!queryTags) {
-      return;
-    }
-    getTagsBySlugName(queryTags).then((tags) => {
+  const updateTags = (tags: string) => {
+    getTagsBySlugName(tags).then((resp) => {
       // eslint-disable-next-line
-      handleTagsChange(tags);
+      handleTagsChange(resp);
     });
   };
 
   const isEdit = qid !== undefined;
-  const { data: similarQuestions = { list: [] } } = useQueryQuestionByTitle(
-    isEdit ? '' : formData.title.value,
-  );
 
-  const saveCaptcha = useCaptchaModal('question');
-  const editCaptcha = useCaptchaModal('edit');
+  const saveCaptcha = useCaptchaPlugin('question');
+  const editCaptcha = useCaptchaPlugin('edit');
 
   const removeDraft = () => {
     saveDraft.save.cancel();
@@ -132,15 +134,35 @@ const Ask = () => {
 
   useEffect(() => {
     if (!qid) {
-      initQueryTags();
+      // order: 1. tags query. 2. prefill query. 3. draft
+      const queryTags = searchParams.get('tags');
+      if (queryTags) {
+        updateTags(queryTags);
+      }
       const draft = storageExpires.get(DRAFT_QUESTION_STORAGE_KEY);
-      if (draft) {
-        formData.title.value = draft.title;
-        formData.content.value = draft.content;
-        formData.tags.value = draft.tags;
-        formData.answer_content.value = draft.answer_content;
-        setCheckState(Boolean(draft.answer_content));
-        setHasDraft(true);
+
+      const prefill = searchParams.get('prefill');
+      if (prefill || draft) {
+        if (prefill) {
+          const file = fm<any>(decodeURIComponent(prefill));
+          formData.title.value = file.attributes?.title;
+          formData.content.value = file.body;
+          if (!queryTags && file.attributes?.tags) {
+            // Remove spaces in file.attributes.tags
+            const filterTags = file.attributes.tags
+              .split(',')
+              .map((tag) => tag.trim())
+              .join(',');
+            updateTags(filterTags);
+          }
+        } else if (draft) {
+          formData.title.value = draft.title;
+          formData.content.value = draft.content;
+          formData.tags.value = draft.tags;
+          formData.answer_content.value = draft.answer_content;
+          setCheckState(Boolean(draft.answer_content));
+          setHasDraft(true);
+        }
         setFormData({ ...formData });
       } else {
         resetForm();
@@ -166,9 +188,9 @@ const Ask = () => {
           tags.value.map((v) => v.slug_name),
         )
       ) {
-        contentChangedRef.current = true;
+        setBlockState(true);
       } else {
-        contentChangedRef.current = false;
+        setBlockState(false);
       }
       return;
     }
@@ -189,15 +211,15 @@ const Ask = () => {
         },
         callback: () => setHasDraft(true),
       });
-      contentChangedRef.current = true;
+      setBlockState(true);
     } else {
       removeDraft();
-      contentChangedRef.current = false;
+      setBlockState(false);
     }
   }, [formData]);
 
   usePromptWithUnload({
-    when: contentChangedRef.current,
+    when: blockState,
   });
 
   const { data: revisions = [] } = useQueryRevisions(qid);
@@ -221,28 +243,43 @@ const Ask = () => {
     });
   }, [qid]);
 
+  const querySimilarQuestions = useCallback(
+    debounce((title) => {
+      queryQuestionByTitle(title).then((res) => {
+        setSimilarQuestions(res);
+      });
+    }, 400),
+    [],
+  );
+
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
       ...formData,
-      title: { ...formData.title, value: e.currentTarget.value, errorMsg: '' },
+      title: { value: e.currentTarget.value, errorMsg: '', isInvalid: false },
     });
+    if (e.currentTarget.value.length >= 10) {
+      querySimilarQuestions(e.currentTarget.value);
+    }
+    if (e.currentTarget.value.length === 0) {
+      setSimilarQuestions([]);
+    }
   };
   const handleContentChange = (value: string) => {
     setFormData({
       ...formData,
-      content: { ...formData.content, value, errorMsg: '' },
+      content: { value, errorMsg: '', isInvalid: false },
     });
   };
   const handleTagsChange = (value) =>
     setFormData({
       ...formData,
-      tags: { ...formData.tags, value, errorMsg: '' },
+      tags: { value, errorMsg: '', isInvalid: false },
     });
 
   const handleAnswerChange = (value: string) =>
     setFormData({
       ...formData,
-      answer_content: { ...formData.answer_content, value, errorMsg: '' },
+      answer_content: { value, errorMsg: '', isInvalid: false },
     });
 
   const handleSummaryChange = (evt: React.ChangeEvent<HTMLInputElement>) =>
@@ -262,6 +299,85 @@ const Ask = () => {
     }
   };
 
+  const submitModifyQuestion = (params) => {
+    setBlockState(false);
+    const ep = {
+      ...params,
+      id: qid,
+      edit_summary: formData.edit_summary.value,
+    };
+    const imgCode = editCaptcha?.getCaptcha();
+    if (imgCode?.verify) {
+      ep.captcha_code = imgCode.captcha_code;
+      ep.captcha_id = imgCode.captcha_id;
+    }
+    modifyQuestion(ep)
+      .then(async (res) => {
+        await editCaptcha?.close();
+        navigate(pathFactory.questionLanding(qid, res?.url_title), {
+          state: { isReview: res?.wait_for_review },
+        });
+      })
+      .catch((err) => {
+        if (err.isError) {
+          editCaptcha?.handleCaptchaError(err.list);
+          const data = handleFormError(err, formData);
+          setFormData({ ...data });
+          const ele = document.getElementById(err.list[0].error_field);
+          scrollToElementTop(ele);
+        }
+      });
+  };
+
+  const submitQuestion = async (params) => {
+    setBlockState(false);
+    const imgCode = saveCaptcha?.getCaptcha();
+    if (imgCode?.verify) {
+      params.captcha_code = imgCode.captcha_code;
+      params.captcha_id = imgCode.captcha_id;
+    }
+    let res;
+    if (checked) {
+      res = await saveQuestionWithAnswer({
+        ...params,
+        answer_content: formData.answer_content.value,
+      }).catch((err) => {
+        if (err.isError) {
+          const captchaErr = saveCaptcha?.handleCaptchaError(err.list);
+          if (!(captchaErr && err.list.length === 1)) {
+            const data = handleFormError(err, formData);
+            setFormData({ ...data });
+            const ele = document.getElementById(err.list[0].error_field);
+            scrollToElementTop(ele);
+          }
+        }
+      });
+    } else {
+      res = await saveQuestion(params).catch((err) => {
+        if (err.isError) {
+          const captchaErr = saveCaptcha?.handleCaptchaError(err.list);
+          if (!(captchaErr && err.list.length === 1)) {
+            const data = handleFormError(err, formData);
+            setFormData({ ...data });
+            const ele = document.getElementById(err.list[0].error_field);
+            scrollToElementTop(ele);
+          }
+        }
+      });
+    }
+
+    const id = res?.id || res?.question?.id;
+    if (id) {
+      await saveCaptcha?.close();
+      if (checked) {
+        navigate(pathFactory.questionLanding(id, res?.question?.url_title));
+      } else {
+        navigate(pathFactory.questionLanding(id, res?.url_title));
+      }
+    }
+    removeDraft();
+  };
+
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     event.stopPropagation();
@@ -273,77 +389,18 @@ const Ask = () => {
     };
 
     if (isEdit) {
-      editCaptcha.check(() => {
-        contentChangedRef.current = false;
-        const ep = {
-          ...params,
-          id: qid,
-          edit_summary: formData.edit_summary.value,
-        };
-        const imgCode = editCaptcha.getCaptcha();
-        if (imgCode.verify) {
-          ep.captcha_code = imgCode.captcha_code;
-          ep.captcha_id = imgCode.captcha_id;
-        }
-        modifyQuestion(ep)
-          .then(async (res) => {
-            await editCaptcha.close();
-            navigate(pathFactory.questionLanding(qid, params.url_title), {
-              state: { isReview: res?.wait_for_review },
-            });
-          })
-          .catch((err) => {
-            if (err.isError) {
-              editCaptcha.handleCaptchaError(err.list);
-              const data = handleFormError(err, formData);
-              setFormData({ ...data });
-            }
-          });
-      });
+      if (!editCaptcha) {
+        submitModifyQuestion(params);
+        return;
+      }
+      editCaptcha.check(() => submitModifyQuestion(params));
     } else {
-      saveCaptcha.check(async () => {
-        contentChangedRef.current = false;
-        const imgCode = saveCaptcha.getCaptcha();
-        if (imgCode.verify) {
-          params.captcha_code = imgCode.captcha_code;
-          params.captcha_id = imgCode.captcha_id;
-        }
-        let res;
-        if (checked) {
-          res = await saveQuestionWithAnswer({
-            ...params,
-            answer_content: formData.answer_content.value,
-          }).catch((err) => {
-            if (err.isError) {
-              const captchaErr = saveCaptcha.handleCaptchaError(err.list);
-              if (!(captchaErr && err.list.length === 1)) {
-                const data = handleFormError(err, formData);
-                setFormData({ ...data });
-              }
-            }
-          });
-        } else {
-          res = await saveQuestion(params).catch((err) => {
-            if (err.isError) {
-              const captchaErr = saveCaptcha.handleCaptchaError(err.list);
-              if (!(captchaErr && err.list.length === 1)) {
-                const data = handleFormError(err, formData);
-                setFormData({ ...data });
-              }
-            }
-          });
-        }
-
-        const id = res?.id || res?.question?.id;
-        if (id) {
-          await saveCaptcha.close();
-          if (checked) {
-            navigate(pathFactory.questionLanding(id, res?.question?.url_title));
-          } else {
-            navigate(pathFactory.questionLanding(id));
-          }
-        }
-        removeDraft();
+      if (!saveCaptcha) {
+        submitQuestion(params);
+        return;
+      }
+      saveCaptcha?.check(async () => {
+        submitQuestion(params);
       });
     }
   };
@@ -383,7 +440,10 @@ const Ask = () => {
                     return (
                       <option key={`${create_at}`} value={index}>
                         {`${date} - ${user_info.display_name} - ${
-                          reason || t('default_reason')
+                          reason ||
+                          (index === revisions.length - 1
+                            ? t('default_first_reason')
+                            : t('default_reason'))
                         }`}
                       </option>
                     );
@@ -401,26 +461,23 @@ const Ask = () => {
                 onChange={handleTitleChange}
                 placeholder={t('form.fields.title.placeholder')}
                 autoFocus
+                contentEditable
               />
-
               <Form.Control.Feedback type="invalid">
                 {formData.title.errorMsg}
               </Form.Control.Feedback>
               {bool && <SearchQuestion similarQuestions={similarQuestions} />}
             </Form.Group>
-            <Form.Group controlId="body">
+
+            <Form.Group controlId="content">
               <Form.Label>{t('form.fields.body.label')}</Form.Label>
-              <Form.Control
-                defaultValue={formData.content.value}
-                isInvalid={formData.content.isInvalid}
-                hidden
-              />
               <Editor
                 value={formData.content.value}
                 onChange={handleContentChange}
                 className={classNames(
                   'form-control p-0',
                   focusType === 'content' && 'focus',
+                  formData.content.isInvalid && 'is-invalid',
                 )}
                 onFocus={() => {
                   setForceType('content');
@@ -434,22 +491,60 @@ const Ask = () => {
                 {formData.content.errorMsg}
               </Form.Control.Feedback>
             </Form.Group>
+
             <Form.Group controlId="tags" className="my-3">
               <Form.Label>{t('form.fields.tags.label')}</Form.Label>
-              <Form.Control
-                defaultValue={JSON.stringify(formData.tags.value)}
-                isInvalid={formData.tags.isInvalid}
-                hidden
-              />
               <TagSelector
                 value={formData.tags.value}
                 onChange={handleTagsChange}
-                showRequiredTagText
+                showRequiredTag
+                maxTagLength={5}
+                isInvalid={formData.tags.isInvalid}
+                errMsg={formData.tags.errorMsg}
               />
-              <Form.Control.Feedback type="invalid">
-                {formData.tags.errorMsg}
-              </Form.Control.Feedback>
             </Form.Group>
+
+            {!isEdit && (
+              <>
+                <Form.Switch
+                  checked={checked}
+                  type="switch"
+                  label={t('answer_question')}
+                  onChange={(e) => setCheckState(e.target.checked)}
+                  id="radio-answer"
+                />
+                {checked && (
+                  <Form.Group controlId="answer" className="mt-3">
+                    <Form.Label>{t('form.fields.answer.label')}</Form.Label>
+                    <Editor
+                      value={formData.answer_content.value}
+                      onChange={handleAnswerChange}
+                      ref={editorRef2}
+                      className={classNames(
+                        'form-control p-0',
+                        focusType === 'answer' && 'focus',
+                        formData.answer_content.isInvalid && 'is-invalid',
+                      )}
+                      onFocus={() => {
+                        setForceType('answer');
+                      }}
+                      onBlur={() => {
+                        setForceType('');
+                      }}
+                    />
+                    <Form.Control
+                      type="text"
+                      isInvalid={formData.answer_content.isInvalid}
+                      hidden
+                    />
+                    <Form.Control.Feedback type="invalid">
+                      {formData.answer_content.errorMsg}
+                    </Form.Control.Feedback>
+                  </Form.Group>
+                )}
+              </>
+            )}
+
             {isEdit && (
               <Form.Group controlId="edit_summary" className="my-3">
                 <Form.Label>{t('form.fields.edit_summary.label')}</Form.Label>
@@ -459,6 +554,7 @@ const Ask = () => {
                   isInvalid={formData.edit_summary.isInvalid}
                   placeholder={t('form.fields.edit_summary.placeholder')}
                   onChange={handleSummaryChange}
+                  contentEditable
                 />
                 <Form.Control.Feedback type="invalid">
                   {formData.edit_summary.errorMsg}
@@ -482,46 +578,6 @@ const Ask = () => {
                   </Button>
                 )}
               </div>
-            )}
-            {!isEdit && (
-              <>
-                <Form.Check
-                  className="mt-5"
-                  checked={checked}
-                  type="checkbox"
-                  label={t('answer_question')}
-                  onChange={(e) => setCheckState(e.target.checked)}
-                  id="radio-answer"
-                />
-                {checked && (
-                  <Form.Group controlId="answer" className="mt-4">
-                    <Form.Label>{t('form.fields.answer.label')}</Form.Label>
-                    <Editor
-                      value={formData.answer_content.value}
-                      onChange={handleAnswerChange}
-                      ref={editorRef2}
-                      className={classNames(
-                        'form-control p-0',
-                        focusType === 'answer' && 'focus',
-                      )}
-                      onFocus={() => {
-                        setForceType('answer');
-                      }}
-                      onBlur={() => {
-                        setForceType('');
-                      }}
-                    />
-                    <Form.Control
-                      type="text"
-                      isInvalid={formData.answer_content.isInvalid}
-                      hidden
-                    />
-                    <Form.Control.Feedback type="invalid">
-                      {formData.answer_content.errorMsg}
-                    </Form.Control.Feedback>
-                  </Form.Group>
-                )}
-              </>
             )}
             {checked && (
               <div className="mt-3">

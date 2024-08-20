@@ -94,10 +94,14 @@ type pluginInfo struct {
 	Version string
 }
 
-func newAnswerBuilder(outputPath string, plugins []string, originalAnswerInfo OriginalAnswerInfo) *answerBuilder {
+func newAnswerBuilder(buildDir, outputPath string, plugins []string, originalAnswerInfo OriginalAnswerInfo) *answerBuilder {
 	material := &buildingMaterial{originalAnswerInfo: originalAnswerInfo}
 	parentDir, _ := filepath.Abs(".")
-	material.tmpDir, _ = os.MkdirTemp(parentDir, "answer_build")
+	if buildDir != "" {
+		material.tmpDir = filepath.Join(parentDir, buildDir)
+	} else {
+		material.tmpDir, _ = os.MkdirTemp(parentDir, "answer_build")
+	}
 	if len(outputPath) == 0 {
 		outputPath = filepath.Join(parentDir, "new_answer")
 	}
@@ -117,12 +121,11 @@ func (a *answerBuilder) DoTask(task func(b *buildingMaterial) error) {
 }
 
 // BuildNewAnswer builds a new answer with specified plugins
-func BuildNewAnswer(outputPath string, plugins []string, originalAnswerInfo OriginalAnswerInfo) (err error) {
-	builder := newAnswerBuilder(outputPath, plugins, originalAnswerInfo)
+func BuildNewAnswer(buildDir, outputPath string, plugins []string, originalAnswerInfo OriginalAnswerInfo) (err error) {
+	builder := newAnswerBuilder(buildDir, outputPath, plugins, originalAnswerInfo)
 	builder.DoTask(createMainGoFile)
 	builder.DoTask(downloadGoModFile)
 	builder.DoTask(copyUIFiles)
-	builder.DoTask(overwriteIndexTs)
 	builder.DoTask(buildUI)
 	builder.DoTask(mergeI18nFiles)
 	builder.DoTask(buildBinary)
@@ -144,7 +147,7 @@ func formatPlugins(plugins []string) (formatted []*pluginInfo) {
 
 // createMainGoFile creates main.go file in tmp dir that content is mainGoTpl
 func createMainGoFile(b *buildingMaterial) (err error) {
-	fmt.Printf("[build] tmp dir: %s\n", b.tmpDir)
+	fmt.Printf("[build] build dir: %s\n", b.tmpDir)
 	err = dir.CreateDirIfNotExist(b.tmpDir)
 	if err != nil {
 		return err
@@ -180,11 +183,14 @@ func createMainGoFile(b *buildingMaterial) (err error) {
 	}
 
 	for _, p := range b.plugins {
-		if len(p.Path) == 0 {
-			continue
+		// If user set a path, use it to replace the module with local path
+		if len(p.Path) > 0 {
+			replacement := fmt.Sprintf("%s@%s=%s", p.Name, p.Version, p.Path)
+			err = b.newExecCmd("go", "mod", "edit", "-replace", replacement).Run()
+		} else if len(p.Version) > 0 {
+			// If user specify a version, use it to get specific version of the module
+			err = b.newExecCmd("go", "get", fmt.Sprintf("%s@%s", p.Name, p.Version)).Run()
 		}
-		replacement := fmt.Sprintf("%s@v%s=%s", p.Name, p.Version, p.Path)
-		err = b.newExecCmd("go", "mod", "edit", "-replace", replacement).Run()
 		if err != nil {
 			return err
 		}

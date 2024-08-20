@@ -18,7 +18,7 @@
  */
 
 import { FC, memo, useEffect } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation, ScrollRestoration } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 
 import { SWRConfig } from 'swr';
@@ -34,6 +34,7 @@ import {
   HttpErrorContent,
 } from '@/components';
 import { LoginToContinueModal } from '@/components/Modal';
+import { changeTheme } from '@/utils';
 
 const Layout: FC = () => {
   const location = useLocation();
@@ -47,6 +48,23 @@ const Layout: FC = () => {
   useEffect(() => {
     httpStatusReset();
   }, [location]);
+
+  useEffect(() => {
+    const systemThemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    function handleSystemThemeChange(event) {
+      if (event.matches) {
+        changeTheme('dark');
+      } else {
+        changeTheme('light');
+      }
+    }
+
+    systemThemeQuery.addListener(handleSystemThemeChange);
+
+    return () => {
+      systemThemeQuery.removeListener(handleSystemThemeChange);
+    };
+  }, []);
   return (
     <HelmetProvider>
       <PageTags />
@@ -57,7 +75,7 @@ const Layout: FC = () => {
         }}>
         <Header />
         {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events */}
-        <div className="position-relative page-wrap">
+        <div className="position-relative page-wrap d-flex flex-column flex-fill">
           {httpStatusCode ? (
             <HttpErrorContent httpCode={httpStatusCode} />
           ) : (
@@ -68,6 +86,7 @@ const Layout: FC = () => {
         <Footer />
         <Customize />
         <LoginToContinueModal visible={showLoginToContinueModal} />
+        <ScrollRestoration />
       </SWRConfig>
     </HelmetProvider>
   );

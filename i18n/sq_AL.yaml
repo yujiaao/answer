@@ -355,7 +355,7 @@ ui:
             msg:
               empty: File cannot be empty.
               only_image: Only image files are allowed.
-              max_size: File size cannot exceed 4MB.
+              max_size: File size cannot exceed 4 MB.
           desc:
             label: Description (optional)
       tab_url: Image URL
@@ -428,7 +428,7 @@ ui:
             range: Display name up to 35 characters.
         slug_name:
           label: URL Slug
-          desc: 'Must use the character set "a-z", "0-9", "+ # - ."'
+          desc: URL slug up to 35 characters.
           msg:
             empty: URL slug cannot be empty.
             range: URL slug up to 35 characters.
@@ -466,7 +466,7 @@ ui:
           label: Display Name
         slug_name:
           label: URL Slug
-          info: 'Must use the character set "a-z", "0-9", "+ # - ."'
+          info: URL slug up to 35 characters.
         desc:
           label: Description
         edit_summary:
@@ -612,7 +612,8 @@ ui:
       label: Name
       msg:
         empty: Name cannot be empty.
-        range: Name up to 30 characters.
+        range: Name must between 4 to 30 characters in length.
+        character: 'Must use the character set "a-z", "A-Z", "0-9", " - . _"'
     email:
       label: Email
       msg:
@@ -708,7 +709,9 @@ ui:
         We've sent an email to that address. Please follow the confirmation instructions.
       email:
         label: Email
-        msg: Email cannot be empty.
+      new_email:
+        label: New email
+        msg: New email cannot be empty.
       password_title: Password
       current_pass:
         label: Current Password
@@ -803,7 +806,7 @@ ui:
       more: More
     tips:
       title: Advanced Search Tips
-      tag: "<1>[tag]</1> search withing a tag"
+      tag: "<1>[tag]</1> search with a tag"
       user: "<1>user:username</1> search by author"
       answer: "<1>answers:0</1> unanswered questions"
       score: "<1>score:3</1> posts with a 3+ score"
@@ -847,7 +850,7 @@ ui:
     answers: Answers
     newest: Newest
     active: Active
-    frequent: Frequent
+    hot: Hot
     score: Score
     unanswered: Unanswered
     modified: modified
@@ -891,7 +894,7 @@ ui:
     x_answers: answers
     x_questions: questions
   install:
-    title: Answer
+    title: Installation
     next: Next
     done: Done
     config_yaml_error: Can't create the config.yaml file.
@@ -956,7 +959,7 @@ ui:
       msg:
         empty: Email cannot be empty.
         incorrect: Email incorrect format.
-    ready_title: Your Answer is Ready!
+    ready_title: Your site is ready
     ready_desc: >-
       If you ever feel like changing more settings, visit <1>admin section</1>; find it in the site menu.
     good_luck: "Have fun, and good luck!"
@@ -1004,7 +1007,7 @@ ui:
       title: Admin
     dashboard:
       title: Dashboard
-      welcome: Welcome to Answer Admin!
+      welcome: Welcome to Admin!
       site_statistics: Site Statistics
       questions: "Questions:"
       answers: "Answers:"

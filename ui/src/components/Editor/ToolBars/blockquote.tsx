@@ -28,8 +28,8 @@ const BlockQuote = () => {
   const { t } = useTranslation('translation', { keyPrefix: 'editor' });
 
   const item = {
-    label: 'blockquote',
-    keyMap: ['Ctrl-Q'],
+    label: 'quote',
+    keyMap: ['Ctrl-q'],
     tip: `${t('blockquote.text')} (Ctrl+Q)`,
   };
 

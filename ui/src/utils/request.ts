@@ -31,6 +31,8 @@ import { floppyNavigation } from './floppyNavigation';
 import { isIgnoredPath, IGNORE_PATH_LIST } from './guard';
 
 const baseConfig = {
+  baseURL:
+    process.env.NODE_ENV === 'development' ? '' : process.env.REACT_APP_API_URL,
   timeout: 10000,
   withCredentials: true,
 };
@@ -136,8 +138,8 @@ class Request {
             // default error msg will show modal
             Modal.confirm({
               content: msg,
-              showCancel: false,
-              confirmText: 'OK',
+              showConfirm: false,
+              cancelText: 'close',
             });
             return Promise.reject(false);
           }

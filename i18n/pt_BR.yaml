@@ -360,7 +360,7 @@ ui:
             msg:
               empty: Arquivo não pode ser vazio.
               only_image: Somente um arquivo de imagem é permitido.
-              max_size: O tamanho do arquivo não pode exceder 4MB.
+              max_size: O tamanho do arquivo não pode exceder 4 MB.
           desc:
             label: Descrição (opcional)
       tab_url: URL da imagem
@@ -855,7 +855,7 @@ ui:
     answers: Respostas
     newest: Mais recente
     active: Ativo
-    frequent: Frequente
+    hot: Hot
     score: Pontuação
     unanswered: Não Respondido
     modified: modificado
@@ -899,7 +899,7 @@ ui:
     x_answers: respostas
     x_questions: perguntas
   install:
-    title: Resposta
+    title: Instalação
     next: Proximo
     done: Completo
     config_yaml_error: Não é possível criar o arquivo config.yaml.
@@ -1017,7 +1017,7 @@ ui:
       title: Administrador
     dashboard:
       title: Painel
-      welcome: Bem vindo ao Answer Administrador!
+      welcome: Bem vindo ao Administrador!
       site_statistics: Estatísticas do Site
       questions: "Perguntas:"
       answers: "Respostas:"

@@ -27,6 +27,7 @@ const (
 	QuestionStatusAvailable = 1
 	QuestionStatusClosed    = 2
 	QuestionStatusDeleted   = 10
+	QuestionStatusPending   = 11
 	QuestionUnPin           = 1
 	QuestionPin             = 2
 	QuestionShow            = 1
@@ -37,12 +38,14 @@ var AdminQuestionSearchStatus = map[string]int{
 	"available": QuestionStatusAvailable,
 	"closed":    QuestionStatusClosed,
 	"deleted":   QuestionStatusDeleted,
+	"pending":   QuestionStatusPending,
 }
 
 var AdminQuestionSearchStatusIntToString = map[int]string{
 	QuestionStatusAvailable: "available",
 	QuestionStatusClosed:    "closed",
 	QuestionStatusDeleted:   "deleted",
+	QuestionStatusPending:   "pending",
 }
 
 // Question question
@@ -63,6 +66,7 @@ type Question struct {
 	UniqueViewCount  int       `xorm:"not null default 0 INT(11) unique_view_count"`
 	VoteCount        int       `xorm:"not null default 0 INT(11) vote_count"`
 	AnswerCount      int       `xorm:"not null default 0 INT(11) answer_count"`
+	HotScore         int       `xorm:"not null default 0 INT(11) hot_score"`
 	CollectionCount  int       `xorm:"not null default 0 INT(11) collection_count"`
 	FollowCount      int       `xorm:"not null default 0 INT(11) follow_count"`
 	AcceptedAnswerID string    `xorm:"not null default 0 BIGINT(20) accepted_answer_id"`

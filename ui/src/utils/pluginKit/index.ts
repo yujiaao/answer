@@ -17,14 +17,17 @@
  * under the License.
  */
 
-import { NamedExoticComponent, FC } from 'react';
+import { RefObject } from 'react';
 
 import builtin from '@/plugins/builtin';
 import * as allPlugins from '@/plugins';
 import type * as Type from '@/common/interface';
+import { LOGGED_TOKEN_STORAGE_KEY } from '@/common/constants';
 import { getPluginsStatus } from '@/services';
+import Storage from '@/utils/storage';
 
 import { initI18nResource } from './utils';
+import { Plugin, PluginInfo, PluginType } from './interface';
 
 /**
  * This information is to be defined for all components.
@@ -38,32 +41,17 @@ import { initI18nResource } from './utils';
  * @field description: Plugin description, optionally configurable. Usually read from the `i18n` file
  */
 
-export type PluginType = 'connector' | 'search' | 'editor';
-export interface PluginInfo {
-  slug_name: string;
-  type: PluginType;
-  name?: string;
-  description?: string;
-}
-
-export interface Plugin {
-  info: PluginInfo;
-  component: NamedExoticComponent | FC;
-  i18nConfig?;
-  hooks?: {
-    useRender?: Array<(element: HTMLElement | null) => void>;
-  };
-  activated?: boolean;
-}
-
 class Plugins {
   plugins: Plugin[] = [];
+
+  registeredPlugins: Type.ActivatedPlugin[] = [];
 
   constructor() {
     this.registerBuiltin();
     this.registerPlugins();
 
     getPluginsStatus().then((plugins) => {
+      this.registeredPlugins = plugins;
       this.activatePlugins(plugins);
     });
   }
@@ -137,6 +125,11 @@ class Plugins {
     return this.plugins.find((p) => p.info.slug_name === slug_name);
   }
 
+  getOnePluginHooks(slug_name: string) {
+    const plugin = this.getPlugin(slug_name);
+    return plugin?.hooks;
+  }
+
   getPlugins() {
     return this.plugins;
   }
@@ -144,10 +137,93 @@ class Plugins {
 
 const plugins = new Plugins();
 
-const useRenderHtmlPlugin = (element: HTMLElement | null) => {
+const getRoutePlugins = () => {
+  return plugins
+    .getPlugins()
+    .filter((plugin) => plugin.info.type === PluginType.Route);
+};
+
+const defaultProps = () => {
+  const token = Storage.get(LOGGED_TOKEN_STORAGE_KEY) || '';
+  return {
+    key: token,
+    headers: {
+      Authorization: token,
+    },
+  };
+};
+
+const validateRoutePlugin = async (slugName) => {
+  let registeredPlugin;
+  if (plugins.registeredPlugins.length === 0) {
+    const pluginsStatus = await getPluginsStatus();
+    registeredPlugin = pluginsStatus.find((p) => p.slug_name === slugName);
+  } else {
+    registeredPlugin = plugins.registeredPlugins.find(
+      (p) => p.slug_name === slugName,
+    );
+  }
+
+  return Boolean(registeredPlugin?.enabled);
+};
+
+const mergeRoutePlugins = (routes) => {
+  const routePlugins = getRoutePlugins();
+  if (routePlugins.length === 0) {
+    return routes;
+  }
+  routes.forEach((route) => {
+    if (route.page === 'pages/Layout') {
+      route.children?.forEach((child) => {
+        if (child.page === 'pages/SideNavLayout') {
+          routePlugins.forEach((plugin) => {
+            const { route: path, slug_name } = plugin.info;
+            child.children.push({
+              page: plugin.component,
+              path,
+              loader: async () => {
+                const bool = await validateRoutePlugin(slug_name);
+                return bool;
+              },
+              guard: (params) => {
+                if (params.loaderData) {
+                  return {
+                    ok: true,
+                  };
+                }
+
+                return {
+                  ok: false,
+                  error: {
+                    code: 404,
+                  },
+                };
+              },
+            });
+          });
+        }
+      });
+    }
+  });
+  return routes;
+};
+
+/**
+ * Only used to enhance the capabilities of the markdown editor
+ * Add RefObject type to solve the problem of dom being null in hooks
+ */
+const useRenderHtmlPlugin = (
+  element: HTMLElement | RefObject<HTMLElement> | null,
+) => {
   plugins
     .getPlugins()
-    .filter((plugin) => plugin.activated && plugin.hooks?.useRender)
+    .filter((plugin) => {
+      return (
+        plugin.activated &&
+        plugin.hooks?.useRender &&
+        plugin.info.type === PluginType.Editor
+      );
+    })
     .forEach((plugin) => {
       plugin.hooks?.useRender?.forEach((hook) => {
         hook(element);
@@ -155,5 +231,21 @@ const useRenderHtmlPlugin = (element: HTMLElement | null) => {
     });
 };
 
-export { useRenderHtmlPlugin };
+// Only one captcha type plug-in can be enabled at the same time
+const useCaptchaPlugin = (key: Type.CaptchaKey) => {
+  const captcha = plugins
+    .getPlugins()
+    .filter(
+      (plugin) => plugin.info.type === PluginType.Captcha && plugin.activated,
+    );
+  const pluginHooks = plugins.getOnePluginHooks(captcha[0]?.info.slug_name);
+  return pluginHooks?.useCaptcha?.({
+    captchaKey: key,
+    commonProps: defaultProps(),
+  });
+};
+
+export type { Plugin, PluginInfo };
+
+export { useRenderHtmlPlugin, mergeRoutePlugins, useCaptchaPlugin, PluginType };
 export default plugins;

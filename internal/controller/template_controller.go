@@ -22,15 +22,19 @@ package controller
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/apache/incubator-answer/plugin"
 	"html/template"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/apache/incubator-answer/internal/base/constant"
 	"github.com/apache/incubator-answer/internal/base/handler"
+	"github.com/apache/incubator-answer/internal/base/translator"
 	templaterender "github.com/apache/incubator-answer/internal/controller/template_render"
+	"github.com/apache/incubator-answer/internal/entity"
 	"github.com/apache/incubator-answer/internal/schema"
 	"github.com/apache/incubator-answer/internal/service/siteinfo_common"
 	"github.com/apache/incubator-answer/pkg/checker"
@@ -46,7 +50,7 @@ import (
 var SiteUrl = ""
 
 type TemplateController struct {
-	scriptPath               string
+	scriptPath               []string
 	cssPath                  string
 	templateRenderController *templaterender.TemplateRenderController
 	siteInfoService          siteinfo_common.SiteInfoCommonService
@@ -65,18 +69,21 @@ func NewTemplateController(
 		siteInfoService:          siteInfoService,
 	}
 }
-func GetStyle() (script, css string) {
+func GetStyle() (script []string, css string) {
 	file, err := ui.Build.ReadFile("build/index.html")
 	if err != nil {
 		return
 	}
-	scriptRegexp := regexp.MustCompile(`<script defer="defer" src="(.*)"></script>`)
-	scriptData := scriptRegexp.FindStringSubmatch(string(file))
+	scriptRegexp := regexp.MustCompile(`<script defer="defer" src="([^"]*)"></script>`)
+	scriptData := scriptRegexp.FindAllStringSubmatch(string(file), -1)
+	for _, s := range scriptData {
+		if len(s) == 2 {
+			script = append(script, s[1])
+		}
+	}
+
 	cssRegexp := regexp.MustCompile(`<link href="(.*)" rel="stylesheet">`)
 	cssListData := cssRegexp.FindStringSubmatch(string(file))
-	if len(scriptData) == 2 {
-		script = scriptData[1]
-	}
 	if len(cssListData) == 2 {
 		css = cssListData[1]
 	}
@@ -171,7 +178,7 @@ func (tc *TemplateController) QuestionList(ctx *gin.Context) {
 	if siteInfo.SiteSeo.Permalink == constant.PermalinkQuestionIDAndTitle {
 		UrlUseTitle = true
 	}
-	siteInfo.Title = fmt.Sprintf("Questions - %s", siteInfo.General.Name)
+	siteInfo.Title = fmt.Sprintf("%s - %s", translator.Tr(handler.GetLang(ctx), constant.QuestionsTitleTrKey), siteInfo.General.Name)
 	tc.html(ctx, http.StatusOK, "question.html", siteInfo, gin.H{
 		"data":     data,
 		"useTitle": UrlUseTitle,
@@ -212,6 +219,11 @@ func (tc *TemplateController) QuestionInfoeRdirect(ctx *gin.Context, siteInfo *s
 		if titleIsAnswerID {
 			answerID = uid.DeShortID(answerID)
 		}
+	}
+
+	if _, err := tc.templateRenderController.AnswerDetail(ctx, answerID); err != nil {
+		answerID = ""
+		titleIsAnswerID = false
 	}
 
 	url = fmt.Sprintf("%s/questions/%s", siteInfo.General.SiteUrl, questionID)
@@ -318,7 +330,7 @@ func (tc *TemplateController) QuestionInfo(ctx *gin.Context) {
 		return
 	}
 	siteInfo.Canonical = fmt.Sprintf("%s/questions/%s/%s", siteInfo.General.SiteUrl, id, encodeTitle)
-	if siteInfo.SiteSeo.Permalink == constant.PermalinkQuestionID {
+	if siteInfo.SiteSeo.Permalink == constant.PermalinkQuestionID || siteInfo.SiteSeo.Permalink == constant.PermalinkQuestionIDByShortID {
 		siteInfo.Canonical = fmt.Sprintf("%s/questions/%s", siteInfo.General.SiteUrl, id)
 	}
 	jsonLD := &schema.QAPageJsonLD{}
@@ -332,6 +344,7 @@ func (tc *TemplateController) QuestionInfo(ctx *gin.Context) {
 	jsonLD.MainEntity.DateCreated = time.Unix(detail.CreateTime, 0)
 	jsonLD.MainEntity.Author.Type = "Person"
 	jsonLD.MainEntity.Author.Name = detail.UserInfo.DisplayName
+	jsonLD.MainEntity.Author.URL = fmt.Sprintf("%s/users/%s", siteInfo.General.SiteUrl, detail.UserInfo.Username)
 	answerList := make([]*schema.SuggestedAnswerItem, 0)
 	for _, answer := range answers {
 		if answer.Accepted == schema.AnswerAcceptedEnable {
@@ -343,6 +356,7 @@ func (tc *TemplateController) QuestionInfo(ctx *gin.Context) {
 			acceptedAnswerItem.URL = fmt.Sprintf("%s/%s", siteInfo.Canonical, answer.ID)
 			acceptedAnswerItem.Author.Type = "Person"
 			acceptedAnswerItem.Author.Name = answer.UserInfo.DisplayName
+			acceptedAnswerItem.Author.URL = fmt.Sprintf("%s/users/%s", siteInfo.General.SiteUrl, answer.UserInfo.Username)
 			jsonLD.MainEntity.AcceptedAnswer = acceptedAnswerItem
 		} else {
 			item := &schema.SuggestedAnswerItem{}
@@ -353,6 +367,7 @@ func (tc *TemplateController) QuestionInfo(ctx *gin.Context) {
 			item.URL = fmt.Sprintf("%s/%s", siteInfo.Canonical, answer.ID)
 			item.Author.Type = "Person"
 			item.Author.Name = answer.UserInfo.DisplayName
+			item.Author.URL = fmt.Sprintf("%s/users/%s", siteInfo.General.SiteUrl, answer.UserInfo.Username)
 			answerList = append(answerList, item)
 		}
 
@@ -376,6 +391,7 @@ func (tc *TemplateController) QuestionInfo(ctx *gin.Context) {
 		"detail":   detail,
 		"answers":  answers,
 		"comments": comments,
+		"noindex":  detail.Show == entity.QuestionHide,
 	})
 }
 
@@ -397,7 +413,7 @@ func (tc *TemplateController) TagList(ctx *gin.Context) {
 	if req.Page > 1 {
 		siteInfo.Canonical = fmt.Sprintf("%s/tags?page=%d", siteInfo.General.SiteUrl, req.Page)
 	}
-	siteInfo.Title = fmt.Sprintf("%s - %s", "Tags", siteInfo.General.Name)
+	siteInfo.Title = fmt.Sprintf("%s - %s", translator.Tr(handler.GetLang(ctx), constant.TagsListTitleTrKey), siteInfo.General.Name)
 	tc.html(ctx, http.StatusOK, "tags.html", siteInfo, gin.H{
 		"page": page,
 		"data": data,
@@ -414,7 +430,7 @@ func (tc *TemplateController) TagInfo(ctx *gin.Context) {
 	}
 	nowPage := req.Page
 	req.Name = tag
-	taginifo, questionList, questionCount, err := tc.templateRenderController.TagInfo(ctx, req)
+	tagInfo, questionList, questionCount, err := tc.templateRenderController.TagInfo(ctx, req)
 	if err != nil {
 		tc.Page404(ctx)
 		return
@@ -426,19 +442,19 @@ func (tc *TemplateController) TagInfo(ctx *gin.Context) {
 	if req.Page > 1 {
 		siteInfo.Canonical = fmt.Sprintf("%s/tags/%s?page=%d", siteInfo.General.SiteUrl, tag, req.Page)
 	}
-	siteInfo.Description = htmltext.FetchExcerpt(taginifo.ParsedText, "...", 240)
-	if len(taginifo.ParsedText) == 0 {
-		siteInfo.Description = "The tag has no description."
+	siteInfo.Description = htmltext.FetchExcerpt(tagInfo.ParsedText, "...", 240)
+	if len(tagInfo.ParsedText) == 0 {
+		siteInfo.Description = translator.Tr(handler.GetLang(ctx), constant.TagHasNoDescription)
 	}
-	siteInfo.Keywords = taginifo.DisplayName
+	siteInfo.Keywords = tagInfo.DisplayName
 
 	UrlUseTitle := false
 	if siteInfo.SiteSeo.Permalink == constant.PermalinkQuestionIDAndTitle {
 		UrlUseTitle = true
 	}
-	siteInfo.Title = fmt.Sprintf("'%s' Questions - %s", taginifo.DisplayName, siteInfo.General.Name)
+	siteInfo.Title = fmt.Sprintf("'%s' %s - %s", tagInfo.DisplayName, translator.Tr(handler.GetLang(ctx), constant.QuestionsTitleTrKey), siteInfo.General.Name)
 	tc.html(ctx, http.StatusOK, "tag-detail.html", siteInfo, gin.H{
-		"tag":           taginifo,
+		"tag":           tagInfo,
 		"questionList":  questionList,
 		"questionCount": questionCount,
 		"useTitle":      UrlUseTitle,
@@ -489,9 +505,37 @@ func (tc *TemplateController) Page404(ctx *gin.Context) {
 }
 
 func (tc *TemplateController) html(ctx *gin.Context, code int, tpl string, siteInfo *schema.TemplateSiteInfoResp, data gin.H) {
+	var (
+		prefix     = ""
+		cssPath    = ""
+		scriptPath = make([]string, len(tc.scriptPath))
+	)
+
+	_ = plugin.CallCDN(func(fn plugin.CDN) error {
+		prefix = fn.GetStaticPrefix()
+		return nil
+	})
+
+	if prefix != "" {
+		if prefix[len(prefix)-1:] == "/" {
+			prefix = strings.TrimSuffix(prefix, "/")
+		}
+		cssPath = prefix + tc.cssPath
+		for i, path := range tc.scriptPath {
+			scriptPath[i] = prefix + path
+		}
+	} else {
+		cssPath = tc.cssPath
+		scriptPath = tc.scriptPath
+	}
+
 	data["siteinfo"] = siteInfo
-	data["scriptPath"] = tc.scriptPath
-	data["cssPath"] = tc.cssPath
+	data["baseURL"] = ""
+	if parsedUrl, err := url.Parse(siteInfo.General.SiteUrl); err == nil {
+		data["baseURL"] = parsedUrl.Path
+	}
+	data["scriptPath"] = scriptPath
+	data["cssPath"] = cssPath
 	data["keywords"] = siteInfo.Keywords
 	if siteInfo.Description == "" {
 		siteInfo.Description = siteInfo.General.Description

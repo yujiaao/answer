@@ -32,7 +32,7 @@ builds:
   - id: build
     main: ./cmd/answer/.
     binary: answer
-    ldflags: -s -w -X github.com/apache/incubator-answer/cmd.Version={{.Version}} -X github.com/apache/incubator-answer/cmd.Revision={{.ShortCommit}} -X github.com/apache/incubator-answer/cmd.Time={{.Date}} -X github.com/apache/incubator-answer/cmd.BuildUser=goreleaser
+    ldflags: -s -w -X github.com/apache/incubator-answer/cmd.Version={{.RawVersion}} -X github.com/apache/incubator-answer/cmd.Revision={{.ShortCommit}} -X github.com/apache/incubator-answer/cmd.Time={{.Date}} -X github.com/apache/incubator-answer/cmd.BuildUser=goreleaser
     flags: -v
     goos:
       - linux
@@ -43,7 +43,7 @@ builds:
   - id: build-windows
     main: ./cmd/answer/.
     binary: answer
-    ldflags: -s -w -X github.com/apache/incubator-answer/cmd.Version={{.Version}} -X github.com/apache/incubator-answer/cmd.Revision={{.ShortCommit}} -X github.com/apache/incubator-answer/cmd.Time={{.Date}} -X github.com/apache/incubator-answer/cmd.BuildUser=goreleaser
+    ldflags: -s -w -X github.com/apache/incubator-answer/cmd.Version={{.RawVersion}} -X github.com/apache/incubator-answer/cmd.Revision={{.ShortCommit}} -X github.com/apache/incubator-answer/cmd.Time={{.Date}} -X github.com/apache/incubator-answer/cmd.BuildUser=goreleaser
     flags: -v
     goos:
       - windows
@@ -55,11 +55,17 @@ builds:
 
 archives:
   - name_template: >-
-      {{ .ProjectName }}_
-      {{- title .Os }}_
-      {{- if eq .Arch "amd64" }}x86_64
-      {{- else if eq .Arch "386" }}i386
-      {{- else }}{{ .Arch }}{{ end }}
+      apache-answer-{{ .RawVersion }}-incubating-bin-{{ .Os }}-{{ .Arch }}
+    files:
+      - src: "docs/release/LICENSE"
+        dst: LICENSE
+      - src: "docs/release/NOTICE"
+        dst: NOTICE
+      - src: "docs/release/licenses/*"
+        dst: licenses/
+      - src: "DISCLAIMER"
+        dst: DISCLAIMER
+    wrap_in_directory: true
 checksum:
   name_template: 'checksums.txt'
 snapshot:
@@ -71,5 +77,10 @@ changelog:
       - '^docs:'
       - '^test:'
 
-# goreleaser release --snapshot --rm-dist
+source:
+  enabled: true
+  name_template: apache-answer-{{ .RawVersion }}-incubating-src
+  prefix_template: "apache-answer-{{ .RawVersion }}-incubating-src/"
+
+# goreleaser release --skip-validate  --skip-publish --clean
 

@@ -28,9 +28,9 @@ let context: IEditorContext;
 const Link = () => {
   const { t } = useTranslation('translation', { keyPrefix: 'editor' });
   const item = {
-    label: 'link',
-    keyMap: ['Ctrl-L'],
-    tip: `${t('link.text')} (Ctrl+L)`,
+    label: 'link-45deg',
+    keyMap: ['Ctrl-l'],
+    tip: `${t('link.text')} (Ctrl+l)`,
   };
   const [visible, setVisible] = useState(false);
   const [link, setLink] = useState({

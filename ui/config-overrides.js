@@ -20,6 +20,7 @@
 const {
   addWebpackModuleRule,
   addWebpackAlias,
+  setWebpackOptimizationSplitChunks,
 } = require("customize-cra");
 
 const path = require("path");
@@ -37,7 +38,85 @@ module.exports = {
       use: "yaml-loader"
     })(config);
 
-   config.resolve.alias = Object.assign({}, config.resolve.alias,{util: false}	)  
+   config.resolve.alias = Object.assign({}, config.resolve.alias,{util: false}	) ;
+
+    setWebpackOptimizationSplitChunks({
+      maxInitialRequests: 20,
+      minSize: 20 * 1024,
+      minChunks: 2,
+      cacheGroups: {
+        automaticNamePrefix: 'chunk',
+        mix1: {
+          test: (module, chunks) => {
+            return (
+              module.resource &&
+              (module.resource.includes('components') ||
+                /\/node_modules\/react-bootstrap\//.test(module.resource))
+            );
+          },
+          name: 'chunk-mix1',
+          filename: 'static/js/[name].[contenthash:8].chunk.js',
+          priority: 14,
+          reuseExistingChunk: true,
+          minChunks: process.env.NODE_ENV === 'production' ? 1 : 2,
+          chunks: 'initial',
+        },
+        mix2: {
+          name: 'chunk-mix2',
+          test: /[\/]node_modules[\/](i18next|lodash|marked|next-share)[\/]/,
+          filename: 'static/js/[name].[contenthash:8].chunk.js',
+          priority: 13,
+          reuseExistingChunk: true,
+          minChunks: 1,
+          chunks: 'initial',
+        },
+        mix3: {
+          name: 'chunk-mix3',
+          test: /[\/]node_modules[\/](@remix-run|@restart|axios|diff)[\/]/,
+          filename: 'static/js/[name].[contenthash:8].chunk.js',
+          priority: 12,
+          reuseExistingChunk: true,
+          minChunks: 1,
+          chunks: 'initial',
+        },
+        codemirror: {
+          name: 'codemirror',
+          test: /[\/]node_modules[\/](\@codemirror)[\/]/,
+          priority: 10,
+          reuseExistingChunk: true,
+          minChunks: process.env.NODE_ENV === 'production' ? 1 : 2,
+          chunks: 'initial',
+          enforce: true,
+        },
+        lezer: {
+          name: 'lezer',
+          test: /[\/]node_modules[\/](\@lezer)[\/]/,
+          priority: 9,
+          reuseExistingChunk: true,
+          minChunks: process.env.NODE_ENV === 'production' ? 1 : 2,
+          chunks: 'initial',
+          enforce: true,
+        },
+        reactDom: {
+          name: 'react-dom',
+          test: /[\/]node_modules[\/](react-dom)[\/]/,
+          filename: 'static/js/[name].[contenthash:8].chunk.js',
+          priority: 8,
+          reuseExistingChunk: true,
+          chunks: 'all',
+          enforce: true,
+        },
+        nodesInitial: {
+          name: 'chunk-nodesInitial',
+          filename: 'static/js/[name].[contenthash:8].chunk.js',
+          test: /[\/]node_modules[\/]/,
+          priority: 1,
+          minChunks: 1,
+          chunks: 'initial',
+          reuseExistingChunk: true,
+        },
+      },
+    })(config);
 
     // add i18n dir to ModuleScopePlugin allowedPaths
     const moduleScopePlugin = config.resolve.plugins.find(_ => _.constructor.name === "ModuleScopePlugin");

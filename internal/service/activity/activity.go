@@ -23,8 +23,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/apache/incubator-answer/internal/service/activity_common"
 	"strings"
+
+	"github.com/apache/incubator-answer/internal/service/activity_common"
+	"github.com/apache/incubator-answer/internal/service/meta_common"
 
 	"github.com/apache/incubator-answer/internal/base/constant"
 	"github.com/apache/incubator-answer/internal/base/handler"
@@ -32,7 +34,6 @@ import (
 	"github.com/apache/incubator-answer/internal/schema"
 	"github.com/apache/incubator-answer/internal/service/comment_common"
 	"github.com/apache/incubator-answer/internal/service/config"
-	"github.com/apache/incubator-answer/internal/service/meta"
 	"github.com/apache/incubator-answer/internal/service/object_info"
 	"github.com/apache/incubator-answer/internal/service/revision_common"
 	"github.com/apache/incubator-answer/internal/service/tag_common"
@@ -57,7 +58,7 @@ type ActivityService struct {
 	objectInfoService     *object_info.ObjService
 	commentCommonService  *comment_common.CommentCommonService
 	revisionService       *revision_common.RevisionService
-	metaService           *meta.MetaService
+	metaService           *metacommon.MetaCommonService
 	configService         *config.ConfigService
 }
 
@@ -70,7 +71,7 @@ func NewActivityService(
 	objectInfoService *object_info.ObjService,
 	commentCommonService *comment_common.CommentCommonService,
 	revisionService *revision_common.RevisionService,
-	metaService *meta.MetaService,
+	metaService *metacommon.MetaCommonService,
 	configService *config.ConfigService,
 ) *ActivityService {
 	return &ActivityService{
@@ -206,7 +207,7 @@ func (as *ActivityService) getTimelineActivityComment(ctx context.Context, objec
 		if err != nil {
 			log.Error(err)
 		} else {
-			return revision.Log
+			return converter.Markdown2HTML(revision.Log)
 		}
 		return
 	}
@@ -218,7 +219,7 @@ func (as *ActivityService) getTimelineActivityComment(ctx context.Context, objec
 		} else {
 			closeMsg := &schema.CloseQuestionMeta{}
 			if err := json.Unmarshal([]byte(metaInfo.Value), closeMsg); err == nil {
-				return closeMsg.CloseMsg
+				return converter.Markdown2HTML(closeMsg.CloseMsg)
 			}
 		}
 	}
@@ -259,7 +260,7 @@ func (as *ActivityService) GetObjectTimelineDetail(ctx context.Context, req *sch
 	return resp, nil
 }
 
-// GetObjectTimelineDetail get object detail
+// getOneObjectDetail get object detail
 func (as *ActivityService) getOneObjectDetail(ctx context.Context, revisionID string) (
 	resp *schema.ObjectTimelineDetail, err error) {
 	resp = &schema.ObjectTimelineDetail{Tags: make([]*schema.ObjectTimelineTag, 0)}
