@@ -30,11 +30,8 @@ export const uploadImage = (params: { file: File; type: Type.UploadType }) => {
   return request.post('/answer/api/v1/file', form);
 };
 
-export const useQueryQuestionByTitle = (title) => {
-  return useSWR<Record<string, any>>(
-    title ? `/answer/api/v1/question/similar?title=${title}` : '',
-    request.instance.get,
-  );
+export const queryQuestionByTitle = (title: string) => {
+  return request.get(`/answer/api/v1/question/similar?title=${title}`);
 };
 
 export const useQueryTags = (params) => {
@@ -65,6 +62,7 @@ export const useQueryComments = (params) => {
     params.page = 1;
   } else {
     // only first page need commentId
+    params.query_cond = '';
     delete params.comment_id;
   }
   return useSWR<Type.ListResult>(
@@ -88,6 +86,16 @@ export const deleteComment = (id, imgCode: Type.ImgCodeReq = {}) => {
 
 export const addComment = (params) => {
   return request.post('/answer/api/v1/comment', params);
+};
+
+export const updateReaction = (params) => {
+  return request.put('/answer/api/v1/meta/reaction', params);
+};
+
+export const queryReactions = (object_id: string) => {
+  return request.get<Type.ReactionItems>(
+    `/answer/api/v1/meta/reaction?object_id=${object_id}`,
+  );
 };
 
 export const queryTags = (tag: string) => {
@@ -200,7 +208,11 @@ export const postAnswer = (params: Type.PostAnswerReq) => {
   return request.post('/answer/api/v1/answer', params);
 };
 
-export const bookmark = (params: { group_id: string; object_id: string }) => {
+export const bookmark = (params: {
+  group_id: string;
+  object_id: string;
+  bookmark: boolean;
+}) => {
   return request.post('/answer/api/v1/collection/switch', params);
 };
 

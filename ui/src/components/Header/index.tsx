@@ -24,7 +24,6 @@ import {
   Nav,
   Form,
   FormControl,
-  Button,
   Col,
 } from 'react-bootstrap';
 import { useTranslation } from 'react-i18next';
@@ -48,6 +47,7 @@ import {
   sideNavStore,
 } from '@/stores';
 import { logout, useQueryNotificationStatus } from '@/services';
+import { Icon } from '@/components';
 
 import NavItems from './components/NavItems';
 
@@ -72,7 +72,7 @@ const Header: FC = () => {
   const tagMatch = useMatch('/tags/:slugName');
   let askUrl = '/questions/ask';
   if (tagMatch && tagMatch.params.slugName) {
-    askUrl = `${askUrl}?tags=${tagMatch.params.slugName}`;
+    askUrl = `${askUrl}?tags=${encodeURIComponent(tagMatch.params.slugName)}`;
   }
 
   useEffect(() => {
@@ -94,7 +94,8 @@ const Header: FC = () => {
     navigate(searchUrl);
   };
 
-  const handleLogout = async () => {
+  const handleLogout = async (evt) => {
+    evt.preventDefault();
     await logout();
     clearUserStore();
     window.location.replace(window.location.href);
@@ -167,27 +168,33 @@ const Header: FC = () => {
           {/* mobile nav */}
           <div className="d-flex lg-none align-items-center flex-lg-nowrap">
             {user?.username ? (
-              <NavItems redDot={redDot} userInfo={user} logOut={handleLogout} />
+              <NavItems
+                redDot={redDot}
+                userInfo={user}
+                logOut={(e) => handleLogout(e)}
+              />
             ) : (
               <>
-                <Button
-                  variant="link"
-                  className={classnames('me-2', {
+                <Link
+                  className={classnames('me-2 btn btn-link', {
                     'link-light': navbarStyle === 'theme-colored',
                     'link-primary': navbarStyle !== 'theme-colored',
                   })}
                   onClick={() => floppyNavigation.storageLoginRedirect()}
-                  href={userCenter.getLoginUrl()}>
+                  to={userCenter.getLoginUrl()}>
                   {t('btns.login')}
-                </Button>
+                </Link>
                 {loginSetting.allow_new_registrations && (
-                  <Button
-                    variant={
-                      navbarStyle === 'theme-colored' ? 'light' : 'primary'
-                    }
-                    href={userCenter.getSignUpUrl()}>
+                  <Link
+                    className={classnames(
+                      'btn',
+                      navbarStyle === 'theme-colored'
+                        ? 'btn-light'
+                        : 'btn-primary',
+                    )}
+                    to={userCenter.getSignUpUrl()}>
                     {t('btns.signup')}
-                  </Button>
+                  </Link>
                 )}
               </>
             )}
@@ -199,8 +206,11 @@ const Header: FC = () => {
           <Col lg={8} className="ps-0">
             <Form
               action="/search"
-              className="w-100 maxw-400"
+              className="w-100 maxw-400 position-relative"
               onSubmit={handleSearch}>
+              <div className="search-wrap" onClick={handleSearch}>
+                <Icon name="search" className="search-icon" />
+              </div>
               <FormControl
                 type="search"
                 placeholder={t('header.search.placeholder')}
@@ -244,24 +254,26 @@ const Header: FC = () => {
               </Nav>
             ) : (
               <>
-                <Button
-                  variant="link"
-                  className={classnames('me-2', {
+                <Link
+                  className={classnames('me-2 btn btn-link', {
                     'link-light': navbarStyle === 'theme-colored',
                     'link-primary': navbarStyle !== 'theme-colored',
                   })}
                   onClick={() => floppyNavigation.storageLoginRedirect()}
-                  href={userCenter.getLoginUrl()}>
+                  to={userCenter.getLoginUrl()}>
                   {t('btns.login')}
-                </Button>
+                </Link>
                 {loginSetting.allow_new_registrations && (
-                  <Button
-                    variant={
-                      navbarStyle === 'theme-colored' ? 'light' : 'primary'
-                    }
-                    href={userCenter.getSignUpUrl()}>
+                  <Link
+                    className={classnames(
+                      'btn',
+                      navbarStyle === 'theme-colored'
+                        ? 'btn-light'
+                        : 'btn-primary',
+                    )}
+                    to={userCenter.getSignUpUrl()}>
                     {t('btns.signup')}
-                  </Button>
+                  </Link>
                 )}
               </>
             )}

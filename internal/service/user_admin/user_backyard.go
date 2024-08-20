@@ -45,6 +45,7 @@ import (
 	"github.com/apache/incubator-answer/internal/service/role"
 	"github.com/apache/incubator-answer/internal/service/siteinfo_common"
 	usercommon "github.com/apache/incubator-answer/internal/service/user_common"
+	"github.com/apache/incubator-answer/pkg/checker"
 	"github.com/jinzhu/copier"
 	"github.com/segmentfault/pacman/errors"
 	"github.com/segmentfault/pacman/log"
@@ -345,6 +346,62 @@ func (us *UserAdminService) UpdateUserPassword(ctx context.Context, req *schema.
 	return
 }
 
+// EditUserProfile edit user profile
+func (us *UserAdminService) EditUserProfile(ctx context.Context, req *schema.EditUserProfileReq) (
+	errFields []*validator.FormErrorField, err error) {
+	if req.UserID == req.LoginUserID {
+		return nil, errors.BadRequest(reason.AdminCannotEditTheirProfile)
+	}
+	userInfo, exist, err := us.userRepo.GetUserInfo(ctx, req.UserID)
+	if err != nil {
+		return nil, err
+	}
+	if !exist {
+		return nil, errors.BadRequest(reason.UserNotFound)
+	}
+
+	if checker.IsInvalidUsername(req.Username) || checker.IsUsersIgnorePath(req.Username) {
+		return append(errFields, &validator.FormErrorField{
+			ErrorField: "username",
+			ErrorMsg:   reason.UsernameInvalid,
+		}), errors.BadRequest(reason.UsernameInvalid)
+	}
+
+	userInfo, exist, err = us.userCommonService.GetByUsername(ctx, req.Username)
+	if err != nil {
+		return nil, err
+	}
+	if exist && userInfo.ID != req.UserID {
+		return append(errFields, &validator.FormErrorField{
+			ErrorField: "username",
+			ErrorMsg:   reason.UsernameDuplicate,
+		}), errors.BadRequest(reason.UsernameDuplicate)
+	}
+
+	userInfo, exist, err = us.userCommonService.GetByEmail(ctx, req.Email)
+	if err != nil {
+		return nil, err
+	}
+	if exist && userInfo.ID != req.UserID {
+		return append(errFields, &validator.FormErrorField{
+			ErrorField: "email",
+			ErrorMsg:   reason.EmailDuplicate,
+		}), errors.BadRequest(reason.EmailDuplicate)
+	}
+
+	user := &entity.User{}
+	user.ID = req.UserID
+	user.DisplayName = req.DisplayName
+	user.Username = req.Username
+	user.EMail = req.Email
+	user.MailStatus = entity.EmailStatusAvailable
+	err = us.userCommonService.UpdateUserProfile(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+	return
+}
+
 // GetUserInfo get user one
 func (us *UserAdminService) GetUserInfo(ctx context.Context, userID string) (resp *schema.GetUserInfoResp, err error) {
 	user, exist, err := us.userRepo.GetUserInfo(ctx, userID)
@@ -457,7 +514,7 @@ func (us *UserAdminService) setUserRoleInfo(ctx context.Context, resp []*schema.
 
 func (us *UserAdminService) GetUserActivation(ctx context.Context, req *schema.GetUserActivationReq) (
 	resp *schema.GetUserActivationResp, err error) {
-	user, exist, err := us.userRepo.GetUserInfo(ctx, req.UserID)
+	userInfo, exist, err := us.userRepo.GetUserInfo(ctx, req.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -471,11 +528,11 @@ func (us *UserAdminService) GetUserActivation(ctx context.Context, req *schema.G
 	}
 
 	data := &schema.EmailCodeContent{
-		Email:  user.EMail,
-		UserID: user.ID,
+		Email:  userInfo.EMail,
+		UserID: userInfo.ID,
 	}
 	code := uuid.NewString()
-	us.emailService.SaveCode(ctx, code, data.ToJSONString())
+	us.emailService.SaveCode(ctx, userInfo.ID, code, data.ToJSONString())
 	resp = &schema.GetUserActivationResp{
 		ActivationURL: fmt.Sprintf("%s/users/account-activation?code=%s", general.SiteUrl, code),
 	}
@@ -484,7 +541,7 @@ func (us *UserAdminService) GetUserActivation(ctx context.Context, req *schema.G
 
 // SendUserActivation send user activation email
 func (us *UserAdminService) SendUserActivation(ctx context.Context, req *schema.SendUserActivationReq) (err error) {
-	user, exist, err := us.userRepo.GetUserInfo(ctx, req.UserID)
+	userInfo, exist, err := us.userRepo.GetUserInfo(ctx, req.UserID)
 	if err != nil {
 		return err
 	}
@@ -498,17 +555,16 @@ func (us *UserAdminService) SendUserActivation(ctx context.Context, req *schema.
 	}
 
 	data := &schema.EmailCodeContent{
-		Email:  user.EMail,
-		UserID: user.ID,
+		Email:  userInfo.EMail,
+		UserID: userInfo.ID,
 	}
 	code := uuid.NewString()
-	us.emailService.SaveCode(ctx, code, data.ToJSONString())
 
 	verifyEmailURL := fmt.Sprintf("%s/users/account-activation?code=%s", general.SiteUrl, code)
 	title, body, err := us.emailService.RegisterTemplate(ctx, verifyEmailURL)
 	if err != nil {
 		return err
 	}
-	go us.emailService.SendAndSaveCode(ctx, user.EMail, title, body, code, data.ToJSONString())
+	go us.emailService.SendAndSaveCode(ctx, userInfo.ID, userInfo.EMail, title, body, code, data.ToJSONString())
 	return nil
 }

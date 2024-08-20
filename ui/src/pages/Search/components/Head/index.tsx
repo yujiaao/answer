@@ -27,18 +27,18 @@ import { tryNormalLogged } from '@/utils/guard';
 import { escapeRemove } from '@/utils';
 import { pathFactory } from '@/router/pathFactory';
 import { PluginRender } from '@/components';
+import Pattern from '@/common/pattern';
+import { PluginType } from '@/utils/pluginKit';
 
 interface Props {
   data;
 }
 
-const reg =
-  /(\[.*\])|(is:answer)|(is:question)|(score:\d*)|(user:\S*)|(answers:\d*)/g;
 const Index: FC<Props> = ({ data }) => {
   const { t } = useTranslation('translation', { keyPrefix: 'search' });
   const [searchParams] = useSearchParams();
   const q = searchParams.get('q');
-  const options = q?.match(reg);
+  const options = q?.match(Pattern.search);
   const [followed, setFollowed] = useState(data?.is_follower);
 
   const follow = () => {
@@ -58,11 +58,11 @@ const Index: FC<Props> = ({ data }) => {
       <div className="mb-3 d-flex align-items-center justify-content-between">
         <h3 className="mb-0">{t('title')}</h3>
 
-        <PluginRender type="search" slug_name="serarch_info" />
+        <PluginRender type={PluginType.Search} slug_name="serarch_info" />
       </div>
       <p>
         <span className="text-secondary me-1">{t('keywords')}</span>
-        {q?.replace(reg, '')}
+        {q?.replace(Pattern.search, '')}
         <br />
         {options?.length && (
           <>

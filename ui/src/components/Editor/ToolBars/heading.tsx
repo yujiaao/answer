@@ -60,9 +60,9 @@ const Heading = () => {
     },
   ];
   const item = {
-    label: 'heading',
-    keyMap: ['Ctrl-H'],
-    tip: `${t('heading.text')} (Ctrl+H)`,
+    label: 'type',
+    keyMap: ['Ctrl-h'],
+    tip: `${t('heading.text')} (Ctrl+h)`,
   };
   const [isShow, setShowState] = useState(false);
   const [isLocked, setLockState] = useState(false);

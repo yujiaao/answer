@@ -17,16 +17,17 @@
  * under the License.
  */
 
-import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Row, Col, Form, Button, Card } from 'react-bootstrap';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 import dayjs from 'dayjs';
 import classNames from 'classnames';
 
-import { handleFormError, scrollToDocTop } from '@/utils';
-import { usePageTags, usePromptWithUnload, useCaptchaModal } from '@/hooks';
+import { handleFormError } from '@/utils';
+import { usePageTags, usePromptWithUnload } from '@/hooks';
+import { useCaptchaPlugin, useRenderHtmlPlugin } from '@/utils/pluginKit';
 import { pathFactory } from '@/router/pathFactory';
 import { Editor, EditorRef, Icon, htmlRender } from '@/components';
 import type * as Type from '@/common/interface';
@@ -35,7 +36,6 @@ import {
   modifyAnswer,
   useQueryRevisions,
 } from '@/services';
-import { useRenderHtmlPlugin } from '@/utils/pluginKit';
 
 import './index.scss';
 
@@ -47,9 +47,6 @@ interface FormDataItem {
 const Index = () => {
   const { aid = '', qid = '' } = useParams();
   const [focusType, setForceType] = useState('');
-  useLayoutEffect(() => {
-    scrollToDocTop();
-  }, []);
 
   const { t } = useTranslation('translation', { keyPrefix: 'edit_answer' });
   const navigate = useNavigate();
@@ -71,9 +68,9 @@ const Index = () => {
   const [formData, setFormData] = useState<FormDataItem>(initFormData);
   const [immData, setImmData] = useState(initFormData);
   const [contentChanged, setContentChanged] = useState(false);
-  const editCaptcha = useCaptchaModal('edit');
+  const editCaptcha = useCaptchaPlugin('edit');
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (data?.info?.content) {
       setFormData({
         ...formData,
@@ -153,6 +150,39 @@ const Index = () => {
     return bol;
   };
 
+  const submitEditAnswer = () => {
+    const params: Type.AnswerParams = {
+      content: formData.content.value,
+      html: editorRef.current.getHtml(),
+      question_id: qid,
+      id: aid,
+      edit_summary: formData.description.value,
+    };
+    editCaptcha?.resolveCaptchaReq(params);
+
+    modifyAnswer(params)
+      .then(async (res) => {
+        await editCaptcha?.close();
+        navigate(
+          pathFactory.answerLanding({
+            questionId: qid,
+            slugTitle: data?.question?.url_title,
+            answerId: aid,
+          }),
+          {
+            state: { isReview: res?.wait_for_review },
+          },
+        );
+      })
+      .catch((ex) => {
+        if (ex.isError) {
+          editCaptcha?.handleCaptchaError(ex.list);
+          const stateData = handleFormError(ex, formData);
+          setFormData({ ...stateData });
+        }
+      });
+  };
+
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     setContentChanged(false);
 
@@ -163,38 +193,11 @@ const Index = () => {
       return;
     }
 
-    editCaptcha.check(() => {
-      const params: Type.AnswerParams = {
-        content: formData.content.value,
-        html: editorRef.current.getHtml(),
-        question_id: qid,
-        id: aid,
-        edit_summary: formData.description.value,
-      };
-      editCaptcha.resolveCaptchaReq(params);
-
-      modifyAnswer(params)
-        .then(async (res) => {
-          await editCaptcha.close();
-          navigate(
-            pathFactory.answerLanding({
-              questionId: qid,
-              slugTitle: data?.question?.url_title,
-              answerId: aid,
-            }),
-            {
-              state: { isReview: res?.wait_for_review },
-            },
-          );
-        })
-        .catch((ex) => {
-          if (ex.isError) {
-            editCaptcha.handleCaptchaError(ex.list);
-            const stateData = handleFormError(ex, formData);
-            setFormData({ ...stateData });
-          }
-        });
-    });
+    if (!editCaptcha) {
+      submitEditAnswer();
+      return;
+    }
+    editCaptcha.check(() => submitEditAnswer());
   };
   const handleSelectedRevision = (e) => {
     const index = e.target.value;
@@ -217,17 +220,17 @@ const Index = () => {
       <h3 className="mb-4">{t('title')}</h3>
       <Row>
         <Col className="page-main flex-auto">
-          <a
-            href={pathFactory.questionLanding(qid, data?.question.url_title)}
+          <Link
+            to={pathFactory.questionLanding(qid, data?.question.url_title)}
             target="_blank"
             rel="noreferrer">
             <h5 className="mb-3">{data?.question.title}</h5>
-          </a>
+          </Link>
 
           <div className="question-content-wrap">
             <div
               ref={questionContentRef}
-              className="content position-absolute top-0 w-100 bg-white"
+              className="content position-absolute top-0 w-100"
               dangerouslySetInnerHTML={{ __html: data?.question.html }}
             />
             <div
@@ -250,7 +253,10 @@ const Index = () => {
                   return (
                     <option key={`${create_at}`} value={index}>
                       {`${date} - ${user_info.display_name} - ${
-                        reason || t('default_reason')
+                        reason ||
+                        (index === revisions.length - 1
+                          ? t('default_first_reason')
+                          : t('default_reason'))
                       }`}
                     </option>
                   );
@@ -294,6 +300,7 @@ const Index = () => {
                 defaultValue={formData.description.value}
                 isInvalid={formData.description.isInvalid}
                 placeholder={t('form.fields.edit_summary.placeholder')}
+                contentEditable
               />
               <Form.Control.Feedback type="invalid">
                 {formData.description.errorMsg}

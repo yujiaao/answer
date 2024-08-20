@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/apache/incubator-answer/configs"
 	"github.com/apache/incubator-answer/i18n"
@@ -37,10 +38,11 @@ const (
 )
 
 var (
-	ConfigFileDir  = "/conf/"
-	UploadFilePath = "/uploads/"
-	I18nPath       = "/i18n/"
-	CacheDir       = "/cache/"
+	ConfigFileDir     = "/conf/"
+	UploadFilePath    = "/uploads/"
+	I18nPath          = "/i18n/"
+	CacheDir          = "/cache/"
+	formatAllPathONCE sync.Once
 )
 
 // GetConfigFilePath get config file path
@@ -49,10 +51,12 @@ func GetConfigFilePath() string {
 }
 
 func FormatAllPath(dataDirPath string) {
-	ConfigFileDir = filepath.Join(dataDirPath, ConfigFileDir)
-	UploadFilePath = filepath.Join(dataDirPath, UploadFilePath)
-	I18nPath = filepath.Join(dataDirPath, I18nPath)
-	CacheDir = filepath.Join(dataDirPath, CacheDir)
+	formatAllPathONCE.Do(func() {
+		ConfigFileDir = filepath.Join(dataDirPath, ConfigFileDir)
+		UploadFilePath = filepath.Join(dataDirPath, UploadFilePath)
+		I18nPath = filepath.Join(dataDirPath, I18nPath)
+		CacheDir = filepath.Join(dataDirPath, CacheDir)
+	})
 }
 
 // InstallAllInitialEnvironment install all initial environment
@@ -100,6 +104,10 @@ func installUploadDir() {
 
 func InstallI18nBundle(replace bool) {
 	fmt.Println("[i18n] try to install i18n bundle...")
+	// if SKIP_REPLACE_I18N is set, skip replace i18n bundles
+	if len(os.Getenv("SKIP_REPLACE_I18N")) > 0 {
+		replace = false
+	}
 	if err := dir.CreateDirIfNotExist(I18nPath); err != nil {
 		fmt.Println(err.Error())
 		return

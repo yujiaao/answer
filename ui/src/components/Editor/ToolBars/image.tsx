@@ -21,23 +21,21 @@ import { useEffect, useState, memo } from 'react';
 import { Button, Form, Modal, Tab, Tabs } from 'react-bootstrap';
 import { useTranslation } from 'react-i18next';
 
-import type { Editor } from 'codemirror';
-
 import { Modal as AnswerModal } from '@/components';
 import ToolItem from '../toolItem';
-import { IEditorContext } from '../types';
+import { IEditorContext, Editor } from '../types';
 import { uploadImage } from '@/services';
 
 let context: IEditorContext;
-const Image = () => {
-  const [editor, setEditor] = useState<Editor>(null);
+const Image = ({ editorInstance }) => {
+  const [editor, setEditor] = useState<Editor>(editorInstance);
   const { t } = useTranslation('translation', { keyPrefix: 'editor' });
 
   const loadingText = `![${t('image.uploading')}...]()`;
 
   const item = {
-    label: 'image',
-    keyMap: ['Ctrl-G'],
+    label: 'image-fill',
+    keyMap: ['Ctrl-g'],
     tip: `${t('image.text')} (Ctrl+G)`,
   };
   const [currentTab, setCurrentTab] = useState('localImage');
@@ -94,16 +92,16 @@ const Image = () => {
 
     return Promise.all(promises);
   };
-  function dragenter(_, e) {
+  function dragenter(e) {
     e.stopPropagation();
     e.preventDefault();
   }
 
-  function dragover(_, e) {
+  function dragover(e) {
     e.stopPropagation();
     e.preventDefault();
   }
-  const drop = async (_, e) => {
+  const drop = async (e) => {
     const fileList = e.dataTransfer.files;
 
     const bool = verifyImageSize(fileList);
@@ -113,11 +111,13 @@ const Image = () => {
     }
 
     const startPos = editor.getCursor();
+
     const endPos = { ...startPos, ch: startPos.ch + loadingText.length };
 
     editor.replaceSelection(loadingText);
+    editor.setReadOnly(true);
     const urls = await upload(fileList).catch((ex) => {
-      console.log('ex: ', ex);
+      console.error('upload file error: ', ex);
     });
 
     const text: string[] = [];
@@ -131,31 +131,33 @@ const Image = () => {
     if (text.length) {
       editor.replaceRange(text.join('\n'), startPos, endPos);
     } else {
-      // Clear loading text
       editor.replaceRange('', startPos, endPos);
     }
+    editor.setReadOnly(false);
+    editor.focus();
   };
 
-  const paste = async (_, event) => {
+  const paste = async (event) => {
     const clipboard = event.clipboardData;
 
     const bool = verifyImageSize(clipboard.files);
 
     if (bool) {
       event.preventDefault();
-      editor.setOption('readOnly', true);
-      const startPos = editor.getCursor('');
+      const startPos = editor.getCursor();
       const endPos = { ...startPos, ch: startPos.ch + loadingText.length };
 
       editor.replaceSelection(loadingText);
+      editor.setReadOnly(true);
       const urls = await upload(clipboard.files);
       const text = urls.map(({ name, url }) => {
         return `![${name}](${url})`;
       });
 
       editor.replaceRange(text.join('\n'), startPos, endPos);
+      editor.setReadOnly(false);
+      editor.focus();
 
-      editor.setOption('readOnly', false);
       return;
     }
 
@@ -167,17 +169,29 @@ const Image = () => {
     }
     event.preventDefault();
 
-    const newHtml = new DOMParser()
+    let innerText = '';
+    const allPTag = new DOMParser()
       .parseFromString(
         htmlStr.replace(
           /<img([\s\S]*?) src\s*=\s*(['"])([\s\S]*?)\2([^>]*)>/gi,
-          `<p>\n![${t('image.text')}]($3)\n</p>`,
+          `<p>![${t('image.text')}]($3)\n\n</p>`,
         ),
         'text/html',
       )
-      .querySelector('body')?.innerText as string;
+      .querySelectorAll('body p');
 
-    editor.replaceSelection(newHtml);
+    allPTag.forEach((p, index) => {
+      const text = p.textContent || '';
+      if (text !== '') {
+        if (index === allPTag.length - 1) {
+          innerText += `${p.textContent}`;
+        } else {
+          innerText += `${p.textContent}${text.endsWith('\n') ? '' : '\n\n'}`;
+        }
+      }
+    });
+
+    editor.replaceSelection(innerText);
   };
   const handleClick = () => {
     if (!link.value) {
@@ -218,9 +232,6 @@ const Image = () => {
   const addLink = (ctx) => {
     context = ctx;
     setEditor(context.editor);
-    if (!editor) {
-      return;
-    }
     const text = context.editor?.getSelection();
 
     setImageName({ ...imageName, value: text });

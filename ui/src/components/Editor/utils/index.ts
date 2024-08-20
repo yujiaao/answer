@@ -1,83 +1,36 @@
-import type { Editor, Position } from 'codemirror';
-import type CodeMirror from 'codemirror';
-import 'katex/dist/katex.min.css';
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
 
-export function createEditorUtils(
-  codemirror: typeof CodeMirror,
-  editor: Editor,
-) {
-  return {
-    wrapText(before: string, after = before, defaultText) {
-      const range = editor.somethingSelected()
-        ? editor.listSelections()[0]
-        : editor.findWordAt(editor.getCursor());
+import { useEffect, useState } from 'react';
 
-      const from = range.from();
-      const to = range.to();
-      const text = editor.getRange(from, to) || defaultText;
-      const fromBefore = codemirror.Pos(from.line, from.ch - before.length);
-      const toAfter = codemirror.Pos(to.line, to.ch + after.length);
+import { minimalSetup } from 'codemirror';
+import { EditorState, Compartment } from '@codemirror/state';
+import { EditorView, placeholder } from '@codemirror/view';
+import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
+import { languages } from '@codemirror/language-data';
 
-      if (
-        editor.getRange(fromBefore, from) === before &&
-        editor.getRange(to, toAfter) === after
-      ) {
-        editor.replaceRange(text, fromBefore, toAfter);
-        editor.setSelection(
-          fromBefore,
-          codemirror.Pos(fromBefore.line, fromBefore.ch + text.length),
-        );
-      } else {
-        editor.replaceRange(before + text + after, from, to);
-        const cursor = editor.getCursor();
+import { Editor } from '../types';
+import { isDarkTheme } from '@/utils/common';
 
-        editor.setSelection(
-          codemirror.Pos(cursor.line, cursor.ch - after.length - text.length),
-          codemirror.Pos(cursor.line, cursor.ch - after.length),
-        );
-      }
-    },
+import createEditorUtils from './extension';
 
-    replaceLines(replace: Parameters<Array<string>['map']>[0], symbolLen = 0) {
-      const [selection] = editor.listSelections();
-
-      const range = [
-        codemirror.Pos(selection.from().line, 0),
-        codemirror.Pos(selection.to().line),
-      ] as const;
-      const lines = editor.getRange(...range).split('\n');
-
-      editor.replaceRange(lines.map(replace).join('\n'), ...range);
-      const newRange = range;
-
-      if (symbolLen > 0) {
-        newRange[0].ch = symbolLen;
-      }
-      editor.setSelection(...newRange);
-    },
-
-    appendBlock(content: string): Position {
-      const cursor = editor.getCursor();
-
-      let emptyLine = -1;
-
-      for (let i = cursor.line; i < editor.lineCount(); i += 1) {
-        if (!editor.getLine(i).trim()) {
-          emptyLine = i;
-          break;
-        }
-      }
-      if (emptyLine === -1) {
-        editor.replaceRange('\n', codemirror.Pos(editor.lineCount()));
-        emptyLine = editor.lineCount();
-      }
-
-      editor.replaceRange(`\n${content}`, codemirror.Pos(emptyLine));
-      return codemirror.Pos(emptyLine + 1, 0);
-    },
-  };
-}
-
+const editableCompartment = new Compartment();
 export function htmlRender(el: HTMLElement | null) {
   if (!el) return;
   // Replace all br tags with newlines
@@ -88,45 +41,6 @@ export function htmlRender(el: HTMLElement | null) {
       p.innerHTML = str;
     }
   });
-
-  import('mermaid').then(({ default: mermaid }) => {
-    mermaid.initialize({ startOnLoad: false });
-
-    el.querySelectorAll('.language-mermaid').forEach((pre) => {
-      const flag = Date.now();
-      mermaid.render(
-        `theGraph${flag}`,
-        pre?.textContent || '',
-        function (svgCode) {
-          const p = document.createElement('p');
-          p.className = 'text-center';
-          p.innerHTML = svgCode;
-
-          pre.parentNode?.replaceChild(p, pre);
-        },
-      );
-    });
-  });
-  import('katex/contrib/auto-render/auto-render').then(
-    ({ default: render }) => {
-      render(el, {
-        delimiters: [
-          { left: '$$', right: '$$', display: true },
-          { left: '$$<br>', right: '<br>$$', display: true },
-          {
-            left: '\\begin{equation}',
-            right: '\\end{equation}',
-            display: true,
-          },
-          { left: '\\begin{align}', right: '\\end{align}', display: true },
-          { left: '\\begin{alignat}', right: '\\end{alignat}', display: true },
-          { left: '\\begin{gather}', right: '\\end{gather}', display: true },
-          { left: '\\(', right: '\\)', display: false },
-          { left: '\\[', right: '\\]', display: true },
-        ],
-      });
-    },
-  );
 
   // change table style
 
@@ -146,7 +60,7 @@ export function htmlRender(el: HTMLElement | null) {
     div.appendChild(table);
   });
 
-  // add rel nofollow for link not inlcludes domain
+  // add rel nofollow for link not includes domain
   el.querySelectorAll('a').forEach((a) => {
     const base = window.location.origin;
     const targetUrl = new URL(a.href, base);
@@ -156,3 +70,110 @@ export function htmlRender(el: HTMLElement | null) {
     }
   });
 }
+
+export const useEditor = ({
+  editorRef,
+  placeholder: placeholderText,
+  autoFocus,
+  onChange,
+  onFocus,
+  onBlur,
+}) => {
+  const [editor, setEditor] = useState<Editor | null>(null);
+  const [value, setValue] = useState<string>('');
+  const init = async () => {
+    const isDark = isDarkTheme();
+
+    const theme = EditorView.theme({
+      '&': {
+        height: '100%',
+        padding: '.375rem .75rem',
+      },
+      '&.cm-focused': {
+        outline: 'none',
+      },
+      '.cm-content': {
+        width: '100%',
+      },
+      '.cm-line': {
+        whiteSpace: 'pre-wrap',
+        wordWrap: 'break-word',
+        wordBreak: 'break-all',
+      },
+      '.ͼ7, .ͼ6': {
+        textDecoration: 'none',
+      },
+      '.cm-cursor': {
+        'border-left-color': isDark ? 'white' : 'black',
+      },
+    });
+
+    const startState = EditorState.create({
+      extensions: [
+        minimalSetup,
+        markdown({
+          codeLanguages: languages,
+          base: markdownLanguage,
+        }),
+        theme,
+        placeholder(placeholderText),
+        EditorView.lineWrapping,
+        editableCompartment.of(EditorView.editable.of(true)),
+      ],
+    });
+
+    const view = new EditorView({
+      parent: editorRef.current,
+      state: startState,
+    });
+
+    const cm = createEditorUtils(view as Editor);
+
+    cm.setReadOnly = (readOnly: boolean) => {
+      cm.dispatch({
+        effects: editableCompartment.reconfigure(
+          EditorView.editable.of(!readOnly),
+        ),
+      });
+    };
+
+    if (autoFocus) {
+      setTimeout(() => {
+        cm.focus();
+      }, 10);
+    }
+
+    cm.on('change', () => {
+      const newValue = cm.getValue();
+      setValue(newValue);
+    });
+
+    cm.on('focus', () => {
+      onFocus?.();
+    });
+
+    cm.on('blur', () => {
+      onBlur?.();
+    });
+
+    setEditor(cm);
+
+    return cm;
+  };
+
+  useEffect(() => {
+    onChange?.(value);
+  }, [value]);
+
+  useEffect(() => {
+    if (!editorRef.current) {
+      return;
+    }
+    if (editorRef.current.children.length > 0 || editor) {
+      return;
+    }
+
+    init();
+  }, [editor]);
+  return editor;
+};

@@ -19,24 +19,55 @@
 
 package schema
 
+import (
+	"github.com/apache/incubator-answer/internal/base/constant"
+	"github.com/apache/incubator-answer/internal/entity"
+)
+
 // SimpleObjectInfo simple object info
 type SimpleObjectInfo struct {
 	ObjectID            string `json:"object_id"`
 	ObjectCreatorUserID string `json:"object_creator_user_id"`
 	QuestionID          string `json:"question_id"`
-	QuestionStatus      int    `json:"status"`
+	QuestionStatus      int    `json:"question_status"`
 	AnswerID            string `json:"answer_id"`
+	AnswerStatus        int    `json:"answer_status"`
 	CommentID           string `json:"comment_id"`
+	CommentStatus       int    `json:"comment_status"`
 	TagID               string `json:"tag_id"`
 	ObjectType          string `json:"object_type"`
 	Title               string `json:"title"`
 	Content             string `json:"content"`
 }
 
+// IsDeleted is deleted
+func (s *SimpleObjectInfo) IsDeleted() bool {
+	switch s.ObjectType {
+	case constant.QuestionObjectType:
+		return s.QuestionStatus == entity.QuestionStatusDeleted
+	case constant.AnswerObjectType:
+		return s.AnswerStatus == entity.AnswerStatusDeleted
+	case constant.CommentObjectType:
+		return s.CommentStatus == entity.CommentStatusDeleted
+	}
+	return false
+}
+
 type UnreviewedRevisionInfoInfo struct {
-	ObjectID string     `json:"object_id"`
-	Title    string     `json:"title"`
-	Content  string     `json:"content"`
-	Html     string     `json:"html"`
-	Tags     []*TagResp `json:"tags"`
+	CreatedAt           int64      `json:"created_at"`
+	ObjectID            string     `json:"object_id"`
+	QuestionID          string     `json:"question_id"`
+	AnswerID            string     `json:"answer_id"`
+	CommentID           string     `json:"comment_id"`
+	ObjectType          string     `json:"object_type"`
+	ObjectCreatorUserID string     `json:"object_creator_user_id"`
+	Title               string     `json:"title"`
+	UrlTitle            string     `json:"url_title"`
+	Content             string     `json:"content"`
+	Html                string     `json:"html"`
+	AnswerCount         int        `json:"answer_count"`
+	AnswerAccepted      bool       `json:"answer_accepted"`
+	Tags                []*TagResp `json:"tags"`
+	Status              int        `json:"status"`
+	ShowStatus          int        `json:"show_status"`
 }

@@ -29,8 +29,14 @@ import {
   installBaseInfo,
   checkConfigFileExists,
 } from '@/services';
-import { Storage, handleFormError, scrollToDocTop } from '@/utils';
+import {
+  Storage,
+  handleFormError,
+  scrollToDocTop,
+  scrollToElementTop,
+} from '@/utils';
 import { CURRENT_LANG_STORAGE_KEY } from '@/common/constants';
+import { BASE_ORIGIN } from '@/router/alias';
 
 import {
   FirstStep,
@@ -94,7 +100,7 @@ const Index: FC = () => {
       errorMsg: '',
     },
     site_url: {
-      value: window.location.origin,
+      value: BASE_ORIGIN,
       isInvalid: false,
       errorMsg: '',
     },
@@ -125,11 +131,35 @@ const Index: FC = () => {
     },
   });
 
+  const updateFormData = (params: FormDataType) => {
+    if (Object.keys(params)?.[0] === 'db_type') {
+      let updatedFormData = formData;
+      if (params.db_type.value === 'mysql') {
+        updatedFormData = {
+          ...updatedFormData,
+          db_username: { ...updatedFormData.db_username, value: 'root' },
+          db_password: { ...updatedFormData.db_password, value: 'root' },
+          db_host: { ...updatedFormData.db_host, value: 'db:3306' },
+        };
+      } else if (params.db_type.value === 'postgres') {
+        updatedFormData = {
+          ...updatedFormData,
+          db_username: { ...updatedFormData.db_username, value: 'postgres' },
+          db_password: { ...updatedFormData.db_password, value: 'postgres' },
+          db_host: { ...updatedFormData.db_host, value: 'db:5432' },
+        };
+      }
+      return updatedFormData;
+    }
+    return formData;
+  };
+
   const handleChange = (params: FormDataType) => {
     setErrorData({
       msg: '',
     });
-    setFormData({ ...formData, ...params });
+    const updatedFormData = updateFormData(params);
+    setFormData({ ...updatedFormData, ...params });
   };
 
   const handleErr = (data) => {
@@ -201,6 +231,8 @@ const Index: FC = () => {
         if (err.isError) {
           const data = handleFormError(err, formData);
           setFormData({ ...data });
+          const ele = document.getElementById(err.list[0].error_field);
+          scrollToElementTop(ele);
         } else {
           handleErr(err);
         }
@@ -323,7 +355,7 @@ const Index: FC = () => {
                           components={{ 1: <code /> }}
                         />{' '}
                         <Trans i18nKey="install.install_now">
-                          You may try{' '}
+                          You may try
                           <a href="###" onClick={(e) => handleInstallNow(e)}>
                             installing now
                           </a>

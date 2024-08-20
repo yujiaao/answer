@@ -27,9 +27,9 @@ let context: IEditorContext;
 const OL = () => {
   const { t } = useTranslation('translation', { keyPrefix: 'editor' });
   const item = {
-    label: 'orderedList',
-    keyMap: ['Ctrl-O'],
-    tip: `${t('ordered_list.text')} (Ctrl+O)`,
+    label: 'list-ol',
+    keyMap: ['Ctrl-o'],
+    tip: `${t('ordered_list.text')} (Ctrl+o)`,
   };
 
   const handleClick = (ctx) => {

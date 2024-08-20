@@ -20,6 +20,7 @@
 package controller_admin
 
 import (
+	"html"
 	"net/http"
 
 	"github.com/apache/incubator-answer/internal/base/handler"
@@ -237,6 +238,7 @@ func (sc *SiteInfoController) UpdateGeneral(ctx *gin.Context) {
 		return
 	}
 	err := sc.siteInfoService.SaveSiteGeneral(ctx, req)
+	req.Name = html.UnescapeString(req.Name)
 	handler.HandleResponse(ctx, err, req)
 }
 

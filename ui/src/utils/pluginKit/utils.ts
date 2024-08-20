@@ -17,9 +17,9 @@
  * under the License.
  */
 
-import { NamedExoticComponent, FC } from 'react';
-
 import i18next from 'i18next';
+
+import { PluginInfo, Plugin, PluginType } from './interface';
 
 /**
  * This information is to be defined for all components.
@@ -34,20 +34,6 @@ import i18next from 'i18next';
  */
 
 const I18N_NS = 'plugin';
-
-export type PluginType = 'connector' | 'search' | 'editor';
-export interface PluginInfo {
-  slug_name: string;
-  type: PluginType;
-  name?: string;
-  description?: string;
-}
-
-export interface Plugin {
-  info: PluginInfo;
-  component: NamedExoticComponent | FC;
-}
-
 interface I18nResource {
   [lng: string]: {
     plugin: {
@@ -89,5 +75,7 @@ const getTransKeyPrefix = (info: PluginInfo) => {
   const kp = `${info.slug_name}.ui`;
   return kp;
 };
+
+export type { Plugin, PluginInfo, PluginType };
 
 export { initI18nResource, getTransNs, getTransKeyPrefix };

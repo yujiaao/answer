@@ -27,6 +27,7 @@ import { useToast } from '@/hooks';
 import { base64ToSvg } from '@/utils';
 import Storage from '@/utils/storage';
 import { REDIRECT_PATH_STORAGE_KEY } from '@/common/constants';
+import { REACT_BASE_PATH } from '@/router/alias';
 
 const Index = () => {
   const { data, mutate } = useOauthConnectorInfoByUser();
@@ -42,7 +43,10 @@ const Index = () => {
 
   const deleteLogins = (e, item) => {
     if (!item.binding) {
-      Storage.set(REDIRECT_PATH_STORAGE_KEY, window.location.pathname);
+      Storage.set(
+        REDIRECT_PATH_STORAGE_KEY,
+        window.location.pathname.replace(REACT_BASE_PATH, ''),
+      );
       return;
     }
     e.preventDefault();
@@ -79,7 +83,7 @@ const Index = () => {
                 onClick={(e) => deleteLogins(e, item)}>
                 <span
                   dangerouslySetInnerHTML={{
-                    __html: base64ToSvg(item.icon),
+                    __html: base64ToSvg(item.icon, 'btnSvg me-2'),
                   }}
                 />
                 <span>

@@ -21,6 +21,9 @@ package plugin
 
 import (
 	"encoding/json"
+	"sync"
+
+	"github.com/segmentfault/pacman/i18n"
 
 	"github.com/apache/incubator-answer/internal/base/handler"
 	"github.com/apache/incubator-answer/internal/base/translator"
@@ -46,6 +49,10 @@ func Register(p Base) {
 
 	if _, ok := p.(Config); ok {
 		registerConfig(p.(Config))
+	}
+
+	if _, ok := p.(UserConfig); ok {
+		registerUserConfig(p.(UserConfig))
 	}
 
 	if _, ok := p.(Connector); ok {
@@ -78,6 +85,26 @@ func Register(p Base) {
 
 	if _, ok := p.(Search); ok {
 		registerSearch(p.(Search))
+	}
+
+	if _, ok := p.(Notification); ok {
+		registerNotification(p.(Notification))
+	}
+
+	if _, ok := p.(Reviewer); ok {
+		registerReviewer(p.(Reviewer))
+	}
+
+	if _, ok := p.(Captcha); ok {
+		registerCaptcha(p.(Captcha))
+	}
+
+	if _, ok := p.(Embed); ok {
+		registerEmbed(p.(Embed))
+	}
+
+	if _, ok := p.(CDN); ok {
+		registerCDN(p.(CDN))
 	}
 }
 
@@ -124,11 +151,26 @@ func MakePlugin[T Base](super bool) (CallFn[T], RegisterFn[T]) {
 }
 
 type statusManager struct {
+	lock   sync.Mutex
 	status map[string]bool
 }
 
 func (m *statusManager) Enable(name string, enabled bool) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	if !enabled {
+		m.status[name] = enabled
+		return
+	}
 	m.status[name] = enabled
+
+	for _, slugName := range coordinatedCaptchaPlugins(name) {
+		m.status[slugName] = false
+	}
+
+	for _, slugName := range coordinatedCDNPlugins(name) {
+		m.status[slugName] = false
+	}
 }
 
 func (m *statusManager) IsEnabled(name string) bool {
@@ -151,6 +193,11 @@ func (m *statusManager) UnmarshalJSON(data []byte) error {
 // Translate translates the key to the current language of the context
 func Translate(ctx *GinContext, key string) string {
 	return translator.Tr(handler.GetLang(ctx), key)
+}
+
+// TranslateWithData translates the key to the language with data
+func TranslateWithData(lang i18n.Language, key string, data any) string {
+	return translator.TrWithData(lang, key, data)
 }
 
 // TranslateFn presents a generator of translated string.

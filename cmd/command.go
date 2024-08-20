@@ -38,6 +38,8 @@ var (
 	dataDirPath string
 	// dumpDataPath dump data path
 	dumpDataPath string
+	// place to build new answer
+	buildDir string
 	// plugins needed to build in answer application
 	buildWithPlugins []string
 	// build output path
@@ -45,6 +47,12 @@ var (
 	// This config is used to upgrade the database from a specific version manually.
 	// If you want to upgrade the database to version 1.1.0, you can use `answer upgrade -f v1.1.0`.
 	upgradeVersion string
+	// The fields that need to be set to the default value
+	configFields []string
+	// i18nSourcePath i18n from path
+	i18nSourcePath string
+	// i18nTargetPath i18n to path
+	i18nTargetPath string
 )
 
 func init() {
@@ -58,9 +66,17 @@ func init() {
 
 	buildCmd.Flags().StringVarP(&buildOutput, "output", "o", "", "build output path")
 
+	buildCmd.Flags().StringVarP(&buildDir, "build-dir", "b", "", "dir for build process")
+
 	upgradeCmd.Flags().StringVarP(&upgradeVersion, "from", "f", "", "upgrade from specific version, eg: -f v1.1.0")
 
-	for _, cmd := range []*cobra.Command{initCmd, checkCmd, runCmd, dumpCmd, upgradeCmd, buildCmd, pluginCmd} {
+	configCmd.Flags().StringSliceVarP(&configFields, "with", "w", []string{}, "the fields that need to be set to the default value, eg: -w allow_password_login")
+
+	i18nCmd.Flags().StringVarP(&i18nSourcePath, "source", "s", "", "i18n source path, eg: -f ./i18n/source")
+
+	i18nCmd.Flags().StringVarP(&i18nTargetPath, "target", "t", "", "i18n target path, eg: -t ./i18n/target")
+
+	for _, cmd := range []*cobra.Command{initCmd, checkCmd, runCmd, dumpCmd, upgradeCmd, buildCmd, pluginCmd, configCmd, i18nCmd} {
 		rootCmd.AddCommand(cmd)
 	}
 }
@@ -205,7 +221,7 @@ To run answer, use:
 		Long:  `Build a new Answer with plugins that you need`,
 		Run: func(_ *cobra.Command, _ []string) {
 			fmt.Printf("try to build a new answer with plugins:\n%s\n", strings.Join(buildWithPlugins, "\n"))
-			err := cli.BuildNewAnswer(buildOutput, buildWithPlugins, cli.OriginalAnswerInfo{
+			err := cli.BuildNewAnswer(buildDir, buildOutput, buildWithPlugins, cli.OriginalAnswerInfo{
 				Version:  Version,
 				Revision: Revision,
 				Time:     Time,
@@ -229,6 +245,60 @@ To run answer, use:
 				fmt.Printf("%s[%s] made by %s\n", info.SlugName, info.Version, info.Author)
 				return nil
 			})
+		},
+	}
+
+	// configCmd set some config to default value
+	configCmd = &cobra.Command{
+		Use:   "config",
+		Short: "set some config to default value",
+		Long:  `set some config to default value`,
+		Run: func(_ *cobra.Command, _ []string) {
+			cli.FormatAllPath(dataDirPath)
+
+			c, err := conf.ReadConfig(cli.GetConfigFilePath())
+			if err != nil {
+				fmt.Println("read config failed: ", err.Error())
+				return
+			}
+
+			field := &cli.ConfigField{}
+			for _, f := range configFields {
+				switch f {
+				case "allow_password_login":
+					field.AllowPasswordLogin = true
+				default:
+					fmt.Printf("field %s not support\n", f)
+				}
+			}
+			err = cli.SetDefaultConfig(c.Data.Database, c.Data.Cache, field)
+			if err != nil {
+				fmt.Println("set default config failed: ", err.Error())
+			} else {
+				fmt.Println("set default config successfully")
+			}
+		},
+	}
+
+	// i18nCmd used to merge i18n files
+	i18nCmd = &cobra.Command{
+		Use:   "i18n",
+		Short: "overwrite i18n files",
+		Long:  `Merge i18n files from plugins to original i18n files. It will overwrite the original i18n files`,
+		Run: func(_ *cobra.Command, _ []string) {
+			if err := cli.ReplaceI18nFilesLocal(i18nTargetPath); err != nil {
+				fmt.Printf("replace i18n files failed %v", err)
+			} else {
+				fmt.Printf("replace i18n files successfully\n")
+			}
+
+			fmt.Printf("try to merge i18n files from %q to %q\n", i18nSourcePath, i18nTargetPath)
+
+			if err := cli.MergeI18nFilesLocal(i18nTargetPath, i18nSourcePath); err != nil {
+				fmt.Printf("merge i18n files failed %v", err)
+			} else {
+				fmt.Printf("merge i18n files successfully\n")
+			}
 		},
 	}
 )
