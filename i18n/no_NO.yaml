@@ -619,7 +619,7 @@ ui:
       label: Name
       msg:
         empty: Name cannot be empty.
-        range: Name must between 4 to 30 characters in length.
+        range: Name must be between 2 to 30 characters in length.
         character: 'Must use the character set "a-z", "A-Z", "0-9", " - . _"'
     email:
       label: Email
@@ -827,7 +827,7 @@ ui:
     via: Share post via...
     copied: Copied
     facebook: Share to Facebook
-    twitter: Share to Twitter
+    twitter: Share to X
   cannot_vote_for_self: You can't vote for your own post
   modal_confirm:
     title: Error...
@@ -859,6 +859,7 @@ ui:
     newest: Newest
     active: Active
     hot: Hot
+    recommend: Recommend
     score: Score
     unanswered: Unanswered
     modified: modified
@@ -1136,7 +1137,7 @@ ui:
           fields:
             display_name:
               label: Display Name
-              msg: Display Name must be at 4-30 characters in length.
+              msg: Display name must be 2-30 characters in length.
             email:
               label: Email
               msg: Email is not valid.
@@ -1382,5 +1383,3 @@ ui:
     staffs: Our community staff
     reputation: reputation
     votes: votes
-
-

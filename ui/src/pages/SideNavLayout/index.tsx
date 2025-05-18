@@ -18,23 +18,29 @@
  */
 
 import { FC, memo } from 'react';
-import { Container, Row, Col } from 'react-bootstrap';
 import { Outlet } from 'react-router-dom';
 
-import { SideNav } from '@/components';
+import { SideNav, Footer } from '@/components';
 
 import '@/common/sideNavLayout.scss';
 
 const Index: FC = () => {
   return (
-    <Container className="d-flex flex-column flex-fill">
-      <Row className="flex-fill">
+    <div className="d-flex">
+      <div
+        className="position-sticky px-3 border-end pt-4 d-none d-xl-block"
+        id="pcSideNav">
         <SideNav />
-        <Col xl={10} lg={9} md={12}>
-          <Outlet />
-        </Col>
-      </Row>
-    </Container>
+      </div>
+      <div className="flex-fill w-100">
+        <div className="d-flex justify-content-center px-0 px-md-4">
+          <div className="answer-container">
+            <Outlet />
+          </div>
+        </div>
+        <Footer />
+      </div>
+    </div>
   );
 };
 

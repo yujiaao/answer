@@ -21,7 +21,9 @@ const {
   addWebpackModuleRule,
   addWebpackAlias,
   setWebpackOptimizationSplitChunks,
+  addWebpackPlugin,
 } = require("customize-cra");
+const webpack = require('webpack');
 
 const path = require("path");
 const i18nPath = path.resolve(__dirname, "../i18n");
@@ -30,7 +32,8 @@ module.exports = {
   webpack: function(config, env) {
     addWebpackAlias({
       "@": path.resolve(__dirname, "src"),
-      "@i18n": i18nPath
+      "@i18n": i18nPath,
+      buffer: 'buffer',
     })(config);
 
     addWebpackModuleRule({
@@ -39,6 +42,12 @@ module.exports = {
     })(config);
 
    config.resolve.alias = Object.assign({}, config.resolve.alias,{util: false}	) ;
+
+    addWebpackPlugin(
+      new webpack.ProvidePlugin({
+        Buffer: ['buffer', 'Buffer'],
+      })
+    )(config);
 
     setWebpackOptimizationSplitChunks({
       maxInitialRequests: 20,

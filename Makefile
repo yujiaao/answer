@@ -1,14 +1,14 @@
 .PHONY: build clean ui
 
-VERSION=1.3.6
+VERSION=1.5.0
 BIN=answer
 DIR_SRC=./cmd/answer
 DOCKER_CMD=docker
 
 GO_ENV=CGO_ENABLED=0 GO111MODULE=on
 Revision=$(shell git rev-parse --short HEAD 2>/dev/null || echo "")
-GO_FLAGS=-ldflags="-X github.com/apache/incubator-answer/cmd.Version=$(VERSION) -X 'github.com/apache/incubator-answer/cmd.Revision=$(Revision)' -X 'github.com/apache/incubator-answer/cmd.Time=`date +%s`' -extldflags -static"
-GO=$(GO_ENV) $(shell which go)
+GO_FLAGS=-ldflags="-X github.com/apache/answer/cmd.Version=$(VERSION) -X 'github.com/apache/answer/cmd.Revision=$(Revision)' -X 'github.com/apache/answer/cmd.Time=`date +%s`' -extldflags -static"
+GO=$(GO_ENV) "$(shell which go)"
 
 build: generate
 	@$(GO) build $(GO_FLAGS) -o $(BIN) $(DIR_SRC)
@@ -21,12 +21,19 @@ universal: generate
 	@rm -f ${BIN}_amd64 ${BIN}_arm64
 
 generate:
+	@$(GO) get github.com/swaggo/swag/cmd/swag@v1.16.3
 	@$(GO) get github.com/google/wire/cmd/wire@v0.5.0
-	@$(GO) get github.com/golang/mock/mockgen@v1.6.0
+	@$(GO) get go.uber.org/mock/mockgen@v0.5.0
+	@$(GO) install github.com/swaggo/swag/cmd/swag@v1.16.3
 	@$(GO) install github.com/google/wire/cmd/wire@v0.5.0
-	@$(GO) install github.com/golang/mock/mockgen@v1.6.0
+	@$(GO) install go.uber.org/mock/mockgen@v0.5.0
 	@$(GO) generate ./...
 	@$(GO) mod tidy
+
+check:
+	@mockgen -version
+	@swag -v
+	@wire flags
 
 test:
 	@$(GO) test ./internal/repo/repo_test
@@ -38,7 +45,7 @@ clean:
 
 install-ui-packages:
 	@corepack enable
-	@corepack prepare pnpm@8.9.2 --activate
+	@corepack prepare pnpm@9.7.0 --activate
 
 ui:
 	@cd ui && pnpm pre-install && pnpm build && cd -

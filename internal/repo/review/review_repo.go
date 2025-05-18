@@ -22,11 +22,11 @@ package review
 import (
 	"context"
 
-	"github.com/apache/incubator-answer/internal/base/data"
-	"github.com/apache/incubator-answer/internal/base/pager"
-	"github.com/apache/incubator-answer/internal/base/reason"
-	"github.com/apache/incubator-answer/internal/entity"
-	"github.com/apache/incubator-answer/internal/service/review"
+	"github.com/apache/answer/internal/base/data"
+	"github.com/apache/answer/internal/base/pager"
+	"github.com/apache/answer/internal/base/reason"
+	"github.com/apache/answer/internal/entity"
+	"github.com/apache/answer/internal/service/review"
 	"github.com/segmentfault/pacman/errors"
 )
 
@@ -66,6 +66,16 @@ func (cr *reviewRepo) GetReview(ctx context.Context, reviewID int) (
 	review *entity.Review, exist bool, err error) {
 	review = &entity.Review{}
 	exist, err = cr.data.DB.Context(ctx).ID(reviewID).Get(review)
+	if err != nil {
+		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+	return
+}
+
+// GetReviewByObject get review by object
+func (cr *reviewRepo) GetReviewByObject(ctx context.Context, objectID string) (review *entity.Review, exist bool, err error) {
+	review = &entity.Review{}
+	exist, err = cr.data.DB.Context(ctx).Desc("id").Where("object_id = ?", objectID).Get(review)
 	if err != nil {
 		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 	}

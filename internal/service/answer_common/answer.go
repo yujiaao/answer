@@ -22,11 +22,11 @@ package answercommon
 import (
 	"context"
 
-	"github.com/apache/incubator-answer/internal/base/handler"
-	"github.com/apache/incubator-answer/internal/entity"
-	"github.com/apache/incubator-answer/internal/schema"
-	"github.com/apache/incubator-answer/pkg/htmltext"
-	"github.com/apache/incubator-answer/pkg/uid"
+	"github.com/apache/answer/internal/base/handler"
+	"github.com/apache/answer/internal/entity"
+	"github.com/apache/answer/internal/schema"
+	"github.com/apache/answer/pkg/htmltext"
+	"github.com/apache/answer/pkg/uid"
 )
 
 type AnswerRepo interface {
@@ -39,6 +39,7 @@ type AnswerRepo interface {
 	GetAnswerPage(ctx context.Context, page, pageSize int, answer *entity.Answer) (answerList []*entity.Answer, total int64, err error)
 	UpdateAcceptedStatus(ctx context.Context, acceptedAnswerID string, questionID string) error
 	GetByID(ctx context.Context, answerID string) (*entity.Answer, bool, error)
+	GetByIDs(ctx context.Context, answerIDs ...string) ([]*entity.Answer, error)
 	GetCountByQuestionID(ctx context.Context, questionID string) (int64, error)
 	GetCountByUserID(ctx context.Context, userID string) (int64, error)
 	GetIDsByUserIDAndQuestionID(ctx context.Context, userID string, questionID string) ([]string, error)
@@ -50,6 +51,7 @@ type AnswerRepo interface {
 	GetAnswerCount(ctx context.Context) (count int64, err error)
 	RemoveAllUserAnswer(ctx context.Context, userID string) (err error)
 	SumVotesByQuestionID(ctx context.Context, questionID string) (float64, error)
+	DeletePermanentlyAnswers(ctx context.Context) (err error)
 }
 
 // AnswerCommon user service

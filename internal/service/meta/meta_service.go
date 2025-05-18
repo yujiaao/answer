@@ -23,20 +23,21 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/apache/answer/internal/service/event_queue"
 	"strconv"
 	"strings"
 
-	"github.com/apache/incubator-answer/internal/base/constant"
-	"github.com/apache/incubator-answer/internal/base/handler"
-	"github.com/apache/incubator-answer/internal/base/reason"
-	"github.com/apache/incubator-answer/internal/base/translator"
-	"github.com/apache/incubator-answer/internal/entity"
-	"github.com/apache/incubator-answer/internal/schema"
-	answercommon "github.com/apache/incubator-answer/internal/service/answer_common"
-	metacommon "github.com/apache/incubator-answer/internal/service/meta_common"
-	questioncommon "github.com/apache/incubator-answer/internal/service/question_common"
-	usercommon "github.com/apache/incubator-answer/internal/service/user_common"
-	"github.com/apache/incubator-answer/pkg/obj"
+	"github.com/apache/answer/internal/base/constant"
+	"github.com/apache/answer/internal/base/handler"
+	"github.com/apache/answer/internal/base/reason"
+	"github.com/apache/answer/internal/base/translator"
+	"github.com/apache/answer/internal/entity"
+	"github.com/apache/answer/internal/schema"
+	answercommon "github.com/apache/answer/internal/service/answer_common"
+	metacommon "github.com/apache/answer/internal/service/meta_common"
+	questioncommon "github.com/apache/answer/internal/service/question_common"
+	usercommon "github.com/apache/answer/internal/service/user_common"
+	"github.com/apache/answer/pkg/obj"
 	myErrors "github.com/segmentfault/pacman/errors"
 )
 
@@ -46,14 +47,22 @@ type MetaService struct {
 	userCommon        *usercommon.UserCommon
 	questionRepo      questioncommon.QuestionRepo
 	answerRepo        answercommon.AnswerRepo
+	eventQueueService event_queue.EventQueueService
 }
 
-func NewMetaService(metaCommonService *metacommon.MetaCommonService, userCommon *usercommon.UserCommon, answerRepo answercommon.AnswerRepo, questionRepo questioncommon.QuestionRepo) *MetaService {
+func NewMetaService(
+	metaCommonService *metacommon.MetaCommonService,
+	userCommon *usercommon.UserCommon,
+	answerRepo answercommon.AnswerRepo,
+	questionRepo questioncommon.QuestionRepo,
+	eventQueueService event_queue.EventQueueService,
+) *MetaService {
 	return &MetaService{
 		metaCommonService: metaCommonService,
 		questionRepo:      questionRepo,
 		userCommon:        userCommon,
 		answerRepo:        answerRepo,
+		eventQueueService: eventQueueService,
 	}
 }
 
@@ -86,22 +95,27 @@ func (ms *MetaService) AddOrUpdateReaction(ctx context.Context, req *schema.Upda
 	if err != nil {
 		return nil, err
 	}
+	var event *schema.EventMsg
 	if objectType == constant.AnswerObjectType {
-		_, exist, err := ms.answerRepo.GetAnswer(ctx, req.ObjectID)
+		answerInfo, exist, err := ms.answerRepo.GetAnswer(ctx, req.ObjectID)
 		if err != nil {
 			return nil, err
 		}
 		if !exist {
 			return nil, myErrors.BadRequest(reason.AnswerNotFound)
 		}
+		event = schema.NewEvent(constant.EventAnswerReact, req.UserID).TID(answerInfo.ID).
+			AID(answerInfo.ID, answerInfo.UserID)
 	} else if objectType == constant.QuestionObjectType {
-		_, exist, err := ms.questionRepo.GetQuestion(ctx, req.ObjectID)
+		questionInfo, exist, err := ms.questionRepo.GetQuestion(ctx, req.ObjectID)
 		if err != nil {
 			return nil, err
 		}
 		if !exist {
 			return nil, myErrors.BadRequest(reason.QuestionNotFound)
 		}
+		event = schema.NewEvent(constant.EventQuestionReact, req.UserID).TID(questionInfo.ID).
+			QID(questionInfo.ID, questionInfo.UserID)
 	} else {
 		return nil, myErrors.BadRequest(reason.ObjectNotFound)
 	}
@@ -138,7 +152,7 @@ func (ms *MetaService) AddOrUpdateReaction(ctx context.Context, req *schema.Upda
 	if err != nil {
 		return nil, err
 	}
-
+	ms.eventQueueService.Send(ctx, event)
 	return resp, nil
 }
 

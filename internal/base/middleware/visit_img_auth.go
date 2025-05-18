@@ -20,15 +20,21 @@
 package middleware
 
 import (
-	"github.com/apache/incubator-answer/internal/base/constant"
-	"github.com/gin-gonic/gin"
 	"net/http"
+	"os"
 	"strings"
+
+	"github.com/apache/answer/internal/base/constant"
+	"github.com/gin-gonic/gin"
 )
 
 // VisitAuth when user visit the site image, check visit token. This only for private mode.
 func (am *AuthUserMiddleware) VisitAuth() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
+		if len(os.Getenv("SKIP_FILE_ACCESS_VERIFY")) > 0 {
+			ctx.Next()
+			return
+		}
 		// If visit brand image, no need to check visit token. Because the brand image is public.
 		if strings.HasPrefix(ctx.Request.URL.Path, "/uploads/branding/") {
 			ctx.Next()

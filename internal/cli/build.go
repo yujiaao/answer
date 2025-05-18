@@ -32,9 +32,9 @@ import (
 	"text/template"
 
 	"github.com/Masterminds/semver/v3"
-	"github.com/apache/incubator-answer/pkg/dir"
-	"github.com/apache/incubator-answer/pkg/writer"
-	"github.com/apache/incubator-answer/ui"
+	"github.com/apache/answer/pkg/dir"
+	"github.com/apache/answer/pkg/writer"
+	"github.com/apache/answer/ui"
 	"github.com/segmentfault/pacman/log"
 	"gopkg.in/yaml.v3"
 )
@@ -43,7 +43,7 @@ const (
 	mainGoTpl = `package main
 
 import (
-	answercmd "github.com/apache/incubator-answer/cmd"
+	answercmd "github.com/apache/answer/cmd"
 
   // remote plugins
 	{{- range .remote_plugins}}
@@ -62,7 +62,7 @@ func main() {
 `
 	goModTpl = `module answer
 
-go 1.19
+go 1.22
 `
 )
 
@@ -86,7 +86,7 @@ type OriginalAnswerInfo struct {
 }
 
 type pluginInfo struct {
-	// Name of the plugin e.g. github.com/apache/incubator-answer-plugins/github-connector
+	// Name of the plugin e.g. github.com/apache/answer-plugins/github-connector
 	Name string
 	// Path to the plugin. If path exist, read plugin from local filesystem
 	Path string
@@ -105,7 +105,7 @@ func newAnswerBuilder(buildDir, outputPath string, plugins []string, originalAns
 	if len(outputPath) == 0 {
 		outputPath = filepath.Join(parentDir, "new_answer")
 	}
-	material.outputPath = outputPath
+	material.outputPath, _ = filepath.Abs(outputPath)
 	material.plugins = formatPlugins(plugins)
 	material.answerModuleReplacement = os.Getenv("ANSWER_MODULE")
 	return &answerBuilder{
@@ -125,6 +125,7 @@ func BuildNewAnswer(buildDir, outputPath string, plugins []string, originalAnswe
 	builder := newAnswerBuilder(buildDir, outputPath, plugins, originalAnswerInfo)
 	builder.DoTask(createMainGoFile)
 	builder.DoTask(downloadGoModFile)
+	builder.DoTask(movePluginToVendor)
 	builder.DoTask(copyUIFiles)
 	builder.DoTask(buildUI)
 	builder.DoTask(mergeI18nFiles)
@@ -136,7 +137,7 @@ func BuildNewAnswer(buildDir, outputPath string, plugins []string, originalAnswe
 func formatPlugins(plugins []string) (formatted []*pluginInfo) {
 	for _, plugin := range plugins {
 		plugin = strings.TrimSpace(plugin)
-		// plugin description like this 'github.com/apache/incubator-answer-plugins/github-connector@latest=/local/path'
+		// plugin description like this 'github.com/apache/answer-plugins/github-connector@latest=/local/path'
 		info := &pluginInfo{}
 		plugin, info.Path, _ = strings.Cut(plugin, "=")
 		info.Name, info.Version, _ = strings.Cut(plugin, "@")
@@ -202,7 +203,7 @@ func createMainGoFile(b *buildingMaterial) (err error) {
 func downloadGoModFile(b *buildingMaterial) (err error) {
 	// If user specify a module replacement, use it. Otherwise, use the latest version.
 	if len(b.answerModuleReplacement) > 0 {
-		replacement := fmt.Sprintf("%s=%s", "github.com/apache/incubator-answer", b.answerModuleReplacement)
+		replacement := fmt.Sprintf("%s=%s", "github.com/apache/answer", b.answerModuleReplacement)
 		err = b.newExecCmd("go", "mod", "edit", "-replace", replacement).Run()
 		if err != nil {
 			return err
@@ -221,9 +222,27 @@ func downloadGoModFile(b *buildingMaterial) (err error) {
 	return
 }
 
+// movePluginToVendor move plugin to vendor dir
+// Traverse the plugins, and if the plugin path is not github.com/apache/answer-plugins, move the contents of the current plugin to the vendor/github.com/apache/answer-plugins/ directory.
+func movePluginToVendor(b *buildingMaterial) (err error) {
+	pluginsDir := filepath.Join(b.tmpDir, "vendor/github.com/apache/answer-plugins/")
+	for _, p := range b.plugins {
+		pluginDir := filepath.Join(b.tmpDir, "vendor/", p.Name)
+		pluginName := filepath.Base(p.Name)
+		if !strings.HasPrefix(p.Name, "github.com/apache/answer-plugins/") {
+			fmt.Printf("try to copy dir from %s to %s\n", pluginDir, filepath.Join(pluginsDir, pluginName))
+			err = copyDirEntries(os.DirFS(pluginDir), ".", filepath.Join(pluginsDir, pluginName), "node_modules")
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // copyUIFiles copy ui files from answer module to tmp dir
 func copyUIFiles(b *buildingMaterial) (err error) {
-	goListCmd := b.newExecCmd("go", "list", "-mod=mod", "-m", "-f", "{{.Dir}}", "github.com/apache/incubator-answer")
+	goListCmd := b.newExecCmd("go", "list", "-mod=mod", "-m", "-f", "{{.Dir}}", "github.com/apache/answer")
 	buf := new(bytes.Buffer)
 	goListCmd.Stdout = buf
 	if err = goListCmd.Run(); err != nil {
@@ -232,13 +251,13 @@ func copyUIFiles(b *buildingMaterial) (err error) {
 
 	answerDir := strings.TrimSpace(buf.String())
 	goModUIDir := filepath.Join(answerDir, "ui")
-	localUIBuildDir := filepath.Join(b.tmpDir, "vendor/github.com/apache/incubator-answer/ui/")
+	localUIBuildDir := filepath.Join(b.tmpDir, "vendor/github.com/apache/answer/ui/")
 	// The node_modules folder generated during development will interfere packaging, so it needs to be ignored.
 	if err = copyDirEntries(os.DirFS(goModUIDir), ".", localUIBuildDir, "node_modules"); err != nil {
 		return fmt.Errorf("failed to copy ui files: %w", err)
 	}
 
-	pluginsDir := filepath.Join(b.tmpDir, "vendor/github.com/apache/incubator-answer-plugins/")
+	pluginsDir := filepath.Join(b.tmpDir, "vendor/github.com/apache/answer-plugins/")
 	localUIPluginDir := filepath.Join(localUIBuildDir, "src/plugins/")
 
 	// copy plugins dir
@@ -264,9 +283,16 @@ func copyUIFiles(b *buildingMaterial) (err error) {
 		if !dir.CheckFileExist(packageJsonPath) {
 			continue
 		}
+
+		pnpmInstallCmd := b.newExecCmd("pnpm", "install")
+		pnpmInstallCmd.Dir = sourcePluginDir
+		if err = pnpmInstallCmd.Run(); err != nil {
+			return fmt.Errorf("failed to install plugin dependencies: %w", err)
+		}
+
 		localPluginDir := filepath.Join(localUIPluginDir, entry.Name())
 		fmt.Printf("try to copy dir from %s to %s\n", sourcePluginDir, localPluginDir)
-		if err = copyDirEntries(os.DirFS(sourcePluginDir), ".", localPluginDir); err != nil {
+		if err = copyDirEntries(os.DirFS(sourcePluginDir), ".", localPluginDir, "node_modules"); err != nil {
 			return fmt.Errorf("failed to copy ui files: %w", err)
 		}
 	}
@@ -276,7 +302,7 @@ func copyUIFiles(b *buildingMaterial) (err error) {
 
 // overwriteIndexTs overwrites index.ts file in ui/src/plugins/ dir
 func overwriteIndexTs(b *buildingMaterial) (err error) {
-	localUIPluginDir := filepath.Join(b.tmpDir, "vendor/github.com/apache/incubator-answer/ui/src/plugins/")
+	localUIPluginDir := filepath.Join(b.tmpDir, "vendor/github.com/apache/answer/ui/src/plugins/")
 
 	folders, err := getFolders(localUIPluginDir)
 	if err != nil {
@@ -320,7 +346,7 @@ func generateIndexTsContent(folders []string) string {
 
 // buildUI run pnpm install and pnpm build commands to build ui
 func buildUI(b *buildingMaterial) (err error) {
-	localUIBuildDir := filepath.Join(b.tmpDir, "vendor/github.com/apache/incubator-answer/ui")
+	localUIBuildDir := filepath.Join(b.tmpDir, "vendor/github.com/apache/answer/ui")
 
 	pnpmInstallCmd := b.newExecCmd("pnpm", "pre-install")
 	pnpmInstallCmd.Dir = localUIBuildDir
@@ -338,7 +364,7 @@ func buildUI(b *buildingMaterial) (err error) {
 
 func replaceNecessaryFile(b *buildingMaterial) (err error) {
 	fmt.Printf("try to replace ui build directory\n")
-	uiBuildDir := filepath.Join(b.tmpDir, "vendor/github.com/apache/incubator-answer/ui")
+	uiBuildDir := filepath.Join(b.tmpDir, "vendor/github.com/apache/answer/ui")
 	err = copyDirEntries(ui.Build, ".", uiBuildDir)
 	return err
 }
@@ -394,7 +420,7 @@ func mergeI18nFiles(b *buildingMaterial) (err error) {
 		}
 	}
 
-	originalI18nDir := filepath.Join(b.tmpDir, "vendor/github.com/apache/incubator-answer/i18n")
+	originalI18nDir := filepath.Join(b.tmpDir, "vendor/github.com/apache/answer/i18n")
 	entries, err := os.ReadDir(originalI18nDir)
 	if err != nil {
 		return err
@@ -519,7 +545,7 @@ func formatUIPluginsDirName(dirPath string) {
 // buildBinary build binary file
 func buildBinary(b *buildingMaterial) (err error) {
 	versionInfo := b.originalAnswerInfo
-	cmdPkg := "github.com/apache/incubator-answer/cmd"
+	cmdPkg := "github.com/apache/answer/cmd"
 	ldflags := fmt.Sprintf("-X %s.Version=%s -X %s.Revision=%s -X %s.Time=%s",
 		cmdPkg, versionInfo.Version, cmdPkg, versionInfo.Revision, cmdPkg, versionInfo.Time)
 	err = b.newExecCmd("go", "build",

@@ -27,18 +27,18 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/apache/incubator-answer/internal/base/constant"
-	"github.com/apache/incubator-answer/internal/base/data"
-	"github.com/apache/incubator-answer/internal/base/handler"
-	"github.com/apache/incubator-answer/internal/base/pager"
-	"github.com/apache/incubator-answer/internal/base/reason"
-	"github.com/apache/incubator-answer/internal/entity"
-	"github.com/apache/incubator-answer/internal/schema"
-	questioncommon "github.com/apache/incubator-answer/internal/service/question_common"
-	"github.com/apache/incubator-answer/internal/service/unique"
-	"github.com/apache/incubator-answer/pkg/htmltext"
-	"github.com/apache/incubator-answer/pkg/uid"
-	"github.com/apache/incubator-answer/plugin"
+	"github.com/apache/answer/internal/base/constant"
+	"github.com/apache/answer/internal/base/data"
+	"github.com/apache/answer/internal/base/handler"
+	"github.com/apache/answer/internal/base/pager"
+	"github.com/apache/answer/internal/base/reason"
+	"github.com/apache/answer/internal/entity"
+	"github.com/apache/answer/internal/schema"
+	questioncommon "github.com/apache/answer/internal/service/question_common"
+	"github.com/apache/answer/internal/service/unique"
+	"github.com/apache/answer/pkg/htmltext"
+	"github.com/apache/answer/pkg/uid"
+	"github.com/apache/answer/plugin"
 	"github.com/segmentfault/pacman/errors"
 	"github.com/segmentfault/pacman/log"
 	"xorm.io/builder"
@@ -167,6 +167,31 @@ func (qr *questionRepo) UpdateQuestionStatusWithOutUpdateTime(ctx context.Contex
 	return nil
 }
 
+func (qr *questionRepo) DeletePermanentlyQuestions(ctx context.Context) (err error) {
+	// get all deleted question ids
+	ids := make([]string, 0)
+	err = qr.data.DB.Context(ctx).Select("id").Table(new(entity.Question).TableName()).
+		Where("status = ?", entity.QuestionStatusDeleted).Find(&ids)
+	if err != nil {
+		return errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+
+	// delete all revisions permanently
+	_, err = qr.data.DB.Context(ctx).In("object_id", ids).Delete(&entity.Revision{})
+	if err != nil {
+		return errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+
+	_, err = qr.data.DB.Context(ctx).Where("status = ?", entity.QuestionStatusDeleted).Delete(&entity.Question{})
+	if err != nil {
+		return errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+	return nil
+}
+
 func (qr *questionRepo) RecoverQuestion(ctx context.Context, questionID string) (err error) {
 	questionID = uid.DeShortID(questionID)
 	_, err = qr.data.DB.Context(ctx).ID(questionID).Cols("status").Update(&entity.Question{Status: entity.QuestionStatusAvailable})
@@ -264,7 +289,7 @@ func (qr *questionRepo) FindByID(ctx context.Context, id []string) (questionList
 func (qr *questionRepo) GetQuestionList(ctx context.Context, question *entity.Question) (questionList []*entity.Question, err error) {
 	question.ID = uid.DeShortID(question.ID)
 	questionList = make([]*entity.Question, 0)
-	err = qr.data.DB.Context(ctx).Find(questionList, question)
+	err = qr.data.DB.Context(ctx).Find(&questionList, question)
 	if err != nil {
 		return questionList, errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 	}
@@ -277,6 +302,29 @@ func (qr *questionRepo) GetQuestionList(ctx context.Context, question *entity.Qu
 func (qr *questionRepo) GetQuestionCount(ctx context.Context) (count int64, err error) {
 	session := qr.data.DB.Context(ctx)
 	session.Where(builder.Lt{"status": entity.QuestionStatusDeleted})
+	count, err = session.Count(&entity.Question{Show: entity.QuestionShow})
+	if err != nil {
+		return 0, errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+	return count, nil
+}
+
+func (qr *questionRepo) GetUnansweredQuestionCount(ctx context.Context) (count int64, err error) {
+	session := qr.data.DB.Context(ctx)
+	session.Where(builder.Lt{"status": entity.QuestionStatusDeleted}).
+		And(builder.Eq{"answer_count": 0})
+	count, err = session.Count(&entity.Question{Show: entity.QuestionShow})
+	if err != nil {
+		return 0, errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+	return count, nil
+}
+
+func (qr *questionRepo) GetResolvedQuestionCount(ctx context.Context) (count int64, err error) {
+	session := qr.data.DB.Context(ctx)
+	session.Where(builder.Lt{"status": entity.QuestionStatusDeleted}).
+		And(builder.Neq{"answer_count": 0}).
+		And(builder.Neq{"accepted_answer_id": 0})
 	count, err = session.Count(&entity.Question{Show: entity.QuestionShow})
 	if err != nil {
 		return 0, errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
@@ -349,10 +397,14 @@ func (qr *questionRepo) GetQuestionPage(ctx context.Context, page, pageSize int,
 	questionList []*entity.Question, total int64, err error) {
 	questionList = make([]*entity.Question, 0)
 	session := qr.data.DB.Context(ctx)
-	status := []int{entity.QuestionStatusAvailable, entity.QuestionStatusClosed}
+	status := []int{entity.QuestionStatusAvailable}
+	if orderCond != "unanswered" {
+		status = append(status, entity.QuestionStatusClosed)
+	}
 	if showPending {
 		status = append(status, entity.QuestionStatusPending)
 	}
+	session.Select("question.*")
 	session.In("question.status", status)
 	if len(tagIDs) > 0 {
 		session.Join("LEFT", "tag_rel", "question.id = tag_rel.object_id")
@@ -385,10 +437,13 @@ func (qr *questionRepo) GetQuestionPage(ctx context.Context, page, pageSize int,
 	case "score":
 		session.OrderBy("question.pin desc,question.vote_count DESC, question.view_count DESC")
 	case "unanswered":
-		session.Where("question.last_answer_id = 0")
+		session.Where("question.answer_count = 0")
 		session.OrderBy("question.pin desc,question.created_at DESC")
+	case "frequent":
+		session.OrderBy("question.pin DESC, question.linked_count DESC, question.updated_at DESC")
 	}
 
+	session.GroupBy("question.id")
 	total, err = pager.Help(page, pageSize, &questionList, &entity.Question{}, session)
 	if err != nil {
 		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
@@ -398,6 +453,61 @@ func (qr *questionRepo) GetQuestionPage(ctx context.Context, page, pageSize int,
 			item.ID = uid.EnShortID(item.ID)
 		}
 	}
+	return questionList, total, err
+}
+
+// GetRecommendQuestionPageByTags get recommend question page by tags
+func (qr *questionRepo) GetRecommendQuestionPageByTags(ctx context.Context, userID string, tagIDs, followedQuestionIDs []string, page, pageSize int) (
+	questionList []*entity.Question, total int64, err error) {
+	questionList = make([]*entity.Question, 0)
+	orderBySQL := "question.pin DESC, question.created_at DESC"
+
+	// Please Make sure every question has at least one tag
+	selectSQL := entity.Question{}.TableName() + ".*"
+	if len(followedQuestionIDs) > 0 {
+		idStr := "'" + strings.Join(followedQuestionIDs, "','") + "'"
+		selectSQL += fmt.Sprintf(", CASE WHEN question.id IN (%s) THEN 0 ELSE 1 END AS order_priority", idStr)
+		orderBySQL = "order_priority, " + orderBySQL
+	}
+	session := qr.data.DB.Context(ctx).Select(selectSQL)
+
+	if len(tagIDs) > 0 {
+		session.Where("question.user_id != ?", userID).
+			And("question.id NOT IN (SELECT question_id FROM answer WHERE user_id = ?)", userID).
+			Join("INNER", "tag_rel", "question.id = tag_rel.object_id").
+			And("tag_rel.status = ?", entity.TagRelStatusAvailable).
+			Join("INNER", "tag", "tag.id = tag_rel.tag_id").
+			In("tag.id", tagIDs)
+	} else if len(followedQuestionIDs) == 0 {
+		return questionList, 0, nil
+	}
+
+	if len(followedQuestionIDs) > 0 {
+		if len(tagIDs) > 0 {
+			// if tags provided, show followed questions and tag questions
+			session.Or(builder.In("question.id", followedQuestionIDs))
+		} else {
+			// if no tags, only show followed questions
+			session.Where(builder.In("question.id", followedQuestionIDs))
+		}
+	}
+
+	session.
+		And("question.show = ? and question.status = ?", entity.QuestionShow, entity.QuestionStatusAvailable).
+		Distinct("question.id").
+		OrderBy(orderBySQL)
+
+	total, err = pager.Help(page, pageSize, &questionList, &entity.Question{}, session)
+	if err != nil {
+		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+
+	if handler.GetEnableShortID(ctx) {
+		for _, item := range questionList {
+			item.ID = uid.EnShortID(item.ID)
+		}
+	}
+
 	return questionList, total, err
 }
 
@@ -555,4 +665,209 @@ func (qr *questionRepo) RemoveAllUserQuestion(ctx context.Context, userID string
 		_ = qr.UpdateSearch(ctx, id)
 	}
 	return nil
+}
+
+// LinkQuestion batch insert question link
+func (qr *questionRepo) LinkQuestion(ctx context.Context, link ...*entity.QuestionLink) (err error) {
+	// Batch retrieve all links
+	var links []*entity.QuestionLink
+	for _, l := range link {
+		l.FromQuestionID = uid.DeShortID(l.FromQuestionID)
+		l.ToQuestionID = uid.DeShortID(l.ToQuestionID)
+		l.FromAnswerID = uid.DeShortID(l.FromAnswerID)
+		l.ToAnswerID = uid.DeShortID(l.ToAnswerID)
+		links = append(links, l)
+	}
+	// Retrieve existing records from the database
+	var existLinks []*entity.QuestionLink
+	session := qr.data.DB.Context(ctx)
+	for _, link := range links {
+		session = session.Or(builder.Eq{
+			"from_question_id": link.FromQuestionID,
+			"to_question_id":   link.ToQuestionID,
+			"from_answer_id":   link.FromAnswerID,
+			"to_answer_id":     link.ToAnswerID,
+		})
+	}
+	err = session.Find(&existLinks)
+	if err != nil {
+		return errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+
+	// Optimize separation of records that need to be updated or inserted using a map
+	existMap := make(map[string]*entity.QuestionLink)
+	for _, el := range existLinks {
+		key := fmt.Sprintf("%s:%s:%s:%s", el.FromQuestionID, el.ToQuestionID, el.FromAnswerID, el.ToAnswerID)
+		existMap[key] = el
+	}
+
+	var updateLinks []*entity.QuestionLink
+	var insertLinks []*entity.QuestionLink
+	for _, link := range links {
+		key := fmt.Sprintf("%s:%s:%s:%s", link.FromQuestionID, link.ToQuestionID, link.FromAnswerID, link.ToAnswerID)
+		if el, exist := existMap[key]; exist {
+			if el.Status == entity.QuestionLinkStatusDeleted {
+				el.Status = entity.QuestionLinkStatusAvailable
+				el.UpdatedAt = time.Now()
+				updateLinks = append(updateLinks, el)
+			}
+		} else {
+			link.Status = entity.QuestionLinkStatusAvailable
+			link.CreatedAt = time.Now()
+			link.UpdatedAt = time.Now()
+			insertLinks = append(insertLinks, link)
+		}
+	}
+
+	// Batch update
+	if len(updateLinks) > 0 {
+		for _, link := range updateLinks {
+			_, err = qr.data.DB.Context(ctx).ID(link.ID).Cols("status").Update(&entity.QuestionLink{Status: entity.QuestionLinkStatusAvailable})
+			if err != nil {
+				return errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+			}
+		}
+	}
+
+	// Batch insert
+	if len(insertLinks) > 0 {
+		_, err = qr.data.DB.Context(ctx).Insert(insertLinks)
+		if err != nil {
+			return errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+		}
+	}
+
+	return
+}
+
+// UpdateQuestionLinkCount update question link count
+func (qr *questionRepo) UpdateQuestionLinkCount(ctx context.Context, questionID string) (err error) {
+	// count the number of links
+	count, err := qr.data.DB.Context(ctx).
+		Where("to_question_id = ?", questionID).
+		Where("status = ?", entity.QuestionLinkStatusAvailable).
+		Count(&entity.QuestionLink{})
+	if err != nil {
+		return errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+
+	// update the number of links
+	_, err = qr.data.DB.Context(ctx).ID(questionID).
+		Cols("linked_count").Update(&entity.Question{LinkedCount: int(count)})
+	if err != nil {
+		return errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+	return
+}
+
+// GetLinkedQuestionIDs get linked question ids
+func (qr *questionRepo) GetLinkedQuestionIDs(ctx context.Context, questionID string, status int) (
+	questionIDs []string, err error) {
+	questionIDs = make([]string, 0)
+	err = qr.data.DB.Context(ctx).
+		Select("to_question_id").
+		Table(new(entity.QuestionLink).TableName()).
+		Where("from_question_id = ?", questionID).
+		Where("status = ?", status).
+		Find(&questionIDs)
+	if err != nil {
+		return nil, errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+	return questionIDs, nil
+}
+
+// RecoverQuestionLink batch recover question link
+func (qr *questionRepo) RecoverQuestionLink(ctx context.Context, links ...*entity.QuestionLink) (err error) {
+	return qr.UpdateQuestionLinkStatus(ctx, entity.QuestionLinkStatusAvailable, links...)
+}
+
+// RemoveQuestionLink batch remove question link
+func (qr *questionRepo) RemoveQuestionLink(ctx context.Context, links ...*entity.QuestionLink) (err error) {
+	return qr.UpdateQuestionLinkStatus(ctx, entity.QuestionLinkStatusDeleted, links...)
+}
+
+// UpdateQuestionLinkStatus update question link status
+func (qr *questionRepo) UpdateQuestionLinkStatus(ctx context.Context, status int, links ...*entity.QuestionLink) (err error) {
+	if len(links) == 0 {
+		return nil
+	}
+
+	session := qr.data.DB.Context(ctx).Cols("status")
+	for _, link := range links {
+		eq := builder.Eq{}
+		if link.FromQuestionID != "" {
+			eq["from_question_id"] = uid.DeShortID(link.FromQuestionID)
+		}
+		if link.FromAnswerID != "" {
+			eq["from_answer_id"] = uid.DeShortID(link.FromAnswerID)
+		}
+		if link.ToQuestionID != "" {
+			eq["to_question_id"] = uid.DeShortID(link.ToQuestionID)
+		}
+		if link.ToAnswerID != "" {
+			eq["to_answer_id"] = uid.DeShortID(link.ToAnswerID)
+		}
+		session = session.Or(eq)
+	}
+	_, err = session.Update(&entity.QuestionLink{Status: status})
+	if err != nil {
+		return errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+	return
+}
+
+// GetQuestionLink get linked question to questionID
+func (qr *questionRepo) GetQuestionLink(ctx context.Context, page, pageSize int, questionID string, orderCond string, inDays int) (questionList []*entity.Question, total int64, err error) {
+	questionList = make([]*entity.Question, 0)
+	questionID = uid.DeShortID(questionID)
+	questionStatus := []int{entity.QuestionStatusAvailable, entity.QuestionStatusClosed, entity.QuestionStatusPending}
+	if questionID == "0" {
+		return nil, 0, errors.InternalServer(reason.DatabaseError).WithError(
+			fmt.Errorf("questionID is empty"),
+		).WithStack()
+	}
+
+	session := qr.data.DB.Context(ctx).
+		Table("question_link").
+		Join("INNER", "question", "question_link.from_question_id = question.id").
+		Where("question_link.to_question_id = ? AND question.show = ?", questionID, entity.QuestionShow).
+		Distinct("question.id").
+		Where("question_link.status = ?", entity.QuestionLinkStatusAvailable).
+		Select("question.*").
+		In("question.status", questionStatus)
+
+	switch orderCond {
+	case "newest":
+		session.OrderBy("question.pin desc,question.created_at DESC")
+	case "active":
+		if inDays == 0 {
+			session.And("question.created_at > ?", time.Now().AddDate(0, 0, -180))
+		}
+		session.And("question.post_update_time > ?", time.Now().AddDate(0, 0, -90))
+		session.OrderBy("question.pin desc,question.post_update_time DESC, question.updated_at DESC")
+	case "hot":
+		session.OrderBy("question.pin desc,question.hot_score DESC")
+	case "score":
+		session.OrderBy("question.pin desc,question.vote_count DESC, question.view_count DESC")
+	case "unanswered":
+		session.Where("question.answer_count = 0")
+		session.OrderBy("question.pin desc,question.created_at DESC")
+	case "frequent":
+		session.OrderBy("question.pin DESC, question.linked_count DESC, question.updated_at DESC")
+	}
+
+	if page > 0 && pageSize > 0 {
+		session.Limit(pageSize, (page-1)*pageSize)
+	}
+
+	total, err = pager.Help(page, pageSize, &questionList, &entity.Question{}, session)
+	if err != nil {
+		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+	if handler.GetEnableShortID(ctx) {
+		for _, item := range questionList {
+			item.ID = uid.EnShortID(item.ID)
+		}
+	}
+	return
 }

@@ -60,7 +60,7 @@ const Index: FC<Props> = ({
   const [searchParams] = useSearchParams();
   const answerRef = useRef<HTMLDivElement>(null);
 
-  useRenderHtmlPlugin(answerRef);
+  useRenderHtmlPlugin(answerRef.current?.querySelector('.fmt') as HTMLElement);
 
   const acceptAnswer = () => {
     acceptanceAnswer({
@@ -76,8 +76,13 @@ const Index: FC<Props> = ({
       return;
     }
 
-    htmlRender(answerRef.current.querySelector('.fmt'));
+    htmlRender(answerRef.current.querySelector('.fmt'), {
+      copySuccessText: t('copied', { keyPrefix: 'messages' }),
+      copyText: t('copy', { keyPrefix: 'messages' }),
+    });
+  }, [answerRef.current]);
 
+  useEffect(() => {
     if (aid === data.id) {
       setTimeout(() => {
         const element = answerRef.current;
@@ -87,7 +92,7 @@ const Index: FC<Props> = ({
         }
       }, 100);
     }
-  }, [data.id, answerRef.current]);
+  }, [data.id]);
 
   if (!data?.id) {
     return null;

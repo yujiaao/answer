@@ -23,18 +23,18 @@ import (
 	"context"
 	"strings"
 
-	"github.com/apache/incubator-answer/internal/base/constant"
-	"github.com/apache/incubator-answer/pkg/converter"
+	"github.com/apache/answer/internal/base/constant"
+	"github.com/apache/answer/pkg/converter"
 
-	"github.com/Chain-Zhang/pinyin"
-	"github.com/apache/incubator-answer/internal/base/reason"
-	"github.com/apache/incubator-answer/internal/entity"
-	"github.com/apache/incubator-answer/internal/schema"
-	"github.com/apache/incubator-answer/internal/service/auth"
-	"github.com/apache/incubator-answer/internal/service/role"
-	"github.com/apache/incubator-answer/internal/service/siteinfo_common"
-	"github.com/apache/incubator-answer/pkg/checker"
-	"github.com/apache/incubator-answer/pkg/random"
+	"github.com/apache/answer/internal/base/reason"
+	"github.com/apache/answer/internal/entity"
+	"github.com/apache/answer/internal/schema"
+	"github.com/apache/answer/internal/service/auth"
+	"github.com/apache/answer/internal/service/role"
+	"github.com/apache/answer/internal/service/siteinfo_common"
+	"github.com/apache/answer/pkg/checker"
+	"github.com/apache/answer/pkg/random"
+	"github.com/mozillazg/go-pinyin"
 	"github.com/segmentfault/pacman/errors"
 	"github.com/segmentfault/pacman/log"
 )
@@ -141,6 +141,7 @@ func (us *UserCommon) UpdateQuestionCount(ctx context.Context, userID string, nu
 }
 
 func (us *UserCommon) BatchUserBasicInfoByID(ctx context.Context, userIDs []string) (map[string]*schema.UserBasicInfo, error) {
+	userIDs = checker.FilterEmptyString(userIDs)
 	userMap := make(map[string]*schema.UserBasicInfo)
 	if len(userIDs) == 0 {
 		return userMap, nil
@@ -154,6 +155,15 @@ func (us *UserCommon) BatchUserBasicInfoByID(ctx context.Context, userIDs []stri
 		info := us.FormatUserBasicInfo(ctx, user)
 		info.Avatar = avatarMapping[user.ID].GetURL()
 		userMap[user.ID] = info
+	}
+	for _, id := range userIDs {
+		if _, ok := userMap[id]; !ok {
+			userMap[id] = &schema.UserBasicInfo{
+				ID:          id,
+				DisplayName: "user" + converter.DeleteUserDisplay(id),
+				Status:      constant.UserDeleted,
+			}
+		}
 	}
 	return userMap, nil
 }
@@ -181,12 +191,7 @@ func (us *UserCommon) FormatUserBasicInfo(ctx context.Context, userInfo *entity.
 func (us *UserCommon) MakeUsername(ctx context.Context, displayName string) (username string, err error) {
 	// Chinese processing
 	if has := checker.IsChinese(displayName); has {
-		str, err := pinyin.New(displayName).Split("").Mode(pinyin.WithoutTone).Convert()
-		if err != nil {
-			return "", errors.BadRequest(reason.UsernameInvalid)
-		} else {
-			displayName = str
-		}
+		displayName = strings.Join(pinyin.LazyConvert(displayName, nil), "")
 	}
 
 	username = strings.ReplaceAll(displayName, " ", "-")
@@ -234,7 +239,7 @@ func (us *UserCommon) CacheLoginUserInfo(ctx context.Context, userID string, use
 		return "", nil, err
 	}
 	if userCacheInfo.RoleID == role.RoleAdminID {
-		if err = us.authService.SetAdminUserCacheInfo(ctx, accessToken, &entity.UserCacheInfo{UserID: userID}); err != nil {
+		if err = us.authService.SetAdminUserCacheInfo(ctx, accessToken, userCacheInfo); err != nil {
 			return "", nil, err
 		}
 	}

@@ -24,8 +24,8 @@ import (
 	"math"
 	"net/http"
 
-	"github.com/apache/incubator-answer/internal/base/constant"
-	"github.com/apache/incubator-answer/internal/schema"
+	"github.com/apache/answer/internal/base/constant"
+	"github.com/apache/answer/internal/schema"
 	"github.com/gin-gonic/gin"
 	"github.com/segmentfault/pacman/log"
 )
@@ -85,6 +85,28 @@ func (t *TemplateRenderController) Sitemap(ctx *gin.Context) {
 			"xmlHeader": template.HTML(`<?xml version="1.0" encoding="UTF-8"?>`),
 			"page":      pageList,
 			"general":   general,
+		},
+	)
+}
+
+func (t *TemplateRenderController) OpenSearch(ctx *gin.Context) {
+	general, err := t.siteInfoService.GetSiteGeneral(ctx)
+	if err != nil {
+		log.Error("get site general failed:", err)
+		return
+	}
+
+	favicon := general.SiteUrl + "/favicon.ico"
+	branding, err := t.siteInfoService.GetSiteBranding(ctx)
+	if err == nil && len(branding.Favicon) > 0 {
+		favicon = branding.Favicon
+	}
+
+	ctx.Header("Content-Type", "application/xml")
+	ctx.HTML(
+		http.StatusOK, "opensearch.xml", gin.H{
+			"general": general,
+			"favicon": favicon,
 		},
 	)
 }

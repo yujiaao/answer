@@ -20,11 +20,11 @@
 package controller
 
 import (
-	"github.com/apache/incubator-answer/internal/base/handler"
-	"github.com/apache/incubator-answer/internal/base/middleware"
-	"github.com/apache/incubator-answer/internal/schema"
-	"github.com/apache/incubator-answer/internal/service/meta"
-	"github.com/apache/incubator-answer/pkg/uid"
+	"github.com/apache/answer/internal/base/handler"
+	"github.com/apache/answer/internal/base/middleware"
+	"github.com/apache/answer/internal/schema"
+	"github.com/apache/answer/internal/service/meta"
+	"github.com/apache/answer/pkg/uid"
 	"github.com/gin-gonic/gin"
 )
 
@@ -68,7 +68,6 @@ func (mc *MetaController) AddOrUpdateReaction(ctx *gin.Context) {
 // @Tags Meta
 // @Accept json
 // @Produce json
-// @Security ApiKeyAuth
 // @Param object_id query string true "object_id"
 // @Success 200 {object} handler.RespBody{data=schema.ReactionRespItem}
 // @Router /answer/api/v1/meta/reaction [get]

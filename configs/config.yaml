@@ -33,6 +33,9 @@ swaggerui:
   address: ':80'
 service_config:
   upload_path: "/data/uploads"
+  clean_up_uploads: true
+  clean_orphan_uploads_period_hours: 48
+  purge_deleted_files_period_days: 30
 ui:
   public_url: '/'
   api_url: '/'

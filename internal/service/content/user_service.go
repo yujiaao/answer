@@ -23,29 +23,30 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/apache/answer/internal/service/event_queue"
+	"github.com/apache/answer/pkg/token"
 	"time"
 
-	"github.com/apache/incubator-answer/internal/base/constant"
-	questioncommon "github.com/apache/incubator-answer/internal/service/question_common"
-	"github.com/apache/incubator-answer/internal/service/user_notification_config"
+	"github.com/apache/answer/internal/base/constant"
+	questioncommon "github.com/apache/answer/internal/service/question_common"
+	"github.com/apache/answer/internal/service/user_notification_config"
 
-	"github.com/apache/incubator-answer/internal/base/handler"
-	"github.com/apache/incubator-answer/internal/base/reason"
-	"github.com/apache/incubator-answer/internal/base/translator"
-	"github.com/apache/incubator-answer/internal/base/validator"
-	"github.com/apache/incubator-answer/internal/entity"
-	"github.com/apache/incubator-answer/internal/schema"
-	"github.com/apache/incubator-answer/internal/service/activity"
-	"github.com/apache/incubator-answer/internal/service/activity_common"
-	"github.com/apache/incubator-answer/internal/service/auth"
-	"github.com/apache/incubator-answer/internal/service/export"
-	"github.com/apache/incubator-answer/internal/service/role"
-	"github.com/apache/incubator-answer/internal/service/siteinfo_common"
-	usercommon "github.com/apache/incubator-answer/internal/service/user_common"
-	"github.com/apache/incubator-answer/internal/service/user_external_login"
-	"github.com/apache/incubator-answer/pkg/checker"
-	"github.com/apache/incubator-answer/plugin"
-	"github.com/google/uuid"
+	"github.com/apache/answer/internal/base/handler"
+	"github.com/apache/answer/internal/base/reason"
+	"github.com/apache/answer/internal/base/translator"
+	"github.com/apache/answer/internal/base/validator"
+	"github.com/apache/answer/internal/entity"
+	"github.com/apache/answer/internal/schema"
+	"github.com/apache/answer/internal/service/activity"
+	"github.com/apache/answer/internal/service/activity_common"
+	"github.com/apache/answer/internal/service/auth"
+	"github.com/apache/answer/internal/service/export"
+	"github.com/apache/answer/internal/service/role"
+	"github.com/apache/answer/internal/service/siteinfo_common"
+	usercommon "github.com/apache/answer/internal/service/user_common"
+	"github.com/apache/answer/internal/service/user_external_login"
+	"github.com/apache/answer/pkg/checker"
+	"github.com/apache/answer/plugin"
 	"github.com/segmentfault/pacman/errors"
 	"github.com/segmentfault/pacman/log"
 	"golang.org/x/crypto/bcrypt"
@@ -65,6 +66,7 @@ type UserService struct {
 	userNotificationConfigRepo    user_notification_config.UserNotificationConfigRepo
 	userNotificationConfigService *user_notification_config.UserNotificationConfigService
 	questionService               *questioncommon.QuestionCommon
+	eventQueueService             event_queue.EventQueueService
 }
 
 func NewUserService(userRepo usercommon.UserRepo,
@@ -79,6 +81,7 @@ func NewUserService(userRepo usercommon.UserRepo,
 	userNotificationConfigRepo user_notification_config.UserNotificationConfigRepo,
 	userNotificationConfigService *user_notification_config.UserNotificationConfigService,
 	questionService *questioncommon.QuestionCommon,
+	eventQueueService event_queue.EventQueueService,
 ) *UserService {
 	return &UserService{
 		userCommonService:             userCommonService,
@@ -93,6 +96,7 @@ func NewUserService(userRepo usercommon.UserRepo,
 		userNotificationConfigRepo:    userNotificationConfigRepo,
 		userNotificationConfigService: userNotificationConfigService,
 		questionService:               questionService,
+		eventQueueService:             eventQueueService,
 	}
 }
 
@@ -221,7 +225,7 @@ func (us *UserService) RetrievePassWord(ctx context.Context, req *schema.UserRet
 		Email:  req.Email,
 		UserID: userInfo.ID,
 	}
-	code := uuid.NewString()
+	code := token.GenerateToken()
 	verifyEmailURL := fmt.Sprintf("%s/users/password-reset?code=%s", us.getSiteUrl(ctx), code)
 	title, body, err := us.emailService.PassResetTemplate(ctx, verifyEmailURL)
 	if err != nil {
@@ -352,6 +356,10 @@ func (us *UserService) UpdateInfo(ctx context.Context, req *schema.UpdateInfoReq
 
 	cond := us.formatUserInfoForUpdateInfo(oldUserInfo, req, siteUsers)
 	err = us.userRepo.UpdateInfo(ctx, cond)
+	if err != nil {
+		return nil, err
+	}
+	us.eventQueueService.Send(ctx, schema.NewEvent(constant.EventUserUpdate, req.UserID))
 	return nil, err
 }
 
@@ -444,7 +452,7 @@ func (us *UserService) UserRegisterByEmail(ctx context.Context, registerUserInfo
 		Email:  registerUserInfo.Email,
 		UserID: userInfo.ID,
 	}
-	code := uuid.NewString()
+	code := token.GenerateToken()
 	verifyEmailURL := fmt.Sprintf("%s/users/account-activation?code=%s", us.getSiteUrl(ctx), code)
 	title, body, err := us.emailService.RegisterTemplate(ctx, verifyEmailURL)
 	if err != nil {
@@ -494,7 +502,7 @@ func (us *UserService) UserVerifyEmailSend(ctx context.Context, userID string) e
 		Email:  userInfo.EMail,
 		UserID: userInfo.ID,
 	}
-	code := uuid.NewString()
+	code := token.GenerateToken()
 	verifyEmailURL := fmt.Sprintf("%s/users/account-activation?code=%s", us.getSiteUrl(ctx), code)
 	title, body, err := us.emailService.RegisterTemplate(ctx, verifyEmailURL)
 	if err != nil {
@@ -527,6 +535,7 @@ func (us *UserService) UserVerifyEmail(ctx context.Context, req *schema.UserVeri
 	}
 	if err = us.userActivity.UserActive(ctx, userInfo.ID); err != nil {
 		log.Error(err)
+		return nil, err
 	}
 
 	// In the case of three-party login, the associated users are bound
@@ -608,7 +617,7 @@ func (us *UserService) UserChangeEmailSendCode(ctx context.Context, req *schema.
 		Email:  req.Email,
 		UserID: req.UserID,
 	}
-	code := uuid.NewString()
+	code := token.GenerateToken()
 	var title, body string
 	verifyEmailURL := fmt.Sprintf("%s/users/confirm-new-email?code=%s", us.getSiteUrl(ctx), code)
 	if userInfo.MailStatus == entity.EmailStatusToBeVerified {
@@ -660,6 +669,7 @@ func (us *UserService) UserChangeEmailVerify(ctx context.Context, content string
 	if userInfo.MailStatus == entity.EmailStatusToBeVerified {
 		if err = us.userActivity.UserActive(ctx, userInfo.ID); err != nil {
 			log.Error(err)
+			return nil, err
 		}
 	}
 

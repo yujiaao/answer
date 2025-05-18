@@ -23,8 +23,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/apache/incubator-answer/internal/base/data"
-	"github.com/apache/incubator-answer/internal/entity"
+	"github.com/apache/answer/internal/base/data"
+	"github.com/apache/answer/internal/entity"
 	"xorm.io/xorm"
 )
 
@@ -97,6 +97,10 @@ var migrations = []Migration{
 	NewMigration("v1.2.5", "add notification plugin and theme config", addNotificationPluginAndThemeConfig, true),
 	NewMigration("v1.3.0", "add review", addReview, false),
 	NewMigration("v1.3.6", "add hot score to question table", addQuestionHotScore, true),
+	NewMigration("v1.4.0", "add badge/badge_group/badge_award table", addBadges, true),
+	NewMigration("v1.4.1", "add question link", addQuestionLink, true),
+	NewMigration("v1.4.2", "add the number of question links", addQuestionLinkedCount, true),
+	NewMigration("v1.4.5", "add file record", addFileRecord, true),
 }
 
 func GetMigrations() []Migration {

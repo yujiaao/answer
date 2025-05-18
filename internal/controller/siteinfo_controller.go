@@ -22,10 +22,10 @@ package controller
 import (
 	"net/http"
 
-	"github.com/apache/incubator-answer/internal/base/constant"
-	"github.com/apache/incubator-answer/internal/base/handler"
-	"github.com/apache/incubator-answer/internal/schema"
-	"github.com/apache/incubator-answer/internal/service/siteinfo_common"
+	"github.com/apache/answer/internal/base/constant"
+	"github.com/apache/answer/internal/base/handler"
+	"github.com/apache/answer/internal/schema"
+	"github.com/apache/answer/internal/service/siteinfo_common"
 	"github.com/gin-gonic/gin"
 	"github.com/segmentfault/pacman/log"
 )
@@ -91,6 +91,9 @@ func (sc *SiteInfoController) GetSiteInfo(ctx *gin.Context) {
 	if err != nil {
 		log.Error(err)
 	}
+	if legal, err := sc.siteInfoService.GetSiteLegal(ctx); err == nil {
+		resp.Legal = &schema.SiteLegalSimpleResp{ExternalContentDisplay: legal.ExternalContentDisplay}
+	}
 
 	handler.HandleResponse(ctx, nil, resp)
 }
@@ -133,12 +136,7 @@ func (sc *SiteInfoController) GetManifestJson(ctx *gin.Context) {
 		Revision:        constant.Revision,
 		ShortName:       "Answer",
 		Name:            "answer.apache.org",
-		Icons: map[string]string{
-			"16":  favicon,
-			"32":  favicon,
-			"48":  favicon,
-			"128": favicon,
-		},
+		Icons:           schema.CreateManifestJsonIcons(favicon),
 		StartUrl:        ".",
 		Display:         "standalone",
 		ThemeColor:      "#000000",
@@ -148,10 +146,7 @@ func (sc *SiteInfoController) GetManifestJson(ctx *gin.Context) {
 	if err != nil {
 		log.Error(err)
 	} else if len(branding.Favicon) > 0 {
-		resp.Icons["16"] = branding.Favicon
-		resp.Icons["32"] = branding.Favicon
-		resp.Icons["48"] = branding.Favicon
-		resp.Icons["128"] = branding.Favicon
+		resp.Icons = schema.CreateManifestJsonIcons(branding.Favicon)
 	}
 	siteGeneral, err := sc.siteInfoService.GetSiteGeneral(ctx)
 	if err != nil {

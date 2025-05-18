@@ -23,15 +23,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/apache/incubator-answer/internal/base/constant"
 	"time"
 
-	"github.com/apache/incubator-answer/internal/base/data"
-	"github.com/apache/incubator-answer/internal/repo/unique"
-	"github.com/apache/incubator-answer/internal/schema"
+	"github.com/apache/answer/internal/base/constant"
+
+	"github.com/apache/answer/internal/base/data"
+	"github.com/apache/answer/internal/repo/unique"
+	"github.com/apache/answer/internal/schema"
 	"github.com/segmentfault/pacman/log"
 
-	"github.com/apache/incubator-answer/internal/entity"
+	"github.com/apache/answer/internal/entity"
 	"golang.org/x/crypto/bcrypt"
 	"xorm.io/xorm"
 )
@@ -49,14 +50,15 @@ func NewMentor(ctx context.Context, engine *xorm.Engine, data *InitNeedUserInput
 }
 
 type InitNeedUserInputData struct {
-	Language      string
-	SiteName      string
-	SiteURL       string
-	ContactEmail  string
-	AdminName     string
-	AdminPassword string
-	AdminEmail    string
-	LoginRequired bool
+	Language               string
+	SiteName               string
+	SiteURL                string
+	ContactEmail           string
+	AdminName              string
+	AdminPassword          string
+	AdminEmail             string
+	LoginRequired          bool
+	ExternalContentDisplay string
 }
 
 func (m *Mentor) InitDB() error {
@@ -78,7 +80,9 @@ func (m *Mentor) InitDB() error {
 	m.do("init site info user config", m.initSiteInfoUsersConfig)
 	m.do("init site info privilege rank", m.initSiteInfoPrivilegeRank)
 	m.do("init site info write", m.initSiteInfoWrite)
+	m.do("init site info legal", m.initSiteInfoLegalConfig)
 	m.do("init default content", m.initDefaultContent)
+	m.do("init default badges", m.initDefaultBadges)
 	return m.err
 }
 
@@ -156,9 +160,28 @@ func (m *Mentor) initAdminUserRoleRel() {
 }
 
 func (m *Mentor) initSiteInfoInterface() {
+	now := time.Now()
+	zoneName, offset := now.In(time.Local).Zone()
+
+	localTimezone := "UTC"
+	for _, tz := range constant.Timezones {
+		loc, err := time.LoadLocation(tz)
+		if err != nil {
+			continue
+		}
+
+		tzNow := now.In(loc)
+		tzName, tzOffset := tzNow.Zone()
+
+		if tzName == zoneName && tzOffset == offset {
+			localTimezone = tz
+			break
+		}
+	}
+
 	interfaceData := map[string]string{
 		"language":  m.userData.Language,
-		"time_zone": "UTC",
+		"time_zone": localTimezone,
 	}
 	interfaceDataBytes, _ := json.Marshal(interfaceData)
 	_, m.err = m.engine.Context(m.ctx).Insert(&entity.SiteInfo{
@@ -183,7 +206,7 @@ func (m *Mentor) initSiteInfoGeneralData() {
 }
 
 func (m *Mentor) initSiteInfoLoginConfig() {
-	loginConfig := map[string]bool{
+	loginConfig := map[string]interface{}{
 		"allow_new_registrations":   true,
 		"allow_email_registrations": true,
 		"allow_password_login":      true,
@@ -193,6 +216,18 @@ func (m *Mentor) initSiteInfoLoginConfig() {
 	_, m.err = m.engine.Context(m.ctx).Insert(&entity.SiteInfo{
 		Type:    "login",
 		Content: string(loginConfigDataBytes),
+		Status:  1,
+	})
+}
+
+func (m *Mentor) initSiteInfoLegalConfig() {
+	legalConfig := map[string]interface{}{
+		"external_content_display": m.userData.ExternalContentDisplay,
+	}
+	legalConfigDataBytes, _ := json.Marshal(legalConfig)
+	_, m.err = m.engine.Context(m.ctx).Insert(&entity.SiteInfo{
+		Type:    "legal",
+		Content: string(legalConfigDataBytes),
 		Status:  1,
 	})
 }
@@ -252,7 +287,15 @@ func (m *Mentor) initSiteInfoPrivilegeRank() {
 
 func (m *Mentor) initSiteInfoWrite() {
 	writeData := map[string]interface{}{
-		"restrict_answer": true,
+		"restrict_answer":                  true,
+		"required_tag":                     false,
+		"recommend_tags":                   []string{},
+		"reserved_tags":                    []string{},
+		"max_image_size":                   4,
+		"max_attachment_size":              8,
+		"max_image_megapixel":              40,
+		"authorized_image_extensions":      []string{"jpg", "jpeg", "png", "gif", "webp"},
+		"authorized_attachment_extensions": []string{},
 	}
 	writeDataBytes, _ := json.Marshal(writeData)
 	_, m.err = m.engine.Context(m.ctx).Insert(&entity.SiteInfo{
@@ -409,5 +452,23 @@ func (m *Mentor) initDefaultContent() {
 	})
 	if m.err != nil {
 		return
+	}
+}
+
+func (m *Mentor) initDefaultBadges() {
+	uniqueIDRepo := unique.NewUniqueIDRepo(&data.Data{DB: m.engine})
+
+	_, m.err = m.engine.Context(m.ctx).Insert(defaultBadgeGroupTable)
+	if m.err != nil {
+		return
+	}
+	for _, badge := range defaultBadgeTable {
+		badge.ID, m.err = uniqueIDRepo.GenUniqueIDStr(m.ctx, new(entity.Badge).TableName())
+		if m.err != nil {
+			return
+		}
+		if _, m.err = m.engine.Context(m.ctx).Insert(badge); m.err != nil {
+			return
+		}
 	}
 }

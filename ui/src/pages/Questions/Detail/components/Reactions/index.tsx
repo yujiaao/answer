@@ -26,6 +26,7 @@ import classNames from 'classnames';
 import { Icon } from '@/components';
 import { queryReactions, updateReaction } from '@/services';
 import { tryNormalLogged } from '@/utils/guard';
+import { isDarkTheme } from '@/utils/common';
 import { ReactionItem } from '@/common/interface';
 
 interface Props {
@@ -60,6 +61,7 @@ const Index: FC<Props> = ({
   const [reactions, setReactions] = useState<ReactionItem[]>();
   const [reactIsActive, setReactIsActive] = useState<boolean>(false);
   const { t } = useTranslation('translation');
+  const darkMode = isDarkTheme();
 
   useEffect(() => {
     queryReactions(objectId).then((res) => {
@@ -94,7 +96,7 @@ const Index: FC<Props> = ({
                 : t(`reaction.${d.name}`)
             }
             key={d.icon}
-            variant="light"
+            variant={darkMode ? 'dark' : 'light'}
             active={reactions?.find((v) => v.emoji === d.name)?.is_active}
             className={`${index !== 0 ? 'ms-1' : ''}`}
             size="sm"
@@ -110,13 +112,13 @@ const Index: FC<Props> = ({
 
   return (
     <div
-      className={classNames('d-block d-md-flex flex-wrap', {
+      className={classNames('d-flex flex-wrap', {
         'mb-3': !showAddCommentBtn,
       })}>
       {showAddCommentBtn && (
         <Button
-          className="rounded-pill me-2 link-secondary"
-          variant="light"
+          className="rounded-pill me-2 link-secondary btn-reaction"
+          variant={darkMode ? 'dark' : 'light'}
           size="sm"
           onClick={handleClickComment}>
           <Icon name="chat-text-fill" />
@@ -135,8 +137,8 @@ const Index: FC<Props> = ({
           aria-label={t('reaction.btn_label')}
           aria-haspopup="true"
           active={reactIsActive}
-          className="smile-btn rounded-pill link-secondary"
-          variant="light">
+          className="smile-btn rounded-pill link-secondary btn-reaction"
+          variant={darkMode ? 'dark' : 'light'}>
           <Icon name="emoji-smile-fill" />
           <span className="ms-1">+</span>
         </Button>
@@ -158,14 +160,14 @@ const Index: FC<Props> = ({
               </Tooltip>
             }>
             <Button
-              className="rounded-pill ms-2 link-secondary d-flex align-items-center"
+              className="rounded-pill ms-2 link-secondary d-flex align-items-center btn-reaction"
               aria-label={
                 data?.is_active
                   ? t('reaction.unreact_emoji', { emoji: data.emoji })
                   : t('reaction.react_emoji', { emoji: data.emoji })
               }
               aria-pressed="true"
-              variant="light"
+              variant={darkMode ? 'dark' : 'light'}
               active={data.is_active}
               size="sm"
               onClick={() =>

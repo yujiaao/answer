@@ -20,14 +20,15 @@
 package controller
 
 import (
-	"github.com/apache/incubator-answer/internal/base/handler"
-	"github.com/apache/incubator-answer/internal/base/middleware"
-	"github.com/apache/incubator-answer/internal/base/reason"
-	"github.com/apache/incubator-answer/internal/schema"
-	"github.com/apache/incubator-answer/internal/service/permission"
-	"github.com/apache/incubator-answer/internal/service/rank"
-	"github.com/apache/incubator-answer/internal/service/tag"
-	"github.com/apache/incubator-answer/internal/service/tag_common"
+	"github.com/apache/answer/internal/base/handler"
+	"github.com/apache/answer/internal/base/middleware"
+	"github.com/apache/answer/internal/base/pager"
+	"github.com/apache/answer/internal/base/reason"
+	"github.com/apache/answer/internal/schema"
+	"github.com/apache/answer/internal/service/permission"
+	"github.com/apache/answer/internal/service/rank"
+	"github.com/apache/answer/internal/service/tag"
+	"github.com/apache/answer/internal/service/tag_common"
 	"github.com/gin-gonic/gin"
 	"github.com/segmentfault/pacman/errors"
 )
@@ -87,6 +88,7 @@ func (tc *TagController) GetTagsBySlugName(ctx *gin.Context) {
 // RemoveTag delete tag
 // @Summary delete tag
 // @Description delete tag
+// @Security ApiKeyAuth
 // @Tags Tag
 // @Accept json
 // @Produce json
@@ -116,6 +118,7 @@ func (tc *TagController) RemoveTag(ctx *gin.Context) {
 // AddTag add tag
 // @Summary add tag
 // @Description add tag
+// @Security ApiKeyAuth
 // @Tags Tag
 // @Accept json
 // @Produce json
@@ -148,6 +151,7 @@ func (tc *TagController) AddTag(ctx *gin.Context) {
 // UpdateTag update tag
 // @Summary update tag
 // @Description update tag
+// @Security ApiKeyAuth
 // @Tags Tag
 // @Accept json
 // @Produce json
@@ -186,6 +190,7 @@ func (tc *TagController) UpdateTag(ctx *gin.Context) {
 // RecoverTag recover delete tag
 // @Summary recover delete tag
 // @Description recover delete tag
+// @Security ApiKeyAuth
 // @Tags Tag
 // @Accept json
 // @Produce json
@@ -244,6 +249,7 @@ func (tc *TagController) GetTagInfo(ctx *gin.Context) {
 	req.CanEdit = canList[0]
 	req.CanDelete = canList[1]
 	req.CanRecover = canList[2]
+	req.CanMerge = middleware.GetUserIsAdminModerator(ctx)
 
 	resp, err := tc.tagService.GetTagInfo(ctx, req)
 	handler.HandleResponse(ctx, err, resp)
@@ -269,6 +275,14 @@ func (tc *TagController) GetTagWithPage(ctx *gin.Context) {
 	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
 
 	resp, err := tc.tagService.GetTagWithPage(ctx, req)
+	if err != nil {
+		handler.HandleResponse(ctx, err, nil)
+		return
+	}
+	if pager.ValPageOutOfRange(resp.Count, req.Page, req.PageSize) {
+		handler.HandleResponse(ctx, errors.NotFound(reason.RequestFormatError), nil)
+		return
+	}
 	handler.HandleResponse(ctx, err, resp)
 }
 
@@ -315,6 +329,7 @@ func (tc *TagController) GetTagSynonyms(ctx *gin.Context) {
 // UpdateTagSynonym update tag
 // @Summary update tag
 // @Description update tag
+// @Security ApiKeyAuth
 // @Tags Tag
 // @Accept json
 // @Produce json
@@ -339,5 +354,33 @@ func (tc *TagController) UpdateTagSynonym(ctx *gin.Context) {
 	}
 
 	err = tc.tagService.UpdateTagSynonym(ctx, req)
+	handler.HandleResponse(ctx, err, nil)
+}
+
+// MergeTag merge tag
+// @Summary merge tag
+// @Description merge tag
+// @Security ApiKeyAuth
+// @Tags Tag
+// @Accept json
+// @Produce json
+// @Param data body schema.AddTagReq true "tag"
+// @Success 200 {object} handler.RespBody
+// @Router /answer/api/v1/tag/merge [post]
+func (tc *TagController) MergeTag(ctx *gin.Context) {
+	req := &schema.MergeTagReq{}
+	if handler.BindAndCheck(ctx, req) {
+		return
+	}
+
+	isAdminModerator := middleware.GetUserIsAdminModerator(ctx)
+	if !isAdminModerator {
+		handler.HandleResponse(ctx, errors.Forbidden(reason.RankFailToMeetTheCondition), nil)
+		return
+	}
+
+	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
+	err := tc.tagService.MergeTag(ctx, req)
+
 	handler.HandleResponse(ctx, err, nil)
 }

@@ -28,25 +28,25 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/apache/incubator-answer/internal/service/review"
-	"github.com/apache/incubator-answer/internal/service/revision"
-	"github.com/apache/incubator-answer/pkg/converter"
+	"github.com/apache/answer/internal/service/review"
+	"github.com/apache/answer/internal/service/revision"
+	"github.com/apache/answer/pkg/converter"
 	"xorm.io/xorm/schemas"
 
-	"github.com/apache/incubator-answer/internal/base/constant"
-	"github.com/apache/incubator-answer/internal/base/data"
-	"github.com/apache/incubator-answer/internal/schema"
-	"github.com/apache/incubator-answer/internal/service/activity_common"
-	answercommon "github.com/apache/incubator-answer/internal/service/answer_common"
-	"github.com/apache/incubator-answer/internal/service/comment_common"
-	"github.com/apache/incubator-answer/internal/service/config"
-	"github.com/apache/incubator-answer/internal/service/export"
-	questioncommon "github.com/apache/incubator-answer/internal/service/question_common"
-	"github.com/apache/incubator-answer/internal/service/report_common"
-	"github.com/apache/incubator-answer/internal/service/service_config"
-	"github.com/apache/incubator-answer/internal/service/siteinfo_common"
-	usercommon "github.com/apache/incubator-answer/internal/service/user_common"
-	"github.com/apache/incubator-answer/pkg/dir"
+	"github.com/apache/answer/internal/base/constant"
+	"github.com/apache/answer/internal/base/data"
+	"github.com/apache/answer/internal/schema"
+	"github.com/apache/answer/internal/service/activity_common"
+	answercommon "github.com/apache/answer/internal/service/answer_common"
+	"github.com/apache/answer/internal/service/comment_common"
+	"github.com/apache/answer/internal/service/config"
+	"github.com/apache/answer/internal/service/export"
+	questioncommon "github.com/apache/answer/internal/service/question_common"
+	"github.com/apache/answer/internal/service/report_common"
+	"github.com/apache/answer/internal/service/service_config"
+	"github.com/apache/answer/internal/service/siteinfo_common"
+	usercommon "github.com/apache/answer/internal/service/user_common"
+	"github.com/apache/answer/pkg/dir"
 	"github.com/segmentfault/pacman/log"
 )
 
@@ -103,7 +103,6 @@ func (ds *dashboardService) Statistical(ctx context.Context) (*schema.DashboardI
 	dashboardInfo := ds.getFromCache(ctx)
 	if dashboardInfo == nil {
 		dashboardInfo = &schema.DashboardInfo{}
-		dashboardInfo.QuestionCount = ds.questionCount(ctx)
 		dashboardInfo.AnswerCount = ds.answerCount(ctx)
 		dashboardInfo.CommentCount = ds.commentCount(ctx)
 		dashboardInfo.UserCount = ds.userCount(ctx)
@@ -119,6 +118,18 @@ func (ds *dashboardService) Statistical(ctx context.Context) (*schema.DashboardI
 		}
 		dashboardInfo.DatabaseVersion = ds.getDatabaseInfo()
 		dashboardInfo.DatabaseSize = ds.GetDatabaseSize()
+	}
+
+	dashboardInfo.QuestionCount = ds.questionCount(ctx)
+	dashboardInfo.UnansweredCount = ds.unansweredQuestionCount(ctx)
+	dashboardInfo.ResolvedCount = ds.resolvedQuestionCount(ctx)
+
+	if dashboardInfo.QuestionCount == 0 {
+		dashboardInfo.ResolvedRate = "0.00"
+		dashboardInfo.UnansweredRate = "0.00"
+	} else {
+		dashboardInfo.ResolvedRate = fmt.Sprintf("%.2f", float64(dashboardInfo.ResolvedCount)/float64(dashboardInfo.QuestionCount)*100)
+		dashboardInfo.UnansweredRate = fmt.Sprintf("%.2f", float64(dashboardInfo.UnansweredCount)/float64(dashboardInfo.QuestionCount)*100)
 	}
 
 	dashboardInfo.ReportCount = ds.reportCount(ctx)
@@ -168,6 +179,22 @@ func (ds *dashboardService) questionCount(ctx context.Context) int64 {
 		log.Errorf("get question count failed: %s", err)
 	}
 	return questionCount
+}
+
+func (ds *dashboardService) unansweredQuestionCount(ctx context.Context) int64 {
+	unansweredQuestionCount, err := ds.questionRepo.GetUnansweredQuestionCount(ctx)
+	if err != nil {
+		log.Errorf("get unanswered question count failed: %s", err)
+	}
+	return unansweredQuestionCount
+}
+
+func (ds *dashboardService) resolvedQuestionCount(ctx context.Context) int64 {
+	resolvedQuestionCount, err := ds.questionRepo.GetResolvedQuestionCount(ctx)
+	if err != nil {
+		log.Errorf("get resolved question count failed: %s", err)
+	}
+	return resolvedQuestionCount
 }
 
 func (ds *dashboardService) answerCount(ctx context.Context) int64 {
@@ -238,7 +265,7 @@ func (ds *dashboardService) voteCount(ctx context.Context) int64 {
 }
 
 func (ds *dashboardService) remoteVersion(ctx context.Context) string {
-	req, _ := http.NewRequest("GET", "https://getlatest.answer.dev/", nil)
+	req, _ := http.NewRequest("GET", "https://answer.apache.org/data/latest.json?from_version="+constant.Version, nil)
 	req.Header.Set("User-Agent", "Answer/"+constant.Version)
 	httpClient := &http.Client{}
 	httpClient.Timeout = 15 * time.Second

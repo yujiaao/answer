@@ -25,9 +25,9 @@ import (
 	"io/fs"
 	"net/http"
 
-	"github.com/apache/incubator-answer/configs"
-	"github.com/apache/incubator-answer/internal/base/conf"
-	"github.com/apache/incubator-answer/ui"
+	"github.com/apache/answer/configs"
+	"github.com/apache/answer/internal/base/conf"
+	"github.com/apache/answer/ui"
 	"github.com/gin-gonic/gin"
 	"github.com/segmentfault/pacman/log"
 	"gopkg.in/yaml.v3"
@@ -64,11 +64,12 @@ func NewInstallHTTPServer() *gin.Engine {
 	installApi.GET(c.UI.BaseURL+"/", CheckConfigFileAndRedirectToInstallPage)
 	installApi.GET(c.UI.BaseURL+"/install", WebPage)
 	installApi.GET(c.UI.BaseURL+"/50x", WebPage)
-	installApi.GET("/installation/language/options", LangOptions)
-	installApi.POST("/installation/db/check", CheckDatabase)
-	installApi.POST("/installation/config-file/check", CheckConfigFile)
-	installApi.POST("/installation/init", InitEnvironment)
-	installApi.POST("/installation/base-info", InitBaseInfo)
+	installApi.GET(c.UI.APIBaseURL+"/installation/language/config", GetLangMapping)
+	installApi.GET(c.UI.APIBaseURL+"/installation/language/options", LangOptions)
+	installApi.POST(c.UI.APIBaseURL+"/installation/db/check", CheckDatabase)
+	installApi.POST(c.UI.APIBaseURL+"/installation/config-file/check", CheckConfigFile)
+	installApi.POST(c.UI.APIBaseURL+"/installation/init", InitEnvironment)
+	installApi.POST(c.UI.APIBaseURL+"/installation/base-info", InitBaseInfo)
 
 	r.NoRoute(func(ctx *gin.Context) {
 		ctx.Redirect(http.StatusFound, "/50x")

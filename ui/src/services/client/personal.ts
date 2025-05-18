@@ -66,7 +66,7 @@ export const usePersonalTop = (username: string, tabName: string) => {
 };
 
 export const usePersonalListByTabName = (params: ListReq, tabName: string) => {
-  let apiUrl = '';
+  let apiUrl: string | null = '';
   if (tabName === 'answers') {
     apiUrl = '/answer/api/v1/personal/answer/page';
   }
@@ -88,6 +88,10 @@ export const usePersonalListByTabName = (params: ListReq, tabName: string) => {
   if (tabName === 'votes') {
     delete params.username;
     apiUrl = '/answer/api/v1/personal/vote/page';
+  }
+  if (tabName === 'badges') {
+    delete params.order;
+    apiUrl = '/answer/api/v1/badge/user/awards';
   }
 
   const queryParams = qs.stringify(params, { skipNulls: true });

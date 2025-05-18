@@ -96,7 +96,10 @@ const Index = () => {
     if (!questionContentRef?.current) {
       return;
     }
-    htmlRender(questionContentRef.current);
+    htmlRender(questionContentRef.current, {
+      copySuccessText: t('copied', { keyPrefix: 'messages' }),
+      copyText: t('copy', { keyPrefix: 'messages' }),
+    });
   }, [questionContentRef]);
 
   usePromptWithUnload({

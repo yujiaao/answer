@@ -26,12 +26,12 @@ import (
 
 	"xorm.io/builder"
 
-	"github.com/apache/incubator-answer/internal/base/data"
-	"github.com/apache/incubator-answer/internal/base/pager"
-	"github.com/apache/incubator-answer/internal/base/reason"
-	"github.com/apache/incubator-answer/internal/entity"
-	"github.com/apache/incubator-answer/internal/service/auth"
-	"github.com/apache/incubator-answer/internal/service/user_admin"
+	"github.com/apache/answer/internal/base/data"
+	"github.com/apache/answer/internal/base/pager"
+	"github.com/apache/answer/internal/base/reason"
+	"github.com/apache/answer/internal/entity"
+	"github.com/apache/answer/internal/service/auth"
+	"github.com/apache/answer/internal/service/user_admin"
 	"github.com/segmentfault/pacman/errors"
 	"github.com/segmentfault/pacman/log"
 )
@@ -173,5 +173,14 @@ func (ur *userAdminRepo) GetUserPage(ctx context.Context, page, pageSize int, us
 		return
 	}
 	tryToDecorateUserListFromUserCenter(ctx, ur.data, users)
+	return
+}
+
+// DeletePermanentlyUsers delete permanently users
+func (ur *userAdminRepo) DeletePermanentlyUsers(ctx context.Context) (err error) {
+	_, err = ur.data.DB.Context(ctx).Where("status = ?", entity.UserStatusDeleted).Delete(&entity.User{})
+	if err != nil {
+		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
 	return
 }

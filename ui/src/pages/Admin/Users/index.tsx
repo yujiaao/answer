@@ -30,17 +30,19 @@ import {
   BaseUserCard,
   Empty,
   QueryGroup,
+  Modal,
 } from '@/components';
 import * as Type from '@/common/interface';
 import { useUserModal } from '@/hooks';
+import { toastStore, loggedUserInfoStore, userCenterStore } from '@/stores';
 import {
   useQueryUsers,
   addUsers,
   getAdminUcAgent,
   AdminUcAgent,
   changeUserStatus,
+  deletePermanently,
 } from '@/services';
-import { loggedUserInfoStore, userCenterStore } from '@/stores';
 import { formatCount } from '@/utils';
 
 import DeleteUserModal from './components/DeleteUserModal';
@@ -139,11 +141,34 @@ const Users: FC = () => {
       status: 'deleted',
       remove_all_content: val,
     }).then(() => {
+      toastStore.getState().show({
+        msg: t('user_deleted', { keyPrefix: 'messages' }),
+        variant: 'success',
+      });
       changeDeleteUserModalState({
         show: false,
         userId: '',
       });
       refreshUsers();
+    });
+  };
+
+  const handleDeletePermanently = () => {
+    Modal.confirm({
+      title: t('title', { keyPrefix: 'delete_permanently' }),
+      content: t('content', { keyPrefix: 'delete_permanently' }),
+      cancelBtnVariant: 'link',
+      confirmText: t('delete', { keyPrefix: 'btns' }),
+      confirmBtnVariant: 'danger',
+      onConfirm: () => {
+        deletePermanently('users').then(() => {
+          toastStore.getState().show({
+            msg: t('users_deleted', { keyPrefix: 'messages' }),
+            variant: 'success',
+          });
+          refreshUsers();
+        });
+      },
     });
   };
 
@@ -165,14 +190,22 @@ const Users: FC = () => {
   return (
     <>
       <h3 className="mb-4">{t('title')}</h3>
-      <div className="d-flex flex-wrap justify-content-between align-items-center mb-3">
-        <Stack direction="horizontal" gap={3}>
+      <div className="d-flex flex-wrap justify-content-between align-items-center">
+        <Stack direction="horizontal" gap={3} className="mb-3">
           <QueryGroup
             data={UserFilterKeys}
             currentSort={curFilter}
             sortKey="filter"
             i18nKeyPrefix="admin.users"
           />
+          {curFilter === 'deleted' && Number(data?.count) > 0 ? (
+            <Button
+              variant="outline-danger"
+              size="sm"
+              onClick={() => handleDeletePermanently()}>
+              {t('deleted_permanently', { keyPrefix: 'btns' })}
+            </Button>
+          ) : null}
           {showAddUser ? (
             <Button
               variant="outline-primary"
@@ -190,7 +223,7 @@ const Users: FC = () => {
           onChange={handleFilter}
           placeholder={t('filter.placeholder')}
           style={{ width: '12.25rem' }}
-          className="mt-3 mt-sm-0"
+          className="mb-3"
         />
       </div>
       <Table responsive="md">

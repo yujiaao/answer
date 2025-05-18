@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
+basePath: /
 definitions:
   constant.NotificationChannelKey:
     enum:
@@ -32,6 +33,16 @@ definitions:
         minimum: 1
         type: integer
     type: object
+  entity.BadgeLevel:
+    enum:
+    - 1
+    - 2
+    - 3
+    type: integer
+    x-enum-varnames:
+    - BadgeLevelBronze
+    - BadgeLevelSilver
+    - BadgeLevelGold
   handler.RespBody:
     properties:
       code:
@@ -73,6 +84,16 @@ definitions:
         type: string
       db_username:
         type: string
+      ssl_cert:
+        type: string
+      ssl_enabled:
+        type: boolean
+      ssl_key:
+        type: string
+      ssl_mode:
+        type: string
+      ssl_root_cert:
+        type: string
     required:
     - db_type
     type: object
@@ -84,6 +105,11 @@ definitions:
       email:
         maxLength: 500
         type: string
+      external_content_display:
+        enum:
+        - always_display
+        - ask_before_display
+        type: string
       lang:
         maxLength: 30
         type: string
@@ -91,6 +117,7 @@ definitions:
         type: boolean
       name:
         maxLength: 30
+        minLength: 2
         type: string
       password:
         maxLength: 32
@@ -105,6 +132,7 @@ definitions:
     required:
     - contact_email
     - email
+    - external_content_display
     - lang
     - name
     - password
@@ -116,6 +144,18 @@ definitions:
       count:
         type: integer
       list: {}
+    type: object
+  plugin.EmbedConfig:
+    properties:
+      enable:
+        type: boolean
+      platform:
+        type: string
+    type: object
+  plugin.RenderConfig:
+    properties:
+      select_theme:
+        type: string
     type: object
   schema.AcceptAnswerReq:
     properties:
@@ -247,7 +287,7 @@ definitions:
     properties:
       display_name:
         maxLength: 30
-        minLength: 4
+        minLength: 2
         type: string
       email:
         maxLength: 500
@@ -342,6 +382,36 @@ definitions:
         maxLength: 100
         type: string
     type: object
+  schema.BadgeListInfo:
+    properties:
+      award_count:
+        description: badge award count
+        type: integer
+      earned_count:
+        description: badge earned count
+        type: integer
+      icon:
+        description: badge icon
+        type: string
+      id:
+        description: badge id
+        type: string
+      level:
+        allOf:
+        - $ref: '#/definitions/entity.BadgeLevel'
+        description: badge level
+      name:
+        description: badge name
+        type: string
+    type: object
+  schema.BadgeStatus:
+    enum:
+    - active
+    - inactive
+    type: string
+    x-enum-varnames:
+    - BadgeStatusActive
+    - BadgeStatusInactive
   schema.CloseQuestionReq:
     properties:
       close_msg:
@@ -442,6 +512,17 @@ definitions:
       name:
         type: string
     type: object
+  schema.DeletePermanentlyReq:
+    properties:
+      type:
+        enum:
+        - users
+        - questions
+        - answers
+        type: string
+    required:
+    - type
+    type: object
   schema.EditUserProfileReq:
     properties:
       display_name:
@@ -512,6 +593,77 @@ definitions:
       is_followed:
         description: if user is followed object will be true,otherwise false
         type: boolean
+    type: object
+  schema.GetBadgeInfoResp:
+    properties:
+      award_count:
+        description: badge award count
+        type: integer
+      description:
+        description: badge description
+        type: string
+      earned_count:
+        description: badge earned count
+        type: integer
+      icon:
+        description: badge icon
+        type: string
+      id:
+        description: badge id
+        type: string
+      is_single:
+        description: badge is single or multiple
+        type: boolean
+      level:
+        allOf:
+        - $ref: '#/definitions/entity.BadgeLevel'
+        description: badge level
+      name:
+        description: badge name
+        type: string
+    type: object
+  schema.GetBadgeListPagedResp:
+    properties:
+      award_count:
+        description: badge award count
+        type: integer
+      description:
+        description: badge description
+        type: string
+      earned:
+        description: badge earned count
+        type: boolean
+      group_name:
+        description: badge group name
+        type: string
+      icon:
+        description: badge icon
+        type: string
+      id:
+        description: badge id
+        type: string
+      level:
+        allOf:
+        - $ref: '#/definitions/entity.BadgeLevel'
+        description: badge level
+      name:
+        description: badge name
+        type: string
+      status:
+        allOf:
+        - $ref: '#/definitions/schema.BadgeStatus'
+        description: badge status
+    type: object
+  schema.GetBadgeListResp:
+    properties:
+      badges:
+        description: badge list info
+        items:
+          $ref: '#/definitions/schema.BadgeListInfo'
+        type: array
+      group_name:
+        description: badge group name
+        type: string
     type: object
   schema.GetCommentPersonalWithPageResp:
     properties:
@@ -685,13 +837,6 @@ definitions:
         type: string
       website:
         description: website
-        type: string
-    type: object
-  schema.GetEmbedOptionResp:
-    properties:
-      enable:
-        type: boolean
-      platform:
         type: string
     type: object
   schema.GetFollowingTagsResp:
@@ -983,6 +1128,19 @@ definitions:
       terms_of_service_parsed_text:
         type: string
     type: object
+  schema.GetTagBasicResp:
+    properties:
+      display_name:
+        type: string
+      recommend:
+        type: boolean
+      reserved:
+        type: boolean
+      slug_name:
+        type: string
+      tag_id:
+        type: string
+    type: object
   schema.GetTagPageResp:
     properties:
       created_at:
@@ -1139,6 +1297,25 @@ definitions:
       activation_url:
         type: string
     type: object
+  schema.GetUserBadgeAwardListResp:
+    properties:
+      earned_count:
+        description: badge award count
+        type: integer
+      icon:
+        description: badge icon
+        type: string
+      id:
+        description: badge id
+        type: string
+      level:
+        allOf:
+        - $ref: '#/definitions/entity.BadgeLevel'
+        description: badge level
+      name:
+        description: badge name
+        type: string
+    type: object
   schema.GetUserNotificationConfigResp:
     properties:
       all_new_question:
@@ -1192,15 +1369,6 @@ definitions:
       name:
         type: string
       slug_name:
-        type: string
-    type: object
-  schema.GetUserStaffReq:
-    properties:
-      page_size:
-        minimum: 1
-        type: integer
-      username:
-        maxLength: 500
         type: string
     type: object
   schema.GetUserStaffResp:
@@ -1272,8 +1440,12 @@ definitions:
   schema.NotificationClearRequest:
     properties:
       type:
-        description: inbox achievement
+        enum:
+        - inbox
+        - achievement
         type: string
+    required:
+    - type
     type: object
   schema.OnCompleteAction:
     properties:
@@ -1401,9 +1573,11 @@ definitions:
         enum:
         - newest
         - active
-        - frequent
+        - hot
         - score
         - unanswered
+        - recommend
+        - frequent
         type: string
       page:
         minimum: 1
@@ -1470,6 +1644,8 @@ definitions:
     type: object
   schema.QuestionPageRespOperator:
     properties:
+      avatar:
+        type: string
       display_name:
         type: string
       id:
@@ -1880,6 +2056,8 @@ definitions:
         $ref: '#/definitions/schema.SiteLoginResp'
       revision:
         type: string
+      site_legal:
+        $ref: '#/definitions/schema.SiteLegalSimpleResp'
       site_seo:
         $ref: '#/definitions/schema.SiteSeoResp'
       site_users:
@@ -1917,6 +2095,11 @@ definitions:
     type: object
   schema.SiteLegalReq:
     properties:
+      external_content_display:
+        enum:
+        - always_display
+        - ask_before_display
+        type: string
       privacy_policy_original_text:
         type: string
       privacy_policy_parsed_text:
@@ -1925,9 +2108,16 @@ definitions:
         type: string
       terms_of_service_parsed_text:
         type: string
+    required:
+    - external_content_display
     type: object
   schema.SiteLegalResp:
     properties:
+      external_content_display:
+        enum:
+        - always_display
+        - ask_before_display
+        type: string
       privacy_policy_original_text:
         type: string
       privacy_policy_parsed_text:
@@ -1936,6 +2126,18 @@ definitions:
         type: string
       terms_of_service_parsed_text:
         type: string
+    required:
+    - external_content_display
+    type: object
+  schema.SiteLegalSimpleResp:
+    properties:
+      external_content_display:
+        enum:
+        - always_display
+        - ask_before_display
+        type: string
+    required:
+    - external_content_display
     type: object
   schema.SiteLoginReq:
     properties:
@@ -2069,33 +2271,70 @@ definitions:
     type: object
   schema.SiteWriteReq:
     properties:
-      recommend_tags:
+      authorized_attachment_extensions:
         items:
           type: string
+        type: array
+      authorized_image_extensions:
+        items:
+          type: string
+        type: array
+      max_attachment_size:
+        type: integer
+      max_image_megapixel:
+        type: integer
+      max_image_size:
+        type: integer
+      recommend_tags:
+        items:
+          $ref: '#/definitions/schema.SiteWriteTag'
         type: array
       required_tag:
         type: boolean
       reserved_tags:
         items:
-          type: string
+          $ref: '#/definitions/schema.SiteWriteTag'
         type: array
       restrict_answer:
         type: boolean
     type: object
   schema.SiteWriteResp:
     properties:
-      recommend_tags:
+      authorized_attachment_extensions:
         items:
           type: string
+        type: array
+      authorized_image_extensions:
+        items:
+          type: string
+        type: array
+      max_attachment_size:
+        type: integer
+      max_image_megapixel:
+        type: integer
+      max_image_size:
+        type: integer
+      recommend_tags:
+        items:
+          $ref: '#/definitions/schema.SiteWriteTag'
         type: array
       required_tag:
         type: boolean
       reserved_tags:
         items:
-          type: string
+          $ref: '#/definitions/schema.SiteWriteTag'
         type: array
       restrict_answer:
         type: boolean
+    type: object
+  schema.SiteWriteTag:
+    properties:
+      display_name:
+        type: string
+      slug_name:
+        type: string
+    required:
+    - slug_name
     type: object
   schema.TagItem:
     properties:
@@ -2197,6 +2436,19 @@ definitions:
       url_title:
         type: string
     type: object
+  schema.UpdateBadgeStatusReq:
+    properties:
+      id:
+        description: badge id
+        type: string
+      status:
+        allOf:
+        - $ref: '#/definitions/schema.BadgeStatus'
+        description: badge status
+    required:
+    - id
+    - status
+    type: object
   schema.UpdateCommentReq:
     properties:
       captcha_code:
@@ -2239,6 +2491,7 @@ definitions:
         type: string
       username:
         maxLength: 30
+        minLength: 2
         type: string
       website:
         maxLength: 500
@@ -2670,6 +2923,7 @@ definitions:
         type: string
       name:
         maxLength: 30
+        minLength: 2
         type: string
       pass:
         maxLength: 32
@@ -2736,6 +2990,8 @@ definitions:
     type: object
 info:
   contact: {}
+  description: Apache Answer API
+  title: Apache Answer
 paths:
   /:
     get:
@@ -2814,6 +3070,75 @@ paths:
       summary: update answer status
       tags:
       - admin
+  /answer/admin/api/badge/status:
+    put:
+      consumes:
+      - application/json
+      description: update badge status
+      parameters:
+      - description: UpdateBadgeStatusReq
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/schema.UpdateBadgeStatusReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.RespBody'
+      security:
+      - ApiKeyAuth: []
+      summary: update badge status
+      tags:
+      - AdminBadge
+  /answer/admin/api/badges:
+    get:
+      consumes:
+      - application/json
+      description: list all badges by page
+      parameters:
+      - description: page
+        in: query
+        name: page
+        type: integer
+      - description: page size
+        in: query
+        name: page_size
+        type: integer
+      - description: badge status
+        enum:
+        - ""
+        - active
+        - inactive
+        in: query
+        name: status
+        type: string
+      - description: search param
+        in: query
+        name: q
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/handler.RespBody'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/schema.GetBadgeListPagedResp'
+                  type: array
+              type: object
+      security:
+      - ApiKeyAuth: []
+      summary: list all badges by page
+      tags:
+      - AdminBadge
   /answer/admin/api/dashboard:
     get:
       consumes:
@@ -2831,6 +3156,30 @@ paths:
       summary: DashboardInfo
       tags:
       - admin
+  /answer/admin/api/delete/permanently:
+    delete:
+      consumes:
+      - application/json
+      description: delete permanently
+      parameters:
+      - description: DeletePermanentlyReq
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/schema.DeletePermanentlyReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.RespBody'
+      security:
+      - ApiKeyAuth: []
+      summary: delete permanently
+      tags:
+      - admin
   /answer/admin/api/language/options:
     get:
       description: Get language options
@@ -2841,6 +3190,8 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/handler.RespBody'
+      security:
+      - ApiKeyAuth: []
       summary: Get language options
       tags:
       - Lang
@@ -3068,6 +3419,8 @@ paths:
                     $ref: '#/definitions/schema.GetRoleResp'
                   type: array
               type: object
+      security:
+      - ApiKeyAuth: []
       summary: get role list
       tags:
       - admin
@@ -4034,8 +4387,6 @@ paths:
           description: OK
           schema:
             type: string
-      security:
-      - ApiKeyAuth: []
       summary: AnswerList
       tags:
       - api-answer
@@ -4063,6 +4414,149 @@ paths:
       summary: recover answer
       tags:
       - Answer
+  /answer/api/v1/badge:
+    get:
+      consumes:
+      - application/json
+      description: get badge info
+      parameters:
+      - default: string
+        description: id
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/handler.RespBody'
+            - properties:
+                data:
+                  $ref: '#/definitions/schema.GetBadgeInfoResp'
+              type: object
+      summary: get badge info
+      tags:
+      - api-badge
+  /answer/api/v1/badge/awards/page:
+    get:
+      consumes:
+      - application/json
+      description: get badge award list
+      parameters:
+      - description: page
+        in: query
+        name: page
+        type: integer
+      - description: page size
+        in: query
+        name: page_size
+        type: integer
+      - description: badge id
+        in: query
+        name: badge_id
+        required: true
+        type: string
+      - description: only list the award by username
+        in: query
+        name: username
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/handler.RespBody'
+            - properties:
+                data:
+                  $ref: '#/definitions/schema.GetBadgeInfoResp'
+              type: object
+      summary: get badge award list
+      tags:
+      - api-badge
+  /answer/api/v1/badge/user/awards:
+    get:
+      consumes:
+      - application/json
+      description: get user badge award list
+      parameters:
+      - description: user name
+        in: query
+        name: username
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/handler.RespBody'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/schema.GetUserBadgeAwardListResp'
+                  type: array
+              type: object
+      summary: get user badge award list
+      tags:
+      - api-badge
+  /answer/api/v1/badge/user/awards/recent:
+    get:
+      consumes:
+      - application/json
+      description: get user badge award list
+      parameters:
+      - description: user name
+        in: query
+        name: username
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/handler.RespBody'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/schema.GetUserBadgeAwardListResp'
+                  type: array
+              type: object
+      summary: get user badge award list
+      tags:
+      - api-badge
+  /answer/api/v1/badges:
+    get:
+      consumes:
+      - application/json
+      description: list all badges group by group
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/handler.RespBody'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/schema.GetBadgeListResp'
+                  type: array
+              type: object
+      summary: list all badges group by group
+      tags:
+      - api-badge
   /answer/api/v1/collection/switch:
     post:
       consumes:
@@ -4341,7 +4835,7 @@ paths:
     get:
       consumes:
       - application/json
-      description: GetEmbedConfig
+      description: get embed plugin config
       produces:
       - application/json
       responses:
@@ -4353,12 +4847,12 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/schema.GetEmbedOptionResp'
+                    $ref: '#/definitions/plugin.EmbedConfig'
                   type: array
               type: object
-      summary: GetEmbedConfig
+      summary: get embed plugin config
       tags:
-      - PluginEmbed
+      - Plugin
   /answer/api/v1/file:
     post:
       consumes:
@@ -4368,6 +4862,7 @@ paths:
       - description: identify the source of the file upload
         enum:
         - post
+        - post_attachment
         - avatar
         - branding
         in: formData
@@ -4502,8 +4997,6 @@ paths:
                 data:
                   $ref: '#/definitions/schema.ReactionRespItem'
               type: object
-      security:
-      - ApiKeyAuth: []
       summary: get reaction
       tags:
       - Meta
@@ -4865,8 +5358,6 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/handler.RespBody'
-      security:
-      - ApiKeyAuth: []
       summary: UserTop
       tags:
       - Question
@@ -4993,8 +5484,6 @@ paths:
                     $ref: '#/definitions/schema.GetPluginListResp'
                   type: array
               type: object
-      security:
-      - ApiKeyAuth: []
       summary: get all plugins status
       tags:
       - Plugin
@@ -5135,8 +5624,6 @@ paths:
           description: OK
           schema:
             type: string
-      security:
-      - ApiKeyAuth: []
       summary: get question details
       tags:
       - Question
@@ -5159,8 +5646,6 @@ paths:
           description: OK
           schema:
             type: string
-      security:
-      - ApiKeyAuth: []
       summary: get question invite user info
       tags:
       - Question
@@ -5185,6 +5670,58 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: update question invite user
+      tags:
+      - Question
+  /answer/api/v1/question/link:
+    get:
+      description: get question link
+      parameters:
+      - in: query
+        minimum: 1
+        name: in_days
+        type: integer
+      - enum:
+        - newest
+        - active
+        - hot
+        - score
+        - unanswered
+        - recommend
+        - frequent
+        in: query
+        name: order
+        type: string
+      - in: query
+        minimum: 1
+        name: page
+        type: integer
+      - in: query
+        maximum: 100
+        minimum: 1
+        name: page_size
+        type: integer
+      - in: query
+        name: question_id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/handler.RespBody'
+            - properties:
+                data:
+                  allOf:
+                  - $ref: '#/definitions/pager.PageModel'
+                  - properties:
+                      list:
+                        items:
+                          $ref: '#/definitions/schema.QuestionPageResp'
+                        type: array
+                    type: object
+              type: object
+      summary: get question link
       tags:
       - Question
   /answer/api/v1/question/operation:
@@ -5243,6 +5780,40 @@ paths:
                     type: object
               type: object
       summary: get questions by page
+      tags:
+      - Question
+  /answer/api/v1/question/recommend/page:
+    get:
+      consumes:
+      - application/json
+      description: get recommend questions by page
+      parameters:
+      - description: QuestionPageReq
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/schema.QuestionPageReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/handler.RespBody'
+            - properties:
+                data:
+                  allOf:
+                  - $ref: '#/definitions/pager.PageModel'
+                  - properties:
+                      list:
+                        items:
+                          $ref: '#/definitions/schema.QuestionPageResp'
+                        type: array
+                    type: object
+              type: object
+      summary: get recommend questions by page
       tags:
       - Question
   /answer/api/v1/question/recover:
@@ -5382,7 +5953,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/schema.GetTagResp'
+                    $ref: '#/definitions/schema.GetTagBasicResp'
                   type: array
               type: object
       security:
@@ -5428,6 +5999,26 @@ paths:
       summary: get reasons by object type and action
       tags:
       - reason
+  /answer/api/v1/render/config:
+    get:
+      consumes:
+      - application/json
+      description: GetRenderConfig
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/handler.RespBody'
+            - properties:
+                data:
+                  $ref: '#/definitions/plugin.RenderConfig'
+              type: object
+      summary: GetRenderConfig
+      tags:
+      - PluginRender
   /answer/api/v1/report:
     post:
       consumes:
@@ -5448,7 +6039,6 @@ paths:
           schema:
             $ref: '#/definitions/handler.RespBody'
       security:
-      - ApiKeyAuth: []
       - ApiKeyAuth: []
       summary: add report
       tags:
@@ -5473,7 +6063,6 @@ paths:
           schema:
             $ref: '#/definitions/handler.RespBody'
       security:
-      - ApiKeyAuth: []
       - ApiKeyAuth: []
       summary: review report
       tags:
@@ -5532,7 +6121,6 @@ paths:
           schema:
             $ref: '#/definitions/handler.RespBody'
       security:
-      - ApiKeyAuth: []
       - ApiKeyAuth: []
       summary: update review
       tags:
@@ -5820,6 +6408,8 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/handler.RespBody'
+      security:
+      - ApiKeyAuth: []
       summary: delete tag
       tags:
       - Tag
@@ -5871,6 +6461,8 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/handler.RespBody'
+      security:
+      - ApiKeyAuth: []
       summary: add tag
       tags:
       - Tag
@@ -5892,7 +6484,33 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/handler.RespBody'
+      security:
+      - ApiKeyAuth: []
       summary: update tag
+      tags:
+      - Tag
+  /answer/api/v1/tag/merge:
+    post:
+      consumes:
+      - application/json
+      description: merge tag
+      parameters:
+      - description: tag
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/schema.AddTagReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.RespBody'
+      security:
+      - ApiKeyAuth: []
+      summary: merge tag
       tags:
       - Tag
   /answer/api/v1/tag/recover:
@@ -5914,6 +6532,8 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/handler.RespBody'
+      security:
+      - ApiKeyAuth: []
       summary: recover delete tag
       tags:
       - Tag
@@ -5936,6 +6556,8 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/handler.RespBody'
+      security:
+      - ApiKeyAuth: []
       summary: update tag
       tags:
       - Tag
@@ -5965,7 +6587,7 @@ paths:
       - Tag
   /answer/api/v1/tags:
     get:
-      description: get tags list
+      description: get tags list by slug name
       parameters:
       - collectionFormat: csv
         description: string collection
@@ -5980,7 +6602,14 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/handler.RespBody'
+            allOf:
+            - $ref: '#/definitions/handler.RespBody'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/schema.GetTagBasicResp'
+                  type: array
+              type: object
       summary: get tags list
       tags:
       - Tag
@@ -6123,6 +6752,8 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/handler.RespBody'
+      security:
+      - ApiKeyAuth: []
       summary: send email to the user email then change their email
       tags:
       - User
@@ -6328,6 +6959,8 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/handler.RespBody'
+      security:
+      - ApiKeyAuth: []
       summary: user logout
       tags:
       - User
@@ -6556,8 +7189,6 @@ paths:
                 data:
                   $ref: '#/definitions/schema.UserRankingResp'
               type: object
-      security:
-      - ApiKeyAuth: []
       summary: get user ranking
       tags:
       - User
@@ -6594,12 +7225,16 @@ paths:
       - application/json
       description: get user staff
       parameters:
-      - description: GetUserStaffReq
-        in: body
-        name: data
+      - description: username
+        in: query
+        name: username
         required: true
-        schema:
-          $ref: '#/definitions/schema.GetUserStaffReq'
+        type: string
+      - description: page_size
+        in: query
+        name: page_size
+        required: true
+        type: string
       produces:
       - application/json
       responses:
@@ -6612,8 +7247,6 @@ paths:
                 data:
                   $ref: '#/definitions/schema.GetUserStaffResp'
               type: object
-      security:
-      - ApiKeyAuth: []
       summary: get user staff
       tags:
       - User
@@ -6677,15 +7310,15 @@ paths:
       - Activity
   /custom.css:
     get:
-      description: get site robots information
+      description: get site custom CSS
       produces:
-      - application/json
+      - text/css
       responses:
         "200":
           description: OK
           schema:
             type: string
-      summary: get site robots information
+      summary: get site custom CSS
       tags:
       - site
   /installation/base-info:
@@ -6779,6 +7412,25 @@ paths:
       summary: init environment
       tags:
       - installation
+  /installation/language/config:
+    get:
+      description: get installation language config mapping
+      parameters:
+      - description: installation language
+        in: query
+        name: lang
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.RespBody'
+      summary: get installation language config mapping
+      tags:
+      - Lang
   /installation/language/options:
     get:
       description: get installation language options

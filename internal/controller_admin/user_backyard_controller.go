@@ -20,13 +20,13 @@
 package controller_admin
 
 import (
-	"github.com/apache/incubator-answer/internal/base/handler"
-	"github.com/apache/incubator-answer/internal/base/middleware"
-	"github.com/apache/incubator-answer/internal/base/reason"
-	"github.com/apache/incubator-answer/internal/base/translator"
-	"github.com/apache/incubator-answer/internal/schema"
-	"github.com/apache/incubator-answer/internal/service/user_admin"
-	"github.com/apache/incubator-answer/plugin"
+	"github.com/apache/answer/internal/base/handler"
+	"github.com/apache/answer/internal/base/middleware"
+	"github.com/apache/answer/internal/base/reason"
+	"github.com/apache/answer/internal/base/translator"
+	"github.com/apache/answer/internal/schema"
+	"github.com/apache/answer/internal/service/user_admin"
+	"github.com/apache/answer/plugin"
 	"github.com/gin-gonic/gin"
 	"github.com/segmentfault/pacman/errors"
 )
@@ -240,5 +240,25 @@ func (uc *UserAdminController) SendUserActivation(ctx *gin.Context) {
 	}
 
 	err := uc.userService.SendUserActivation(ctx, req)
+	handler.HandleResponse(ctx, err, nil)
+}
+
+// DeletePermanently delete permanently
+// @Summary delete permanently
+// @Description delete permanently
+// @Security ApiKeyAuth
+// @Tags admin
+// @Accept json
+// @Produce json
+// @Param data body schema.DeletePermanentlyReq true "DeletePermanentlyReq"
+// @Success 200 {object} handler.RespBody
+// @Router /answer/admin/api/delete/permanently [delete]
+func (uc *UserAdminController) DeletePermanently(ctx *gin.Context) {
+	req := &schema.DeletePermanentlyReq{}
+	if handler.BindAndCheck(ctx, req) {
+		return
+	}
+
+	err := uc.userService.DeletePermanently(ctx, req)
 	handler.HandleResponse(ctx, err, nil)
 }

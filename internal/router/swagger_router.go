@@ -22,7 +22,7 @@ package router
 import (
 	"fmt"
 
-	"github.com/apache/incubator-answer/docs"
+	"github.com/apache/answer/docs"
 	"github.com/gin-gonic/gin"
 	swaggerfiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
@@ -51,9 +51,5 @@ func (a *SwaggerRouter) Register(r *gin.RouterGroup) {
 
 // InitSwaggerDocs init swagger docs
 func (a *SwaggerRouter) InitSwaggerDocs() {
-	docs.SwaggerInfo.Title = "answer"
-	docs.SwaggerInfo.Description = "answer api"
-	docs.SwaggerInfo.Version = "v0.0.1"
 	docs.SwaggerInfo.Host = fmt.Sprintf("%s%s", a.config.Host, a.config.Address)
-	docs.SwaggerInfo.BasePath = "/"
 }

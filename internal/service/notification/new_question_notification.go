@@ -24,12 +24,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/apache/incubator-answer/internal/base/constant"
-	"github.com/apache/incubator-answer/internal/base/translator"
-	"github.com/apache/incubator-answer/internal/schema"
-	"github.com/apache/incubator-answer/pkg/display"
-	"github.com/apache/incubator-answer/pkg/token"
-	"github.com/apache/incubator-answer/plugin"
+	"github.com/apache/answer/internal/base/constant"
+	"github.com/apache/answer/internal/base/translator"
+	"github.com/apache/answer/internal/schema"
+	"github.com/apache/answer/pkg/display"
+	"github.com/apache/answer/pkg/token"
+	"github.com/apache/answer/plugin"
 	"github.com/jinzhu/copier"
 	"github.com/segmentfault/pacman/i18n"
 	"github.com/segmentfault/pacman/log"
@@ -162,6 +162,9 @@ func (ns *ExternalNotificationService) checkSendNewQuestionNotificationEmailLimi
 
 func (ns *ExternalNotificationService) sendNewQuestionNotificationEmail(ctx context.Context,
 	userID string, rawData *schema.NewQuestionTemplateRawData) {
+	if unavailable := ns.checkUserStatusBeforeNotification(ctx, userID); unavailable {
+		return
+	}
 	userInfo, exist, err := ns.userRepo.GetByUserID(ctx, userID)
 	if err != nil {
 		log.Error(err)

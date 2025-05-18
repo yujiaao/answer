@@ -24,17 +24,17 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/apache/incubator-answer/internal/entity"
-	"github.com/apache/incubator-answer/internal/service/activity_common"
-	"github.com/apache/incubator-answer/internal/service/activity_type"
-	"github.com/apache/incubator-answer/pkg/obj"
+	"github.com/apache/answer/internal/entity"
+	"github.com/apache/answer/internal/service/activity_common"
+	"github.com/apache/answer/internal/service/activity_type"
+	"github.com/apache/answer/pkg/obj"
 	"xorm.io/builder"
 	"xorm.io/xorm"
 
-	"github.com/apache/incubator-answer/internal/base/data"
-	"github.com/apache/incubator-answer/internal/base/reason"
-	"github.com/apache/incubator-answer/internal/service/config"
-	"github.com/apache/incubator-answer/internal/service/unique"
+	"github.com/apache/answer/internal/base/data"
+	"github.com/apache/answer/internal/base/reason"
+	"github.com/apache/answer/internal/service/config"
+	"github.com/apache/answer/internal/service/unique"
 	"github.com/segmentfault/pacman/errors"
 )
 
@@ -104,6 +104,19 @@ func (ar *ActivityRepo) GetActivity(ctx context.Context, session *xorm.Session,
 		And(builder.Eq{"user_id": userID}).
 		And(builder.Eq{"activity_type": activityType}).
 		Get(existsActivity)
+	return
+}
+
+func (ar *ActivityRepo) GetUserActivitiesByActivityType(ctx context.Context, userID string, activityType int) (
+	activityList []*entity.Activity, err error) {
+	activityList = make([]*entity.Activity, 0)
+	err = ar.data.DB.Context(ctx).Where("user_id = ?", userID).
+		And("activity_type = ?", activityType).
+		And("cancelled = 0").
+		Find(&activityList)
+	if err != nil {
+		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
 	return
 }
 

@@ -30,6 +30,7 @@ import {
   loginToContinueStore,
   pageTagStore,
   writeSettingStore,
+  siteLealStore,
 } from '@/stores';
 import { RouteAlias } from '@/router/alias';
 import {
@@ -46,7 +47,6 @@ type TLoginState = {
   isLogged: boolean;
   isNotActivated: boolean;
   isActivated: boolean;
-  isForbidden: boolean;
   isNormal: boolean;
   isAdmin: boolean;
   isModerator: boolean;
@@ -71,7 +71,6 @@ export const deriveLoginState = (): TLoginState => {
     isLogged: false,
     isNotActivated: false,
     isActivated: false,
-    isForbidden: false,
     isNormal: false,
     isAdmin: false,
     isModerator: false,
@@ -86,10 +85,8 @@ export const deriveLoginState = (): TLoginState => {
   if (ls.isLogged && user.mail_status === 2) {
     ls.isNotActivated = true;
   }
-  if (ls.isLogged && user.status === 'suspended') {
-    ls.isForbidden = true;
-  }
-  if (ls.isActivated && !ls.isForbidden) {
+
+  if (ls.isActivated) {
     ls.isNormal = true;
   }
   if (ls.isNormal && user.role_id === 2) {
@@ -203,26 +200,6 @@ export const activated = () => {
   return gr;
 };
 
-export const forbidden = () => {
-  const gr: TGuardResult = { ok: true };
-  const us = deriveLoginState();
-  if (gr.ok && !us.isForbidden) {
-    gr.ok = false;
-    gr.redirect = RouteAlias.home;
-  }
-  return gr;
-};
-
-export const notForbidden = () => {
-  const gr: TGuardResult = { ok: true };
-  const us = deriveLoginState();
-  if (us.isForbidden) {
-    gr.ok = false;
-    gr.redirect = RouteAlias.suspended;
-  }
-  return gr;
-};
-
 export const admin = () => {
   const gr = logged();
   const us = deriveLoginState();
@@ -321,10 +298,6 @@ export const tryNormalLogged = (canNavigate: boolean = false) => {
   }
   if (us.isNotActivated) {
     floppyNavigation.navigate(RouteAlias.inactive);
-  } else if (us.isForbidden) {
-    floppyNavigation.navigate(RouteAlias.suspended, {
-      handler: 'replace',
-    });
   }
 
   return false;
@@ -408,9 +381,13 @@ export const initAppSettingsStore = async () => {
     customizeStore.getState().update(appSettings.custom_css_html);
     themeSettingStore.getState().update(appSettings.theme);
     seoSettingStore.getState().update(appSettings.site_seo);
-    writeSettingStore
-      .getState()
-      .update({ restrict_answer: appSettings.site_write.restrict_answer });
+    writeSettingStore.getState().update({
+      restrict_answer: appSettings.site_write.restrict_answer,
+      ...appSettings.site_write,
+    });
+    siteLealStore.getState().update({
+      external_content_display: appSettings.site_legal.external_content_display,
+    });
   }
 };
 

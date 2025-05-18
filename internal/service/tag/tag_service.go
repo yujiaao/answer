@@ -24,21 +24,21 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/apache/incubator-answer/internal/base/constant"
-	"github.com/apache/incubator-answer/internal/service/activity_queue"
-	"github.com/apache/incubator-answer/internal/service/revision_common"
-	"github.com/apache/incubator-answer/internal/service/siteinfo_common"
-	tagcommonser "github.com/apache/incubator-answer/internal/service/tag_common"
-	"github.com/apache/incubator-answer/pkg/htmltext"
+	"github.com/apache/answer/internal/base/constant"
+	"github.com/apache/answer/internal/service/activity_queue"
+	"github.com/apache/answer/internal/service/revision_common"
+	"github.com/apache/answer/internal/service/siteinfo_common"
+	tagcommonser "github.com/apache/answer/internal/service/tag_common"
+	"github.com/apache/answer/pkg/htmltext"
 	"github.com/jinzhu/copier"
 
-	"github.com/apache/incubator-answer/internal/base/pager"
-	"github.com/apache/incubator-answer/internal/base/reason"
-	"github.com/apache/incubator-answer/internal/entity"
-	"github.com/apache/incubator-answer/internal/schema"
-	"github.com/apache/incubator-answer/internal/service/activity_common"
-	"github.com/apache/incubator-answer/internal/service/permission"
-	"github.com/apache/incubator-answer/pkg/converter"
+	"github.com/apache/answer/internal/base/pager"
+	"github.com/apache/answer/internal/base/reason"
+	"github.com/apache/answer/internal/entity"
+	"github.com/apache/answer/internal/schema"
+	"github.com/apache/answer/internal/service/activity_common"
+	"github.com/apache/answer/internal/service/permission"
+	"github.com/apache/answer/pkg/converter"
 	"github.com/segmentfault/pacman/errors"
 	"github.com/segmentfault/pacman/log"
 )
@@ -186,7 +186,7 @@ func (ts *TagService) GetTagInfo(ctx context.Context, req *schema.GetTagInfoReq)
 	resp.Reserved = tagInfo.Reserved
 	resp.IsFollower = ts.checkTagIsFollow(ctx, req.UserID, tagInfo.ID)
 	resp.Status = entity.TagStatusDisplayMapping[tagInfo.Status]
-	resp.MemberActions = permission.GetTagPermission(ctx, tagInfo.Status, req.CanEdit, req.CanDelete, req.CanRecover)
+	resp.MemberActions = permission.GetTagPermission(ctx, tagInfo.Status, req.CanEdit, req.CanDelete, req.CanMerge, req.CanRecover)
 	resp.GetExcerpt()
 	return resp, nil
 }
@@ -432,9 +432,66 @@ func (ts *TagService) GetTagWithPage(ctx context.Context, req *schema.GetTagWith
 		}
 		item.GetExcerpt()
 		resp = append(resp, item)
-
 	}
 	return pager.NewPageModel(total, resp), nil
+}
+
+// MergeTag merge tag
+func (ts *TagService) MergeTag(ctx context.Context, req *schema.MergeTagReq) (err error) {
+	// 1. get source tag and its synonyms
+	sourceTag, exist, err := ts.tagCommonService.GetTagByID(ctx, req.SourceTagID)
+	if err != nil {
+		return err
+	}
+	if !exist {
+		return errors.BadRequest(reason.TagNotFound)
+	}
+
+	sourceTagSynonyms, err := ts.tagRepo.GetTagList(ctx, &entity.Tag{MainTagID: converter.StringToInt64(sourceTag.ID)})
+	if err != nil {
+		return err
+	}
+
+	addSynonymTagList := make([]string, 0)
+	addSynonymTagList = append(addSynonymTagList, sourceTag.SlugName)
+	for _, tag := range sourceTagSynonyms {
+		addSynonymTagList = append(addSynonymTagList, tag.SlugName)
+	}
+
+	// 2. get target tag
+	targetTagInfo, exist, err := ts.tagCommonService.GetTagByID(ctx, req.TargetTagID)
+	if err != nil {
+		return err
+	}
+	if !exist {
+		return errors.BadRequest(reason.TagNotFound)
+	}
+
+	// 3. update source tag and its synonyms as synonyms of target tag
+	if len(addSynonymTagList) > 0 {
+		err = ts.tagRepo.UpdateTagSynonym(ctx, addSynonymTagList, converter.StringToInt64(targetTagInfo.ID), targetTagInfo.SlugName)
+		if err != nil {
+			return err
+		}
+	}
+
+	// 4. update tag followers
+	err = ts.followCommon.MigrateFollowers(ctx, sourceTag.ID, targetTagInfo.ID, "follow")
+	if err != nil {
+		return err
+	}
+
+	// 5. update question tags
+	err = ts.tagCommonService.MigrateTagQuestions(ctx, sourceTag.ID, targetTagInfo.ID)
+	if err != nil {
+		return err
+	}
+	err = ts.tagCommonService.RefreshTagQuestionCount(ctx, []string{targetTagInfo.ID, sourceTag.ID})
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // checkTagIsFollow get tag list page

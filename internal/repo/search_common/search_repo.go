@@ -26,22 +26,22 @@ import (
 	"strings"
 	"time"
 
-	tagcommon "github.com/apache/incubator-answer/internal/service/tag_common"
-	"github.com/apache/incubator-answer/plugin"
+	tagcommon "github.com/apache/answer/internal/service/tag_common"
+	"github.com/apache/answer/plugin"
 
-	"github.com/apache/incubator-answer/pkg/htmltext"
+	"github.com/apache/answer/pkg/htmltext"
 
-	"github.com/apache/incubator-answer/internal/base/data"
-	"github.com/apache/incubator-answer/internal/base/handler"
-	"github.com/apache/incubator-answer/internal/base/reason"
-	"github.com/apache/incubator-answer/internal/entity"
-	"github.com/apache/incubator-answer/internal/schema"
-	"github.com/apache/incubator-answer/internal/service/search_common"
-	"github.com/apache/incubator-answer/internal/service/unique"
-	usercommon "github.com/apache/incubator-answer/internal/service/user_common"
-	"github.com/apache/incubator-answer/pkg/converter"
-	"github.com/apache/incubator-answer/pkg/obj"
-	"github.com/apache/incubator-answer/pkg/uid"
+	"github.com/apache/answer/internal/base/data"
+	"github.com/apache/answer/internal/base/handler"
+	"github.com/apache/answer/internal/base/reason"
+	"github.com/apache/answer/internal/entity"
+	"github.com/apache/answer/internal/schema"
+	"github.com/apache/answer/internal/service/search_common"
+	"github.com/apache/answer/internal/service/unique"
+	usercommon "github.com/apache/answer/internal/service/user_common"
+	"github.com/apache/answer/pkg/converter"
+	"github.com/apache/answer/pkg/obj"
+	"github.com/apache/answer/pkg/uid"
 	"github.com/segmentfault/pacman/errors"
 	"xorm.io/builder"
 )
@@ -99,7 +99,7 @@ func NewSearchRepo(
 }
 
 // SearchContents search question and answer data
-func (sr *searchRepo) SearchContents(ctx context.Context, words []string, tagIDs [][]string, userID string, votes int, page, size int, order string) (resp []*schema.SearchResult, total int64, err error) {
+func (sr *searchRepo) SearchContents(ctx context.Context, words []string, tagIDs [][]string, userID string, votes int, page, pageSize int, order string) (resp []*schema.SearchResult, total int64, err error) {
 	words = filterWords(words)
 
 	var (
@@ -206,7 +206,8 @@ func (sr *searchRepo) SearchContents(ctx context.Context, words []string, tagIDs
 		return
 	}
 
-	querySQL, _, err := builder.MySQL().Select("*").From(sql, "t").OrderBy(sr.parseOrder(ctx, order)).Limit(size, page-1).ToSQL()
+	startNum := (page - 1) * pageSize
+	querySQL, _, err := builder.MySQL().Select("*").From(sql, "t").OrderBy(sr.parseOrder(ctx, order)).Limit(pageSize, startNum).ToSQL()
 	if err != nil {
 		return
 	}
@@ -241,7 +242,7 @@ func (sr *searchRepo) SearchContents(ctx context.Context, words []string, tagIDs
 }
 
 // SearchQuestions search question data
-func (sr *searchRepo) SearchQuestions(ctx context.Context, words []string, tagIDs [][]string, notAccepted bool, views, answers int, page, size int, order string) (resp []*schema.SearchResult, total int64, err error) {
+func (sr *searchRepo) SearchQuestions(ctx context.Context, words []string, tagIDs [][]string, notAccepted bool, views, answers int, page, pageSize int, order string) (resp []*schema.SearchResult, total int64, err error) {
 	words = filterWords(words)
 	var (
 		qfs  = qFields
@@ -320,7 +321,8 @@ func (sr *searchRepo) SearchQuestions(ctx context.Context, words []string, tagID
 		return
 	}
 
-	querySQL, _, err := b.OrderBy(sr.parseOrder(ctx, order)).Limit(size, page-1).ToSQL()
+	startNum := (page - 1) * pageSize
+	querySQL, _, err := b.OrderBy(sr.parseOrder(ctx, order)).Limit(pageSize, startNum).ToSQL()
 	if err != nil {
 		return
 	}
@@ -351,7 +353,7 @@ func (sr *searchRepo) SearchQuestions(ctx context.Context, words []string, tagID
 }
 
 // SearchAnswers search answer data
-func (sr *searchRepo) SearchAnswers(ctx context.Context, words []string, tagIDs [][]string, accepted bool, questionID string, page, size int, order string) (resp []*schema.SearchResult, total int64, err error) {
+func (sr *searchRepo) SearchAnswers(ctx context.Context, words []string, tagIDs [][]string, accepted bool, questionID string, page, pageSize int, order string) (resp []*schema.SearchResult, total int64, err error) {
 	words = filterWords(words)
 
 	var (
@@ -415,7 +417,8 @@ func (sr *searchRepo) SearchAnswers(ctx context.Context, words []string, tagIDs 
 		return
 	}
 
-	querySQL, _, err := b.OrderBy(sr.parseOrder(ctx, order)).Limit(size, page-1).ToSQL()
+	startNum := (page - 1) * pageSize
+	querySQL, _, err := b.OrderBy(sr.parseOrder(ctx, order)).Limit(pageSize, startNum).ToSQL()
 	if err != nil {
 		return
 	}

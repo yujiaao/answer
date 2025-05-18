@@ -54,7 +54,9 @@ const routes: RouteNode[] = [
       if (!gr.ok) {
         return gr;
       }
-      return guard.notForbidden();
+      return {
+        ok: true,
+      };
     },
     children: [
       // question and answer
@@ -106,6 +108,10 @@ const routes: RouteNode[] = [
           {
             path: 'questions/:qid/:slugPermalink/:aid',
             page: 'pages/Questions/Detail',
+          },
+          {
+            path: 'questions/linked/:qid',
+            page: 'pages/Questions/Linked',
           },
           {
             path: '/search',
@@ -217,6 +223,14 @@ const routes: RouteNode[] = [
             path: 'review',
             page: 'pages/Review',
           },
+          {
+            path: '/badges',
+            page: 'pages/Badges/index',
+          },
+          {
+            path: '/badges/:badge_id',
+            page: 'pages/Badges/Detail/index',
+          },
         ],
       },
       {
@@ -297,7 +311,7 @@ const routes: RouteNode[] = [
         path: '/users/account-suspended',
         page: 'pages/Users/Suspended',
         guard: () => {
-          return guard.forbidden();
+          return guard.notLogged();
         },
       },
       {
@@ -399,6 +413,10 @@ const routes: RouteNode[] = [
           {
             path: ':slug_name',
             page: 'pages/Admin/Plugins/Config',
+          },
+          {
+            path: 'badges',
+            page: 'pages/Admin/Badges',
           },
         ],
       },

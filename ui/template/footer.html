@@ -19,17 +19,25 @@
 
 -->
 {{define "footer"}}
-</div>
-        <footer class="bg-light py-3">
-            <div class="container">
-                <p class="text-center mb-0 small text-secondary">
-                  {{$cc := (join " " .siteinfo.Year .siteinfo.General.Name) -}}
-                  {{- $ft := translator $.language "ui.footer.build_on" "cc" $cc -}}
-                  {{templateHTML (replaceHTMLTag $ft "<a href=\"https://answer.apache.org/\" target=\"_blank\"> Answer </a>")}}
-                </p>
-            </div>
+        <footer class="py-3 bg-light w-100">
+          <p class="text-center mb-0 small">
+            <a class="me-3" href="{{$.baseURL}}/tos" data-discover="true">
+              {{translator $.language "ui.admin.legal.terms_of_service.label"}}
+            </a>
+            <a href="{{$.baseURL}}/privacy" data-discover="true">
+              {{translator $.language "ui.admin.legal.privacy_policy.label"}}
+            </a>
+          </p>
+          <p class="text-center mb-0 small text-secondary">
+            {{$cc := (join " " .siteinfo.Year .siteinfo.General.Name) -}}
+            {{- $ft := translator $.language "ui.footer.build_on" "cc" $cc -}}
+            {{templateHTML (replaceHTMLTag $ft "<a href=\"https://answer.apache.org/\" target=\"_blank\"> Answer </a>")}}
+          </p>
         </footer>
+      </div>
     </div>
+  </div>
+</div>
 <!--customize_footer-->
 {{if .FooterCode }}{{.FooterCode | templateHTML}}{{end}}
 <!--customize_footer-->

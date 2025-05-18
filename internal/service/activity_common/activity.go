@@ -23,11 +23,11 @@ import (
 	"context"
 	"time"
 
-	"github.com/apache/incubator-answer/internal/entity"
-	"github.com/apache/incubator-answer/internal/schema"
-	"github.com/apache/incubator-answer/internal/service/activity_queue"
-	"github.com/apache/incubator-answer/pkg/converter"
-	"github.com/apache/incubator-answer/pkg/uid"
+	"github.com/apache/answer/internal/entity"
+	"github.com/apache/answer/internal/schema"
+	"github.com/apache/answer/internal/service/activity_queue"
+	"github.com/apache/answer/pkg/converter"
+	"github.com/apache/answer/pkg/uid"
 	"github.com/segmentfault/pacman/log"
 	"xorm.io/xorm"
 )
@@ -37,6 +37,7 @@ type ActivityRepo interface {
 	GetActivityTypeByObjectType(ctx context.Context, objectKey, action string) (activityType int, err error)
 	GetActivity(ctx context.Context, session *xorm.Session, objectID, userID string, activityType int) (
 		existsActivity *entity.Activity, exist bool, err error)
+	GetUserActivitiesByActivityType(ctx context.Context, userID string, activityType int) (activityList []*entity.Activity, err error)
 	GetUserIDObjectIDActivitySum(ctx context.Context, userID, objectID string) (int, error)
 	GetActivityTypeByConfigKey(ctx context.Context, configKey string) (activityType int, err error)
 	AddActivity(ctx context.Context, activity *entity.Activity) (err error)

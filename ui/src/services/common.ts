@@ -35,11 +35,11 @@ export const queryQuestionByTitle = (title: string) => {
 };
 
 export const useQueryTags = (params) => {
-  const { data, error, mutate } = useSWR<Type.ListResult>(
-    `/answer/api/v1/tags/page?${qs.stringify(params, {
-      skipNulls: true,
-    })}`,
-    request.instance.get,
+  const apiUrl = `/answer/api/v1/tags/page?${qs.stringify(params, {
+    skipNulls: true,
+  })}`;
+  const { data, error, mutate } = useSWR<Type.ListResult>(apiUrl, (url) =>
+    request.get(url, { allow404: true }),
   );
   return {
     data,
@@ -199,6 +199,24 @@ export const questionDetail = (id: string) => {
   );
 };
 
+export const useQuestionLink = (params: {
+  question_id: string;
+  page: number;
+  page_size: number;
+  order?: string;
+}) => {
+  const apiUrl = `/answer/api/v1/question/link?${qs.stringify(params)}`;
+  const { data, error } = useSWR<Type.ListResult, Error>(
+    [apiUrl, params],
+    request.instance.get,
+  );
+  return {
+    data,
+    isLoading: !data && !error,
+    error,
+  };
+};
+
 export const getAnswers = (params: Type.AnswersReq) => {
   const apiUrl = `/answer/api/v1/answer/page?${qs.stringify(params)}`;
   return request.get<Type.ListResult<Type.AnswerItem>>(apiUrl);
@@ -323,4 +341,8 @@ export const questionOperation = (params: Type.QuestionOperationReq) => {
 
 export const getPluginsStatus = () => {
   return request.get<Type.ActivatedPlugin[]>('/answer/api/v1/plugin/status');
+};
+
+export const deletePermanently = (type: string) => {
+  return request.delete('/answer/admin/api/delete/permanently', { type });
 };

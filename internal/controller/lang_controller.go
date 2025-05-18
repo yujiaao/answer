@@ -22,9 +22,9 @@ package controller
 import (
 	"encoding/json"
 
-	"github.com/apache/incubator-answer/internal/base/handler"
-	"github.com/apache/incubator-answer/internal/base/translator"
-	"github.com/apache/incubator-answer/internal/service/siteinfo_common"
+	"github.com/apache/answer/internal/base/handler"
+	"github.com/apache/answer/internal/base/translator"
+	"github.com/apache/answer/internal/service/siteinfo_common"
 	"github.com/gin-gonic/gin"
 	"github.com/segmentfault/pacman/i18n"
 )
@@ -57,6 +57,7 @@ func (u *LangController) GetLangMapping(ctx *gin.Context) {
 // GetAdminLangOptions Get language options
 // @Summary Get language options
 // @Description Get language options
+// @Security ApiKeyAuth
 // @Tags Lang
 // @Produce json
 // @Success 200 {object} handler.RespBody{}

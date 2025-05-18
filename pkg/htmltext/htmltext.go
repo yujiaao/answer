@@ -27,28 +27,12 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/Chain-Zhang/pinyin"
 	"github.com/Machiel/slugify"
+	"github.com/apache/answer/pkg/checker"
+	"github.com/apache/answer/pkg/converter"
 	strip "github.com/grokify/html-strip-tags-go"
-
-	"github.com/apache/incubator-answer/pkg/checker"
-	"github.com/apache/incubator-answer/pkg/converter"
+	"github.com/mozillazg/go-pinyin"
 )
-
-// min() and max() can be removed starting from Go1.21
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
 
 // ClearText clear HTML, get the clear text
 func ClearText(html string) (text string) {
@@ -112,11 +96,7 @@ func convertChinese(content string) string {
 	if !has {
 		return content
 	}
-	str, err := pinyin.New(content).Split("-").Mode(pinyin.WithoutTone).Convert()
-	if err != nil {
-		return content
-	}
-	return str
+	return strings.Join(pinyin.LazyConvert(content, nil), "-")
 }
 
 func cutLongTitle(title string) string {

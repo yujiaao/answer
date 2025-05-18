@@ -25,8 +25,8 @@ import (
 
 	"github.com/segmentfault/pacman/i18n"
 
-	"github.com/apache/incubator-answer/internal/base/handler"
-	"github.com/apache/incubator-answer/internal/base/translator"
+	"github.com/apache/answer/internal/base/handler"
+	"github.com/apache/answer/internal/base/translator"
 	"github.com/gin-gonic/gin"
 )
 
@@ -103,8 +103,16 @@ func Register(p Base) {
 		registerEmbed(p.(Embed))
 	}
 
+	if _, ok := p.(Render); ok {
+		registerRender(p.(Render))
+	}
+
 	if _, ok := p.(CDN); ok {
 		registerCDN(p.(CDN))
+	}
+
+	if _, ok := p.(Importer); ok {
+		registerImporter(p.(Importer))
 	}
 }
 
@@ -219,7 +227,7 @@ func MakeTranslator(key string) Translator {
 
 // Translate translates the key to the current language of the context
 func (t Translator) Translate(ctx *GinContext) string {
-	if &t == nil || t.Fn == nil {
+	if t.Fn == nil {
 		return ""
 	}
 	return t.Fn(ctx)

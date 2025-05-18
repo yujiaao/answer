@@ -18,10 +18,11 @@
  */
 
 /* eslint-disable no-nested-ternary */
-import { FC, useState, useEffect, useRef } from 'react';
+import { FC, useState, useEffect, useRef, useCallback } from 'react';
 import { Dropdown, Button, Form } from 'react-bootstrap';
 import { useTranslation } from 'react-i18next';
 
+import debounce from 'lodash/debounce';
 import { marked } from 'marked';
 import classNames from 'classnames';
 
@@ -69,7 +70,7 @@ const TagSelector: FC<IProps> = ({
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [repeatIndex, setRepeatIndex] = useState(-1);
   const [searchValue, setSearchValue] = useState<string>('');
-  const [tags, setTags] = useState<Type.Tag[] | null>(null);
+  const [tags, setTags] = useState<Type.Tag[] | null>([]);
   const [requiredTags, setRequiredTags] = useState<Type.Tag[] | null>(null);
   const { t } = useTranslation('translation', { keyPrefix: 'tag_selector' });
   const { data: userPermission } = useUserPermission('tag.add');
@@ -146,20 +147,23 @@ const TagSelector: FC<IProps> = ({
     handleMenuShow(false);
   };
 
-  const fetchTags = (str) => {
-    if (!showRequiredTag && !str) {
-      setTags([]);
-      return;
-    }
-    queryTags(str).then((res) => {
-      const tagArray: Type.Tag[] = filterTags(res || []);
-      if (str === '') {
-        setRequiredTags(res);
+  const fetchTags = useCallback(
+    debounce((str) => {
+      if (!showRequiredTag && !str) {
+        setTags([]);
+        return;
       }
-      handleMenuShow(tagArray.length > 0);
-      setTags(tagArray);
-    });
-  };
+      queryTags(str).then((res) => {
+        const tagArray: Type.Tag[] = filterTags(res || []);
+        if (str === '') {
+          setRequiredTags(res);
+        }
+        handleMenuShow(tagArray.length > 0);
+        setTags(tagArray);
+      });
+    }, 400),
+    [],
+  );
 
   const resetSearch = () => {
     setCurrentIndex(0);
@@ -229,7 +233,7 @@ const TagSelector: FC<IProps> = ({
     e.stopPropagation();
     const { keyCode } = e;
     if (keyCode === 9) {
-      handleTagSelectorBlur();
+      // handleTagSelectorBlur();
       return;
     }
     if (value.length > 0 && keyCode === 8 && !searchValue) {
@@ -365,13 +369,12 @@ const TagSelector: FC<IProps> = ({
   return (
     <div ref={containerRef} className="position-relative">
       <div
-        tabIndex={0}
         className={classNames(
           'tag-selector-wrap form-control position-relative p-0',
           focusState ? 'tag-selector-wrap--focus' : '',
           isInvalid ? 'is-invalid' : '',
         )}
-        onFocus={handleTagSelectorFocus}
+        onClick={handleTagSelectorFocus}
         onKeyDown={handleKeyDown}>
         <div onClick={handleClickToggle}>
           <div
@@ -410,6 +413,7 @@ const TagSelector: FC<IProps> = ({
                 placeholder={t('add_btn')}
                 value={searchValue}
                 onChange={handleSearch}
+                onFocus={handleTagSelectorFocus}
               />
             ) : (
               <Form.Control

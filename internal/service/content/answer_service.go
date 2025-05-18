@@ -24,27 +24,29 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/apache/incubator-answer/internal/base/constant"
-	"github.com/apache/incubator-answer/internal/base/reason"
-	"github.com/apache/incubator-answer/internal/entity"
-	"github.com/apache/incubator-answer/internal/schema"
-	"github.com/apache/incubator-answer/internal/service/activity"
-	"github.com/apache/incubator-answer/internal/service/activity_common"
-	"github.com/apache/incubator-answer/internal/service/activity_queue"
-	answercommon "github.com/apache/incubator-answer/internal/service/answer_common"
-	collectioncommon "github.com/apache/incubator-answer/internal/service/collection_common"
-	"github.com/apache/incubator-answer/internal/service/export"
-	"github.com/apache/incubator-answer/internal/service/notice_queue"
-	"github.com/apache/incubator-answer/internal/service/permission"
-	questioncommon "github.com/apache/incubator-answer/internal/service/question_common"
-	"github.com/apache/incubator-answer/internal/service/review"
-	"github.com/apache/incubator-answer/internal/service/revision_common"
-	"github.com/apache/incubator-answer/internal/service/role"
-	usercommon "github.com/apache/incubator-answer/internal/service/user_common"
-	"github.com/apache/incubator-answer/pkg/converter"
-	"github.com/apache/incubator-answer/pkg/htmltext"
-	"github.com/apache/incubator-answer/pkg/token"
-	"github.com/apache/incubator-answer/pkg/uid"
+	"github.com/apache/answer/internal/service/event_queue"
+
+	"github.com/apache/answer/internal/base/constant"
+	"github.com/apache/answer/internal/base/reason"
+	"github.com/apache/answer/internal/entity"
+	"github.com/apache/answer/internal/schema"
+	"github.com/apache/answer/internal/service/activity"
+	"github.com/apache/answer/internal/service/activity_common"
+	"github.com/apache/answer/internal/service/activity_queue"
+	answercommon "github.com/apache/answer/internal/service/answer_common"
+	collectioncommon "github.com/apache/answer/internal/service/collection_common"
+	"github.com/apache/answer/internal/service/export"
+	"github.com/apache/answer/internal/service/notice_queue"
+	"github.com/apache/answer/internal/service/permission"
+	questioncommon "github.com/apache/answer/internal/service/question_common"
+	"github.com/apache/answer/internal/service/review"
+	"github.com/apache/answer/internal/service/revision_common"
+	"github.com/apache/answer/internal/service/role"
+	usercommon "github.com/apache/answer/internal/service/user_common"
+	"github.com/apache/answer/pkg/converter"
+	"github.com/apache/answer/pkg/htmltext"
+	"github.com/apache/answer/pkg/token"
+	"github.com/apache/answer/pkg/uid"
 	"github.com/segmentfault/pacman/errors"
 	"github.com/segmentfault/pacman/log"
 )
@@ -67,6 +69,7 @@ type AnswerService struct {
 	externalNotificationQueueService notice_queue.ExternalNotificationQueueService
 	activityQueueService             activity_queue.ActivityQueueService
 	reviewService                    *review.ReviewService
+	eventQueueService                event_queue.EventQueueService
 }
 
 func NewAnswerService(
@@ -86,6 +89,7 @@ func NewAnswerService(
 	externalNotificationQueueService notice_queue.ExternalNotificationQueueService,
 	activityQueueService activity_queue.ActivityQueueService,
 	reviewService *review.ReviewService,
+	eventQueueService event_queue.EventQueueService,
 ) *AnswerService {
 	return &AnswerService{
 		answerRepo:                       answerRepo,
@@ -104,6 +108,7 @@ func NewAnswerService(
 		externalNotificationQueueService: externalNotificationQueueService,
 		activityQueueService:             activityQueueService,
 		reviewService:                    reviewService,
+		eventQueueService:                eventQueueService,
 	}
 }
 
@@ -162,6 +167,17 @@ func (as *AnswerService) RemoveAnswer(ctx context.Context, req *schema.RemoveAns
 	if err != nil {
 		log.Error("user IncreaseAnswerCount error", err.Error())
 	}
+	err = as.questionRepo.RemoveQuestionLink(ctx, &entity.QuestionLink{
+		FromQuestionID: answerInfo.QuestionID,
+		FromAnswerID:   answerInfo.ID,
+	}, &entity.QuestionLink{
+		ToQuestionID: answerInfo.QuestionID,
+		ToAnswerID:   answerInfo.ID,
+	})
+	if err != nil {
+		log.Error("RemoveQuestionLink error", err.Error())
+	}
+
 	// #2372 In order to simplify the process and complexity, as well as to consider if it is in-house,
 	// facing the problem of recovery.
 	//err = as.answerActivityService.DeleteAnswer(ctx, answerInfo.ID, answerInfo.CreatedAt, answerInfo.VoteCount)
@@ -175,6 +191,8 @@ func (as *AnswerService) RemoveAnswer(ctx context.Context, req *schema.RemoveAns
 		OriginalObjectID: answerInfo.ID,
 		ActivityTypeKey:  constant.ActAnswerDeleted,
 	})
+	as.eventQueueService.Send(ctx, schema.NewEvent(constant.EventAnswerDelete, req.UserID).TID(answerInfo.ID).
+		AID(answerInfo.ID, answerInfo.UserID))
 	return
 }
 
@@ -191,6 +209,15 @@ func (as *AnswerService) RecoverAnswer(ctx context.Context, req *schema.RecoverA
 		return nil
 	}
 	if err = as.answerRepo.RecoverAnswer(ctx, req.AnswerID); err != nil {
+		return err
+	}
+	if err = as.questionRepo.RecoverQuestionLink(ctx, &entity.QuestionLink{
+		FromQuestionID: answerInfo.QuestionID,
+		FromAnswerID:   answerInfo.ID,
+	}, &entity.QuestionLink{
+		ToQuestionID: answerInfo.QuestionID,
+		ToAnswerID:   answerInfo.ID,
+	}); err != nil {
 		return err
 	}
 
@@ -245,6 +272,15 @@ func (as *AnswerService) Insert(ctx context.Context, req *schema.AnswerAddReq) (
 	if err := as.answerRepo.UpdateAnswerStatus(ctx, insertData.ID, insertData.Status); err != nil {
 		return "", err
 	}
+	if insertData.Status == entity.AnswerStatusAvailable {
+		insertData.ParsedText, err = as.questionCommon.UpdateQuestionLink(ctx, insertData.QuestionID, insertData.ID, insertData.ParsedText, insertData.OriginalText)
+		if err != nil {
+			return "", err
+		}
+		if err = as.answerRepo.UpdateAnswer(ctx, insertData, []string{"parsed_text"}); err != nil {
+			return "", err
+		}
+	}
 	err = as.questionCommon.UpdateAnswerCount(ctx, req.QuestionID)
 	if err != nil {
 		log.Error("IncreaseAnswerCount error", err.Error())
@@ -295,6 +331,8 @@ func (as *AnswerService) Insert(ctx context.Context, req *schema.AnswerAddReq) (
 		OriginalObjectID: questionInfo.ID,
 		ActivityTypeKey:  constant.ActQuestionAnswered,
 	})
+	as.eventQueueService.Send(ctx, schema.NewEvent(constant.EventAnswerCreate, req.UserID).TID(insertData.ID).
+		AID(insertData.ID, insertData.UserID))
 	return insertData.ID, nil
 }
 
@@ -358,6 +396,10 @@ func (as *AnswerService) Update(ctx context.Context, req *schema.AnswerUpdateReq
 	if !canUpdate {
 		revisionDTO.Status = entity.RevisionUnreviewedStatus
 	} else {
+		insertData.ParsedText, err = as.questionCommon.UpdateQuestionLink(ctx, insertData.QuestionID, insertData.ID, insertData.ParsedText, insertData.OriginalText)
+		if err != nil {
+			return "", err
+		}
 		if err = as.answerRepo.UpdateAnswer(ctx, insertData, []string{"original_text", "parsed_text", "updated_at", "last_edit_user_id"}); err != nil {
 			return "", err
 		}
@@ -383,6 +425,8 @@ func (as *AnswerService) Update(ctx context.Context, req *schema.AnswerUpdateReq
 			ActivityTypeKey:  constant.ActAnswerEdited,
 			RevisionID:       revisionID,
 		})
+		as.eventQueueService.Send(ctx, schema.NewEvent(constant.EventAnswerUpdate, req.UserID).TID(insertData.ID).
+			AID(insertData.ID, insertData.UserID))
 	}
 
 	return insertData.ID, nil
@@ -434,6 +478,11 @@ func (as *AnswerService) AcceptAnswer(ctx context.Context, req *schema.AcceptAns
 			return err
 		}
 		oldAnswerInfo.ID = uid.DeShortID(oldAnswerInfo.ID)
+	}
+
+	if acceptedAnswerInfo != nil {
+		as.eventQueueService.Send(ctx, schema.NewEvent(constant.EventQuestionAccept, req.UserID).TID(acceptedAnswerInfo.ID).
+			QID(questionInfo.ID, questionInfo.UserID).AID(acceptedAnswerInfo.ID, acceptedAnswerInfo.UserID))
 	}
 
 	as.updateAnswerRank(ctx, req.UserID, questionInfo, acceptedAnswerInfo, oldAnswerInfo)

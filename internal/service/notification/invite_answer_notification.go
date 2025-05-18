@@ -21,11 +21,12 @@ package notification
 
 import (
 	"context"
-	"github.com/apache/incubator-answer/internal/base/constant"
-	"github.com/apache/incubator-answer/internal/schema"
+	"time"
+
+	"github.com/apache/answer/internal/base/constant"
+	"github.com/apache/answer/internal/schema"
 	"github.com/segmentfault/pacman/i18n"
 	"github.com/segmentfault/pacman/log"
-	"time"
 )
 
 func (ns *ExternalNotificationService) handleInviteAnswerNotification(ctx context.Context,
@@ -54,6 +55,9 @@ func (ns *ExternalNotificationService) handleInviteAnswerNotification(ctx contex
 
 func (ns *ExternalNotificationService) sendInviteAnswerNotificationEmail(ctx context.Context,
 	userID, email, lang string, rawData *schema.NewInviteAnswerTemplateRawData) {
+	if unavailable := ns.checkUserStatusBeforeNotification(ctx, userID); unavailable {
+		return
+	}
 	codeContent := &schema.EmailCodeContent{
 		SourceType: schema.UnsubscribeSourceType,
 		NotificationSources: []constant.NotificationSource{

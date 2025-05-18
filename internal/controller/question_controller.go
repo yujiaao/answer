@@ -22,20 +22,20 @@ package controller
 import (
 	"net/http"
 
-	"github.com/apache/incubator-answer/internal/base/handler"
-	"github.com/apache/incubator-answer/internal/base/middleware"
-	"github.com/apache/incubator-answer/internal/base/pager"
-	"github.com/apache/incubator-answer/internal/base/reason"
-	"github.com/apache/incubator-answer/internal/base/translator"
-	"github.com/apache/incubator-answer/internal/base/validator"
-	"github.com/apache/incubator-answer/internal/entity"
-	"github.com/apache/incubator-answer/internal/schema"
-	"github.com/apache/incubator-answer/internal/service/action"
-	"github.com/apache/incubator-answer/internal/service/content"
-	"github.com/apache/incubator-answer/internal/service/permission"
-	"github.com/apache/incubator-answer/internal/service/rank"
-	"github.com/apache/incubator-answer/internal/service/siteinfo_common"
-	"github.com/apache/incubator-answer/pkg/uid"
+	"github.com/apache/answer/internal/base/handler"
+	"github.com/apache/answer/internal/base/middleware"
+	"github.com/apache/answer/internal/base/pager"
+	"github.com/apache/answer/internal/base/reason"
+	"github.com/apache/answer/internal/base/translator"
+	"github.com/apache/answer/internal/base/validator"
+	"github.com/apache/answer/internal/entity"
+	"github.com/apache/answer/internal/schema"
+	"github.com/apache/answer/internal/service/action"
+	"github.com/apache/answer/internal/service/content"
+	"github.com/apache/answer/internal/service/permission"
+	"github.com/apache/answer/internal/service/rank"
+	"github.com/apache/answer/internal/service/siteinfo_common"
+	"github.com/apache/answer/pkg/uid"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
 	"github.com/segmentfault/pacman/errors"
@@ -224,7 +224,6 @@ func (qc *QuestionController) ReopenQuestion(ctx *gin.Context) {
 // @Summary get question details
 // @Description get question details
 // @Tags Question
-// @Security ApiKeyAuth
 // @Accept  json
 // @Produce  json
 // @Param id query string true "Question TagID"  default(1)
@@ -279,7 +278,6 @@ func (qc *QuestionController) GetQuestion(ctx *gin.Context) {
 // @Summary get question invite user info
 // @Description get question invite user info
 // @Tags Question
-// @Security ApiKeyAuth
 // @Accept  json
 // @Produce  json
 // @Param id query string true "Question ID"  default(1)
@@ -333,6 +331,39 @@ func (qc *QuestionController) QuestionPage(ctx *gin.Context) {
 	req.LoginUserID = middleware.GetLoginUserIDFromContext(ctx)
 
 	questions, total, err := qc.questionService.GetQuestionPage(ctx, req)
+	if err != nil {
+		handler.HandleResponse(ctx, err, nil)
+		return
+	}
+	if pager.ValPageOutOfRange(total, req.Page, req.PageSize) {
+		handler.HandleResponse(ctx, errors.NotFound(reason.RequestFormatError), nil)
+		return
+	}
+	handler.HandleResponse(ctx, nil, pager.NewPageModel(total, questions))
+}
+
+// QuestionRecommendPage get recommend questions by page
+// @Summary get recommend questions by page
+// @Description get recommend questions by page
+// @Tags Question
+// @Accept  json
+// @Produce  json
+// @Param data body schema.QuestionPageReq  true "QuestionPageReq"
+// @Success 200 {object} handler.RespBody{data=pager.PageModel{list=[]schema.QuestionPageResp}}
+// @Router /answer/api/v1/question/recommend/page [get]
+func (qc *QuestionController) QuestionRecommendPage(ctx *gin.Context) {
+	req := &schema.QuestionPageReq{}
+	if handler.BindAndCheck(ctx, req) {
+		return
+	}
+	req.LoginUserID = middleware.GetLoginUserIDFromContext(ctx)
+
+	if req.LoginUserID == "" {
+		handler.HandleResponse(ctx, errors.Unauthorized(reason.UnauthorizedError), nil)
+		return
+	}
+
+	questions, total, err := qc.questionService.GetRecommendQuestionPage(ctx, req)
 	if err != nil {
 		handler.HandleResponse(ctx, err, nil)
 		return
@@ -788,7 +819,6 @@ func (qc *QuestionController) GetSimilarQuestions(ctx *gin.Context) {
 // @Tags Question
 // @Accept json
 // @Produce json
-// @Security ApiKeyAuth
 // @Param username query string true "username"  default(string)
 // @Success 200 {object} handler.RespBody
 // @Router /answer/api/v1/personal/qa/top [get]
@@ -944,4 +974,26 @@ func (qc *QuestionController) AdminUpdateQuestionStatus(ctx *gin.Context) {
 
 	err := qc.questionService.AdminSetQuestionStatus(ctx, req)
 	handler.HandleResponse(ctx, err, nil)
+}
+
+// GetQuestionLink get question link
+// @Summary get question link
+// @Description get question link
+// @Tags Question
+// @Param data query schema.GetQuestionLinkReq  true "GetQuestionLinkReq"
+// @Success 200 {object} handler.RespBody{data=pager.PageModel{list=[]schema.QuestionPageResp}}
+// @Router /answer/api/v1/question/link [get]
+func (qc *QuestionController) GetQuestionLink(ctx *gin.Context) {
+	req := &schema.GetQuestionLinkReq{}
+	if handler.BindAndCheck(ctx, req) {
+		return
+	}
+	req.LoginUserID = middleware.GetLoginUserIDFromContext(ctx)
+	req.QuestionID = uid.DeShortID(req.QuestionID)
+	questions, total, err := qc.questionService.GetQuestionLink(ctx, req)
+	if err != nil {
+		handler.HandleResponse(ctx, err, nil)
+		return
+	}
+	handler.HandleResponse(ctx, nil, pager.NewPageModel(total, questions))
 }

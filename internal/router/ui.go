@@ -22,16 +22,16 @@ package router
 import (
 	"embed"
 	"fmt"
-	"github.com/apache/incubator-answer/plugin"
+	"github.com/apache/answer/plugin"
 	"io/fs"
 	"net/http"
 	"os"
 	"strings"
 
-	"github.com/apache/incubator-answer/internal/controller"
-	"github.com/apache/incubator-answer/internal/service/siteinfo_common"
-	"github.com/apache/incubator-answer/pkg/htmltext"
-	"github.com/apache/incubator-answer/ui"
+	"github.com/apache/answer/internal/controller"
+	"github.com/apache/answer/internal/service/siteinfo_common"
+	"github.com/apache/answer/pkg/htmltext"
+	"github.com/apache/answer/ui"
 	"github.com/gin-gonic/gin"
 	"github.com/segmentfault/pacman/log"
 )
@@ -120,10 +120,8 @@ func (a *UIRouter) Register(r *gin.Engine, baseURLPath string) {
 			} else {
 				c.Header("content-type", "image/vnd.microsoft.icon")
 				filePath = UIRootFilePath + urlPath
-
 			}
 		case "/manifest.json":
-			// filePath = UIRootFilePath + urlPath
 			a.siteInfoController.GetManifestJson(c)
 			return
 		case "/install":
@@ -154,6 +152,17 @@ func (a *UIRouter) Register(r *gin.Engine, baseURLPath string) {
 			c.String(http.StatusOK, strings.ReplaceAll(string(file), "/static", cdnPrefix+"/static"))
 			return
 		}
+
+		// This part is to solve the problem of returning 404 when the access path does not exist.
+		// However, there is no way to check whether the current route exists in the frontend.
+		// We can only hand over the route to the frontend for processing.
+		// And the plugin, frontend routes can now be dynamically registered,
+		// so there's no good way to get all frontend routes
+		//if filePath == UIIndexFilePath {
+		//	c.String(http.StatusNotFound, string(file))
+		//	return
+		//}
+
 		c.String(http.StatusOK, string(file))
 	})
 }

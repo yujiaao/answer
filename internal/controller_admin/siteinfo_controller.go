@@ -23,10 +23,10 @@ import (
 	"html"
 	"net/http"
 
-	"github.com/apache/incubator-answer/internal/base/handler"
-	"github.com/apache/incubator-answer/internal/base/middleware"
-	"github.com/apache/incubator-answer/internal/schema"
-	"github.com/apache/incubator-answer/internal/service/siteinfo"
+	"github.com/apache/answer/internal/base/handler"
+	"github.com/apache/answer/internal/base/middleware"
+	"github.com/apache/answer/internal/schema"
+	"github.com/apache/answer/internal/service/siteinfo"
 	"github.com/gin-gonic/gin"
 )
 
@@ -188,12 +188,12 @@ func (sc *SiteInfoController) GetRobots(ctx *gin.Context) {
 	ctx.String(http.StatusOK, resp.Robots)
 }
 
-// GetRobots get site robots information
-// @Summary get site robots information
-// @Description get site robots information
+// GetCss get site custom CSS
+// @Summary get site custom CSS
+// @Description get site custom CSS
 // @Tags site
-// @Produce json
-// @Success 200 {string} txt ""
+// @Produce text/css
+// @Success 200 {string} css ""
 // @Router /custom.css [get]
 func (sc *SiteInfoController) GetCss(ctx *gin.Context) {
 	resp, err := sc.siteInfoService.GetSiteCustomCssHTML(ctx)

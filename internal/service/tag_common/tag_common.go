@@ -26,15 +26,15 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/apache/incubator-answer/internal/base/constant"
-	"github.com/apache/incubator-answer/internal/base/reason"
-	"github.com/apache/incubator-answer/internal/base/validator"
-	"github.com/apache/incubator-answer/internal/entity"
-	"github.com/apache/incubator-answer/internal/schema"
-	"github.com/apache/incubator-answer/internal/service/activity_queue"
-	"github.com/apache/incubator-answer/internal/service/revision_common"
-	"github.com/apache/incubator-answer/internal/service/siteinfo_common"
-	"github.com/apache/incubator-answer/pkg/converter"
+	"github.com/apache/answer/internal/base/constant"
+	"github.com/apache/answer/internal/base/reason"
+	"github.com/apache/answer/internal/base/validator"
+	"github.com/apache/answer/internal/entity"
+	"github.com/apache/answer/internal/schema"
+	"github.com/apache/answer/internal/service/activity_queue"
+	"github.com/apache/answer/internal/service/revision_common"
+	"github.com/apache/answer/internal/service/siteinfo_common"
+	"github.com/apache/answer/pkg/converter"
 	"github.com/segmentfault/pacman/errors"
 	"github.com/segmentfault/pacman/log"
 )
@@ -71,11 +71,13 @@ type TagRelRepo interface {
 	ShowTagRelListByObjectID(ctx context.Context, objectID string) (err error)
 	HideTagRelListByObjectID(ctx context.Context, objectID string) (err error)
 	RemoveTagRelListByIDs(ctx context.Context, ids []int64) (err error)
-	EnableTagRelByIDs(ctx context.Context, ids []int64) (err error)
+	EnableTagRelByIDs(ctx context.Context, ids []int64, hide bool) (err error)
 	GetObjectTagRelWithoutStatus(ctx context.Context, objectId, tagID string) (tagRel *entity.TagRel, exist bool, err error)
 	GetObjectTagRelList(ctx context.Context, objectId string) (tagListList []*entity.TagRel, err error)
 	BatchGetObjectTagRelList(ctx context.Context, objectIds []string) (tagListList []*entity.TagRel, err error)
 	CountTagRelByTagID(ctx context.Context, tagID string) (count int64, err error)
+	GetTagRelDefaultStatusByObjectID(ctx context.Context, objectID string) (status int, err error)
+	MigrateTagObjects(ctx context.Context, sourceTagId, targetTagId string) error
 }
 
 // TagCommonService user service
@@ -136,6 +138,7 @@ func (ts *TagCommonService) SearchTagLike(ctx context.Context, req *schema.Searc
 		}
 		mainTagID := converter.IntToString(tag.MainTagID)
 		if _, ok := mainTagMap[mainTagID]; ok {
+			tag.ID = mainTagMap[mainTagID].ID
 			tag.SlugName = mainTagMap[mainTagID].SlugName
 			tag.DisplayName = mainTagMap[mainTagID].DisplayName
 			tag.Reserved = mainTagMap[mainTagID].Reserved
@@ -147,6 +150,7 @@ func (ts *TagCommonService) SearchTagLike(ctx context.Context, req *schema.Searc
 	for _, tag := range tags {
 		if _, ok := repetitiveTag[tag.SlugName]; !ok {
 			item := schema.GetTagBasicResp{}
+			item.TagID = tag.ID
 			item.SlugName = tag.SlugName
 			item.DisplayName = tag.DisplayName
 			item.Recommend = tag.Recommend
@@ -354,10 +358,17 @@ func (ts *TagCommonService) AddTag(ctx context.Context, req *schema.AddTagReq) (
 	}
 	tagInfoJson, _ := json.Marshal(tagInfo)
 	revisionDTO.Content = string(tagInfoJson)
-	_, err = ts.revisionService.AddRevision(ctx, revisionDTO, true)
+	revisionID, err := ts.revisionService.AddRevision(ctx, revisionDTO, true)
 	if err != nil {
 		return nil, err
 	}
+	ts.activityQueueService.Send(ctx, &schema.ActivityMsg{
+		UserID:           req.UserID,
+		ObjectID:         tagInfo.ID,
+		OriginalObjectID: tagInfo.ID,
+		ActivityTypeKey:  constant.ActTagCreated,
+		RevisionID:       revisionID,
+	})
 	return &schema.AddTagResp{SlugName: tagInfo.SlugName}, nil
 }
 
@@ -768,10 +779,9 @@ func (ts *TagCommonService) ShowTagRelListByObjectID(ctx context.Context, object
 
 // CreateOrUpdateTagRelList if tag relation is exists update status, if not create it
 func (ts *TagCommonService) CreateOrUpdateTagRelList(ctx context.Context, objectId string, tagIDs []string) (err error) {
-	addTagIDMapping := make(map[string]bool)
-	needRefreshTagIDs := make([]string, 0)
+	addTagIDMapping := make(map[string]struct{})
 	for _, t := range tagIDs {
-		addTagIDMapping[t] = true
+		addTagIDMapping[t] = struct{}{}
 	}
 
 	// get all old relation
@@ -780,8 +790,10 @@ func (ts *TagCommonService) CreateOrUpdateTagRelList(ctx context.Context, object
 		return err
 	}
 	var deleteTagRel []int64
+	needRefreshTagIDs := make([]string, 0, len(oldTagRelList)+len(tagIDs))
+	needRefreshTagIDs = append(needRefreshTagIDs, tagIDs...)
 	for _, rel := range oldTagRelList {
-		if !addTagIDMapping[rel.TagID] {
+		if _, ok := addTagIDMapping[rel.TagID]; !ok {
 			deleteTagRel = append(deleteTagRel, rel.ID)
 			needRefreshTagIDs = append(needRefreshTagIDs, rel.TagID)
 		}
@@ -789,8 +801,11 @@ func (ts *TagCommonService) CreateOrUpdateTagRelList(ctx context.Context, object
 
 	addTagRelList := make([]*entity.TagRel, 0)
 	enableTagRelList := make([]int64, 0)
+	defaultTagRelStatus, err := ts.tagRelRepo.GetTagRelDefaultStatusByObjectID(ctx, objectId)
+	if err != nil {
+		return err
+	}
 	for _, tagID := range tagIDs {
-		needRefreshTagIDs = append(needRefreshTagIDs, tagID)
 		rel, exist, err := ts.tagRelRepo.GetObjectTagRelWithoutStatus(ctx, objectId, tagID)
 		if err != nil {
 			return err
@@ -798,11 +813,11 @@ func (ts *TagCommonService) CreateOrUpdateTagRelList(ctx context.Context, object
 		// if not exist add tag relation
 		if !exist {
 			addTagRelList = append(addTagRelList, &entity.TagRel{
-				TagID: tagID, ObjectID: objectId, Status: entity.TagStatusAvailable,
+				TagID: tagID, ObjectID: objectId, Status: defaultTagRelStatus,
 			})
 		}
 		// if exist and has been removed, that should be enabled
-		if exist && rel.Status != entity.TagStatusAvailable {
+		if exist && rel.Status != entity.TagRelStatusAvailable && rel.Status != entity.TagRelStatusHide {
 			enableTagRelList = append(enableTagRelList, rel.ID)
 		}
 	}
@@ -818,7 +833,7 @@ func (ts *TagCommonService) CreateOrUpdateTagRelList(ctx context.Context, object
 		}
 	}
 	if len(enableTagRelList) > 0 {
-		if err = ts.tagRelRepo.EnableTagRelByIDs(ctx, enableTagRelList); err != nil {
+		if err = ts.tagRelRepo.EnableTagRelByIDs(ctx, enableTagRelList, defaultTagRelStatus == entity.TagRelStatusHide); err != nil {
 			return err
 		}
 	}
@@ -915,4 +930,9 @@ func (ts *TagCommonService) UpdateTag(ctx context.Context, req *schema.UpdateTag
 	}
 
 	return
+}
+
+// MigrateTagQuestions migrate tag question
+func (ts *TagCommonService) MigrateTagQuestions(ctx context.Context, sourceTagID, targetTagID string) (err error) {
+	return ts.tagRelRepo.MigrateTagObjects(ctx, sourceTagID, targetTagID)
 }

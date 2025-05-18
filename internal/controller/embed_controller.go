@@ -20,9 +20,8 @@
 package controller
 
 import (
-	"github.com/apache/incubator-answer/internal/base/handler"
-	"github.com/apache/incubator-answer/internal/schema"
-	"github.com/apache/incubator-answer/plugin"
+	"github.com/apache/answer/internal/base/handler"
+	"github.com/apache/answer/plugin"
 	"github.com/gin-gonic/gin"
 )
 
@@ -33,34 +32,21 @@ func NewEmbedController() *EmbedController {
 	return &EmbedController{}
 }
 
-// GetEmbedConfig godoc
-// @Summary GetEmbedConfig
-// @Description GetEmbedConfig
-// @Tags PluginEmbed
+// GetEmbedConfig get embed plugin config
+// @Summary get embed plugin config
+// @Description get embed plugin config
+// @Tags Plugin
 // @Accept json
 // @Produce json
+// @Success 200 {object} handler.RespBody{data=[]plugin.EmbedConfig}
 // @Router /answer/api/v1/embed/config [get]
-// @Success 200 {object} handler.RespBody{data=[]schema.GetEmbedOptionResp}
 func (c *EmbedController) GetEmbedConfig(ctx *gin.Context) {
-	resp := make([]*schema.GetEmbedOptionResp, 0)
-	var slugName string
+	resp := make([]*plugin.EmbedConfig, 0)
 
-	_ = plugin.CallEmbed(func(base plugin.Embed) error {
-		slugName = base.Info().SlugName
-		return nil
+	err := plugin.CallEmbed(func(embed plugin.Embed) (err error) {
+		resp, err = embed.GetEmbedConfigs(ctx)
+		return err
 	})
 
-	_ = plugin.CallConfig(func(fn plugin.Config) error {
-		if fn.Info().SlugName == slugName {
-			for _, field := range fn.ConfigFields() {
-				resp = append(resp, &schema.GetEmbedOptionResp{
-					Platform: field.Name,
-					Enable:   field.Value.(bool),
-				})
-			}
-			return nil
-		}
-		return nil
-	})
-	handler.HandleResponse(ctx, nil, resp)
+	handler.HandleResponse(ctx, err, resp)
 }

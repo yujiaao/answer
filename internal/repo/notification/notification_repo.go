@@ -23,13 +23,13 @@ import (
 	"context"
 	"time"
 
-	"github.com/apache/incubator-answer/internal/base/data"
-	"github.com/apache/incubator-answer/internal/base/pager"
-	"github.com/apache/incubator-answer/internal/base/reason"
-	"github.com/apache/incubator-answer/internal/entity"
-	"github.com/apache/incubator-answer/internal/schema"
-	notficationcommon "github.com/apache/incubator-answer/internal/service/notification_common"
-	"github.com/apache/incubator-answer/pkg/uid"
+	"github.com/apache/answer/internal/base/data"
+	"github.com/apache/answer/internal/base/pager"
+	"github.com/apache/answer/internal/base/reason"
+	"github.com/apache/answer/internal/entity"
+	"github.com/apache/answer/internal/schema"
+	notficationcommon "github.com/apache/answer/internal/service/notification_common"
+	"github.com/apache/answer/pkg/uid"
 	"github.com/segmentfault/pacman/errors"
 )
 
@@ -69,7 +69,7 @@ func (nr *notificationRepo) UpdateNotificationContent(ctx context.Context, notif
 func (nr *notificationRepo) ClearUnRead(ctx context.Context, userID string, notificationType int) (err error) {
 	info := &entity.Notification{}
 	info.IsRead = schema.NotificationRead
-	_, err = nr.data.DB.Context(ctx).Where("user_id =?", userID).And("type =?", notificationType).Cols("is_read").Update(info)
+	_, err = nr.data.DB.Context(ctx).Where("user_id = ?", userID).And("type = ?", notificationType).Cols("is_read").Update(info)
 	if err != nil {
 		return errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 	}
@@ -79,7 +79,7 @@ func (nr *notificationRepo) ClearUnRead(ctx context.Context, userID string, noti
 func (nr *notificationRepo) ClearIDUnRead(ctx context.Context, userID string, id string) (err error) {
 	info := &entity.Notification{}
 	info.IsRead = schema.NotificationRead
-	_, err = nr.data.DB.Context(ctx).Where("user_id =?", userID).And("id =?", id).Cols("is_read").Update(info)
+	_, err = nr.data.DB.Context(ctx).Where("user_id = ?", userID).And("id = ?", id).Cols("is_read").Update(info)
 	if err != nil {
 		return errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 	}
@@ -98,7 +98,7 @@ func (nr *notificationRepo) GetById(ctx context.Context, id string) (*entity.Not
 
 func (nr *notificationRepo) GetByUserIdObjectIdTypeId(ctx context.Context, userID, objectID string, notificationType int) (*entity.Notification, bool, error) {
 	info := &entity.Notification{}
-	exist, err := nr.data.DB.Context(ctx).Where("user_id = ? ", userID).And("object_id = ?", objectID).And("type = ?", notificationType).Get(info)
+	exist, err := nr.data.DB.Context(ctx).Where("user_id = ?", userID).And("object_id = ?", objectID).And("type = ?", notificationType).Get(info)
 	if err != nil {
 		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 		return info, false, err
@@ -126,6 +126,30 @@ func (nr *notificationRepo) GetNotificationPage(ctx context.Context, searchCond 
 	total, err = pager.Help(searchCond.Page, searchCond.PageSize, &notificationList, cond, session)
 	if err != nil {
 		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+	return
+}
+
+func (nr *notificationRepo) CountNotificationByUser(ctx context.Context, cond *entity.Notification) (int64, error) {
+	count, err := nr.data.DB.Context(ctx).Count(cond)
+	if err != nil {
+		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+	return count, err
+}
+
+func (nr *notificationRepo) DeleteNotification(ctx context.Context, userID string) (err error) {
+	_, err = nr.data.DB.Context(ctx).Where("user_id = ?", userID).Delete(&entity.Notification{})
+	if err != nil {
+		return errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+	return
+}
+
+func (nr *notificationRepo) DeleteUserNotificationConfig(ctx context.Context, userID string) (err error) {
+	_, err = nr.data.DB.Context(ctx).Where("user_id = ?", userID).Delete(&entity.UserNotificationConfig{})
+	if err != nil {
+		return errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 	}
 	return
 }

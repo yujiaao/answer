@@ -24,24 +24,24 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/apache/incubator-answer/internal/service/content"
+	"github.com/apache/answer/internal/service/content"
 	"github.com/segmentfault/pacman/log"
 
-	"github.com/apache/incubator-answer/internal/base/constant"
-	"github.com/apache/incubator-answer/internal/service/notice_queue"
-	"github.com/apache/incubator-answer/pkg/converter"
+	"github.com/apache/answer/internal/base/constant"
+	"github.com/apache/answer/internal/service/notice_queue"
+	"github.com/apache/answer/pkg/converter"
 
-	"github.com/apache/incubator-answer/internal/base/pager"
-	"github.com/apache/incubator-answer/internal/service/rank"
-	"github.com/apache/incubator-answer/pkg/obj"
+	"github.com/apache/answer/internal/base/pager"
+	"github.com/apache/answer/internal/service/rank"
+	"github.com/apache/answer/pkg/obj"
 
 	"xorm.io/builder"
 
-	"github.com/apache/incubator-answer/internal/base/data"
-	"github.com/apache/incubator-answer/internal/base/reason"
-	"github.com/apache/incubator-answer/internal/entity"
-	"github.com/apache/incubator-answer/internal/schema"
-	"github.com/apache/incubator-answer/internal/service/activity_common"
+	"github.com/apache/answer/internal/base/data"
+	"github.com/apache/answer/internal/base/reason"
+	"github.com/apache/answer/internal/entity"
+	"github.com/apache/answer/internal/schema"
+	"github.com/apache/answer/internal/service/activity_common"
 	"github.com/segmentfault/pacman/errors"
 	"xorm.io/xorm"
 )
@@ -240,6 +240,9 @@ func (vr *VoteRepo) setActivityRankToZeroIfUserReachLimit(ctx context.Context, s
 	op *schema.VoteOperationInfo, userInfoMapping map[string]*entity.User, maxDailyRank int) (err error) {
 	// check if user reach daily rank limit
 	for _, activity := range op.Activities {
+		if userInfoMapping[activity.ActivityUserID] == nil {
+			continue
+		}
 		if activity.Rank > 0 {
 			// check if reach max daily rank
 			reach, err := vr.userRankRepo.CheckReachLimit(ctx, session, activity.ActivityUserID, maxDailyRank)

@@ -26,6 +26,7 @@ import type * as Type from '@/common/interface';
 import { Avatar, Icon } from '@/components';
 import { floppyNavigation } from '@/utils';
 import { userCenterStore } from '@/stores';
+import { REACT_BASE_PATH } from '@/router/alias';
 
 interface Props {
   redDot: Type.NotificationStatus | undefined;
@@ -35,24 +36,25 @@ interface Props {
 
 const Index: FC<Props> = ({ redDot, userInfo, logOut }) => {
   const { t } = useTranslation();
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const navigate = useNavigate();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { agent: ucAgent } = userCenterStore();
   const handleLinkClick = (evt) => {
     if (floppyNavigation.shouldProcessLinkClick(evt)) {
       evt.preventDefault();
       const href = evt.currentTarget.getAttribute('href');
-      navigate(href);
+      floppyNavigation.navigate(href, {
+        handler: navigate,
+      });
     }
   };
   return (
     <>
       <Nav className="flex-row">
-        <Nav.Link
-          as={NavLink}
+        <NavLink
           to="/users/notifications/inbox"
           title={t('inbox', { keyPrefix: 'notifications' })}
-          className="icon-link d-flex align-items-center justify-content-center p-0 me-3 position-relative">
+          className="icon-link nav-link d-flex align-items-center justify-content-center p-0 me-2 position-relative">
           <Icon name="bell-fill" className="fs-4" />
           {(redDot?.inbox || 0) > 0 && (
             <div className="unread-dot bg-danger">
@@ -61,13 +63,12 @@ const Index: FC<Props> = ({ redDot, userInfo, logOut }) => {
               </span>
             </div>
           )}
-        </Nav.Link>
+        </NavLink>
 
-        <Nav.Link
-          as={NavLink}
+        <NavLink
           to="/users/notifications/achievement"
           title={t('achievement', { keyPrefix: 'notifications' })}
-          className="icon-link d-flex align-items-center justify-content-center p-0 me-3 position-relative">
+          className="icon-link nav-link d-flex align-items-center justify-content-center p-0 me-2 position-relative">
           <Icon name="trophy-fill" className="fs-4" />
           {(redDot?.achievement || 0) > 0 && (
             <div className="unread-dot bg-danger">
@@ -76,7 +77,7 @@ const Index: FC<Props> = ({ redDot, userInfo, logOut }) => {
               </span>
             </div>
           )}
-        </Nav.Link>
+        </NavLink>
       </Nav>
 
       <Dropdown align="end">
@@ -94,24 +95,26 @@ const Index: FC<Props> = ({ redDot, userInfo, logOut }) => {
           />
         </Dropdown.Toggle>
 
-        <Dropdown.Menu>
+        <Dropdown.Menu className="position-absolute">
           <Dropdown.Item
-            href={`/users/${userInfo.username}`}
+            href={`${REACT_BASE_PATH}/users/${userInfo.username}`}
             onClick={handleLinkClick}>
             {t('header.nav.profile')}
           </Dropdown.Item>
           <Dropdown.Item
-            href={`/users/${userInfo.username}/bookmarks`}
+            href={`${REACT_BASE_PATH}/users/${userInfo.username}/bookmarks`}
             onClick={handleLinkClick}>
             {t('header.nav.bookmark')}
           </Dropdown.Item>
           <Dropdown.Item
-            href="/users/settings/profile"
+            href={`${REACT_BASE_PATH}/users/settings/profile`}
             onClick={handleLinkClick}>
             {t('header.nav.setting')}
           </Dropdown.Item>
           <Dropdown.Divider />
-          <Dropdown.Item href="/users/logout" onClick={(e) => logOut(e)}>
+          <Dropdown.Item
+            href={`${REACT_BASE_PATH}/users/logout`}
+            onClick={(e) => logOut(e)}>
             {t('header.nav.logout')}
           </Dropdown.Item>
         </Dropdown.Menu>
@@ -134,7 +137,7 @@ const Index: FC<Props> = ({ redDot, userInfo, logOut }) => {
             </Nav>
           </Dropdown.Toggle>
 
-          <Dropdown.Menu>
+          <Dropdown.Menu className="position-absolute">
             {ucAgent.agent_info.url ? (
               <Dropdown.Item href={ucAgent.agent_info.url}>
                 {ucAgent.agent_info.name}

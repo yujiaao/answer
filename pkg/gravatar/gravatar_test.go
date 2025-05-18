@@ -20,7 +20,7 @@
 package gravatar
 
 import (
-	"github.com/apache/incubator-answer/internal/base/constant"
+	"github.com/apache/answer/internal/base/constant"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -38,7 +38,7 @@ func TestGetAvatarURL(t *testing.T) {
 		{
 			name: "answer@answer.com",
 			args: args{email: "answer@answer.com"},
-			want: "https://www.gravatar.com/avatar/b2be4e4438f08a5e885be8de5f41fdd7",
+			want: "https://www.gravatar.com/avatar/7296942c1f63d97f6c124705142009867638f7b3dbcdadd0cb1bcb40e427eb8e",
 		},
 	}
 	for _, tt := range tests {

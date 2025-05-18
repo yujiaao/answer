@@ -22,12 +22,12 @@ package auth
 import (
 	"context"
 	"encoding/json"
-	"github.com/apache/incubator-answer/internal/service/auth"
+	"github.com/apache/answer/internal/service/auth"
 
-	"github.com/apache/incubator-answer/internal/base/constant"
-	"github.com/apache/incubator-answer/internal/base/data"
-	"github.com/apache/incubator-answer/internal/base/reason"
-	"github.com/apache/incubator-answer/internal/entity"
+	"github.com/apache/answer/internal/base/constant"
+	"github.com/apache/answer/internal/base/data"
+	"github.com/apache/answer/internal/base/reason"
+	"github.com/apache/answer/internal/entity"
 	"github.com/segmentfault/pacman/errors"
 	"github.com/segmentfault/pacman/log"
 )
@@ -226,7 +226,7 @@ func (ar *authRepo) RemoveUserTokens(ctx context.Context, userID string, remainT
 		if err := ar.RemoveUserCacheInfo(ctx, token); err != nil {
 			log.Error(err)
 		} else {
-			log.Debugf("del user %s token success")
+			log.Debugf("del user %s token success", userID)
 		}
 	}
 	if err := ar.RemoveUserStatus(ctx, userID); err != nil {

@@ -27,6 +27,7 @@ import { SchemaForm, JSONSchema, initFormData, UISchema } from '@/components';
 import { useToast } from '@/hooks';
 import { getLegalSetting, putLegalSetting } from '@/services';
 import { handleFormError, scrollToElementTop } from '@/utils';
+import { siteLealStore } from '@/stores';
 
 const Legal: FC = () => {
   const { t } = useTranslation('translation', {
@@ -34,10 +35,29 @@ const Legal: FC = () => {
   });
   const Toast = useToast();
 
+  const externalContent = [
+    {
+      value: 'always_display',
+      label: t('external_content_display.always_display'),
+    },
+    {
+      value: 'ask_before_display',
+      label: t('external_content_display.ask_before_display'),
+    },
+  ];
+
   const schema: JSONSchema = {
     title: t('page_title'),
     required: ['terms_of_service', 'privacy_policy'],
     properties: {
+      external_content_display: {
+        type: 'string',
+        title: t('external_content_display.label'),
+        description: t('external_content_display.text'),
+        enum: externalContent?.map((lang) => lang.value),
+        enumNames: externalContent?.map((lang) => lang.label),
+        default: 0,
+      },
       terms_of_service: {
         type: 'string',
         title: t('terms_of_service.label'),
@@ -51,6 +71,9 @@ const Legal: FC = () => {
     },
   };
   const uiSchema: UISchema = {
+    external_content_display: {
+      'ui:widget': 'select',
+    },
     terms_of_service: {
       'ui:widget': 'textarea',
       'ui:options': {
@@ -71,6 +94,7 @@ const Legal: FC = () => {
     evt.stopPropagation();
 
     const reqParams: Type.AdminSettingsLegal = {
+      external_content_display: formData.external_content_display.value,
       terms_of_service_original_text: formData.terms_of_service.value,
       terms_of_service_parsed_text: marked.parse(
         formData.terms_of_service.value,
@@ -84,6 +108,9 @@ const Legal: FC = () => {
         Toast.onShow({
           msg: t('update', { keyPrefix: 'toast' }),
           variant: 'success',
+        });
+        siteLealStore.getState().update({
+          external_content_display: reqParams.external_content_display,
         });
       })
       .catch((err) => {
@@ -100,6 +127,8 @@ const Legal: FC = () => {
     getLegalSetting().then((setting) => {
       if (setting) {
         const formMeta = { ...formData };
+        formMeta.external_content_display.value =
+          setting.external_content_display;
         formMeta.terms_of_service.value =
           setting.terms_of_service_original_text;
         formMeta.privacy_policy.value = setting.privacy_policy_original_text;

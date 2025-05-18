@@ -34,3 +34,6 @@ dist/
 answer.log
 answer.run
 
+
+# Lint setup generated file
+.husky/

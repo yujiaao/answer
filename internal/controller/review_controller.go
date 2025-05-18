@@ -20,14 +20,14 @@
 package controller
 
 import (
-	"github.com/apache/incubator-answer/internal/base/handler"
-	"github.com/apache/incubator-answer/internal/base/middleware"
-	"github.com/apache/incubator-answer/internal/base/reason"
-	"github.com/apache/incubator-answer/internal/schema"
-	"github.com/apache/incubator-answer/internal/service/action"
-	"github.com/apache/incubator-answer/internal/service/rank"
-	"github.com/apache/incubator-answer/internal/service/review"
-	"github.com/apache/incubator-answer/plugin"
+	"github.com/apache/answer/internal/base/handler"
+	"github.com/apache/answer/internal/base/middleware"
+	"github.com/apache/answer/internal/base/reason"
+	"github.com/apache/answer/internal/schema"
+	"github.com/apache/answer/internal/service/action"
+	"github.com/apache/answer/internal/service/rank"
+	"github.com/apache/answer/internal/service/review"
+	"github.com/apache/answer/plugin"
 	"github.com/gin-gonic/gin"
 	"github.com/segmentfault/pacman/errors"
 )
@@ -86,7 +86,6 @@ func (rc *ReviewController) GetUnreviewedPostPage(ctx *gin.Context) {
 // UpdateReview update review
 // @Summary update review
 // @Description update review
-// @Security ApiKeyAuth
 // @Tags Review
 // @Accept json
 // @Produce json

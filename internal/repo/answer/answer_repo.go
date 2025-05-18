@@ -23,19 +23,19 @@ import (
 	"context"
 	"time"
 
-	"github.com/apache/incubator-answer/internal/base/constant"
-	"github.com/apache/incubator-answer/internal/base/data"
-	"github.com/apache/incubator-answer/internal/base/handler"
-	"github.com/apache/incubator-answer/internal/base/pager"
-	"github.com/apache/incubator-answer/internal/base/reason"
-	"github.com/apache/incubator-answer/internal/entity"
-	"github.com/apache/incubator-answer/internal/schema"
-	"github.com/apache/incubator-answer/internal/service/activity_common"
-	answercommon "github.com/apache/incubator-answer/internal/service/answer_common"
-	"github.com/apache/incubator-answer/internal/service/rank"
-	"github.com/apache/incubator-answer/internal/service/unique"
-	"github.com/apache/incubator-answer/pkg/uid"
-	"github.com/apache/incubator-answer/plugin"
+	"github.com/apache/answer/internal/base/constant"
+	"github.com/apache/answer/internal/base/data"
+	"github.com/apache/answer/internal/base/handler"
+	"github.com/apache/answer/internal/base/pager"
+	"github.com/apache/answer/internal/base/reason"
+	"github.com/apache/answer/internal/entity"
+	"github.com/apache/answer/internal/schema"
+	"github.com/apache/answer/internal/service/activity_common"
+	answercommon "github.com/apache/answer/internal/service/answer_common"
+	"github.com/apache/answer/internal/service/rank"
+	"github.com/apache/answer/internal/service/unique"
+	"github.com/apache/answer/pkg/uid"
+	"github.com/apache/answer/plugin"
 	"github.com/segmentfault/pacman/errors"
 	"github.com/segmentfault/pacman/log"
 )
@@ -198,7 +198,7 @@ func (ar *answerRepo) GetAnswerList(ctx context.Context, answer *entity.Answer) 
 	answerList = make([]*entity.Answer, 0)
 	answer.ID = uid.DeShortID(answer.ID)
 	answer.QuestionID = uid.DeShortID(answer.QuestionID)
-	err = ar.data.DB.Context(ctx).Find(answerList, answer)
+	err = ar.data.DB.Context(ctx).Find(&answerList, answer)
 	if err != nil {
 		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 	}
@@ -216,7 +216,7 @@ func (ar *answerRepo) GetAnswerPage(ctx context.Context, page, pageSize int, ans
 	answer.ID = uid.DeShortID(answer.ID)
 	answer.QuestionID = uid.DeShortID(answer.QuestionID)
 	answerList = make([]*entity.Answer, 0)
-	total, err = pager.Help(page, pageSize, answerList, answer, ar.data.DB.Context(ctx))
+	total, err = pager.Help(page, pageSize, &answerList, answer, ar.data.DB.Context(ctx))
 	if err != nil {
 		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 	}
@@ -268,6 +268,24 @@ func (ar *answerRepo) GetByID(ctx context.Context, answerID string) (*entity.Ans
 		resp.QuestionID = uid.EnShortID(resp.QuestionID)
 	}
 	return &resp, has, nil
+}
+
+func (ar *answerRepo) GetByIDs(ctx context.Context, answerIDs ...string) ([]*entity.Answer, error) {
+	for idx, answerID := range answerIDs {
+		answerIDs[idx] = uid.DeShortID(answerID)
+	}
+	var resp = make([]*entity.Answer, 0)
+	err := ar.data.DB.Context(ctx).In("id", answerIDs).Find(&resp)
+	if err != nil {
+		return nil, errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+	if handler.GetEnableShortID(ctx) {
+		for _, item := range resp {
+			item.ID = uid.EnShortID(item.ID)
+			item.QuestionID = uid.EnShortID(item.QuestionID)
+		}
+	}
+	return resp, nil
 }
 
 func (ar *answerRepo) GetCountByQuestionID(ctx context.Context, questionID string) (int64, error) {
@@ -508,4 +526,29 @@ func (ar *answerRepo) updateSearch(ctx context.Context, answerID string) (err er
 	}
 	err = s.UpdateContent(ctx, content)
 	return
+}
+
+func (ar *answerRepo) DeletePermanentlyAnswers(ctx context.Context) error {
+	// get all deleted answers ids
+	ids := make([]string, 0)
+	err := ar.data.DB.Context(ctx).Select("id").Table(new(entity.Answer).TableName()).
+		Where("status = ?", entity.AnswerStatusDeleted).Find(&ids)
+	if err != nil {
+		return errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+
+	// delete all revisions permanently
+	_, err = ar.data.DB.Context(ctx).In("object_id", ids).Delete(&entity.Revision{})
+	if err != nil {
+		return errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+
+	_, err = ar.data.DB.Context(ctx).Where("status = ?", entity.AnswerStatusDeleted).Delete(&entity.Answer{})
+	if err != nil {
+		return errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+	return nil
 }

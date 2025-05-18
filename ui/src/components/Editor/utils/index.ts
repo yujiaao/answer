@@ -24,6 +24,8 @@ import { EditorState, Compartment } from '@codemirror/state';
 import { EditorView, placeholder } from '@codemirror/view';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
+import copy from 'copy-to-clipboard';
+import Tooltip from 'bootstrap/js/dist/tooltip';
 
 import { Editor } from '../types';
 import { isDarkTheme } from '@/utils/common';
@@ -31,8 +33,16 @@ import { isDarkTheme } from '@/utils/common';
 import createEditorUtils from './extension';
 
 const editableCompartment = new Compartment();
-export function htmlRender(el: HTMLElement | null) {
+interface htmlRenderConfig {
+  copyText: string;
+  copySuccessText: string;
+}
+export function htmlRender(el: HTMLElement | null, config?: htmlRenderConfig) {
   if (!el) return;
+  const { copyText = '', copySuccessText = '' } = config || {
+    copyText: 'Copy to clipboard',
+    copySuccessText: 'Copied!',
+  };
   // Replace all br tags with newlines
   // Fixed an issue where the BR tag in the editor block formula HTML caused rendering errors.
   el.querySelectorAll('p').forEach((p) => {
@@ -69,6 +79,50 @@ export function htmlRender(el: HTMLElement | null) {
       a.rel = 'nofollow';
     }
   });
+
+  // Add copy button to all pre tags
+  el.querySelectorAll('pre').forEach((pre) => {
+    // Create copy button
+    const codeWrap = document.createElement('div');
+    codeWrap.className = 'position-relative a-code-wrap';
+    const codeTool = document.createElement('div');
+    codeTool.className = 'a-code-tool';
+    const uniqueId = `a-copy-code-${Date.now().toString().substring(5)}-${Math.floor(Math.random() * 10)}${Math.floor(Math.random() * 10)}${Math.floor(Math.random() * 10)}`;
+    const str = `
+      <a role="button" class="link-secondary a-copy-code" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="${copyText}" id="${uniqueId}">
+        <i class="br bi-copy"></i>
+      </a>
+    `;
+    codeTool.innerHTML = str;
+
+    // Add copy button to pre tag
+    pre.style.position = 'relative';
+
+    // 将 codeTool 和 pre 插入到 codeWrap 中, 并且使用 codeWrap 替换 pre
+    codeWrap.appendChild(codeTool);
+    pre.parentNode?.replaceChild(codeWrap, pre);
+    codeWrap.appendChild(pre);
+
+    const tooltipTriggerList = el.querySelectorAll('.a-copy-code');
+
+    Array.from(tooltipTriggerList)?.map(
+      (tooltipTriggerEl) => new Tooltip(tooltipTriggerEl),
+    );
+
+    // Copy pre content on button click
+    const copyBtn = codeTool.querySelector('.a-copy-code');
+    copyBtn?.addEventListener('click', () => {
+      const textToCopy = pre.textContent || '';
+      copy(textToCopy);
+      // Change tooltip text on copy success
+      const tooltipInstance = Tooltip.getOrCreateInstance(`#${uniqueId}`);
+      tooltipInstance?.setContent({ '.tooltip-inner': copySuccessText });
+      const myTooltipEl = document.querySelector(`#${uniqueId}`);
+      myTooltipEl?.addEventListener('hidden.bs.tooltip', () => {
+        tooltipInstance.setContent({ '.tooltip-inner': copyText });
+      });
+    });
+  });
 }
 
 export const useEditor = ({
@@ -98,7 +152,6 @@ export const useEditor = ({
       '.cm-line': {
         whiteSpace: 'pre-wrap',
         wordWrap: 'break-word',
-        wordBreak: 'break-all',
       },
       '.ͼ7, .ͼ6': {
         textDecoration: 'none',

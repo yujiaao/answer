@@ -21,26 +21,28 @@ package content
 
 import (
 	"context"
+	"fmt"
+	"github.com/apache/answer/internal/service/event_queue"
 	"strings"
 
-	"github.com/apache/incubator-answer/internal/service/activity_common"
+	"github.com/apache/answer/internal/service/activity_common"
 
-	"github.com/apache/incubator-answer/internal/base/constant"
-	"github.com/apache/incubator-answer/internal/base/handler"
-	"github.com/apache/incubator-answer/internal/base/pager"
-	"github.com/apache/incubator-answer/internal/base/translator"
-	"github.com/apache/incubator-answer/internal/entity"
-	"github.com/apache/incubator-answer/internal/service/activity_type"
-	"github.com/apache/incubator-answer/internal/service/comment_common"
-	"github.com/apache/incubator-answer/internal/service/config"
-	"github.com/apache/incubator-answer/internal/service/object_info"
-	"github.com/apache/incubator-answer/pkg/htmltext"
+	"github.com/apache/answer/internal/base/constant"
+	"github.com/apache/answer/internal/base/handler"
+	"github.com/apache/answer/internal/base/pager"
+	"github.com/apache/answer/internal/base/translator"
+	"github.com/apache/answer/internal/entity"
+	"github.com/apache/answer/internal/service/activity_type"
+	"github.com/apache/answer/internal/service/comment_common"
+	"github.com/apache/answer/internal/service/config"
+	"github.com/apache/answer/internal/service/object_info"
+	"github.com/apache/answer/pkg/htmltext"
 	"github.com/segmentfault/pacman/log"
 
-	"github.com/apache/incubator-answer/internal/base/reason"
-	"github.com/apache/incubator-answer/internal/schema"
-	answercommon "github.com/apache/incubator-answer/internal/service/answer_common"
-	questioncommon "github.com/apache/incubator-answer/internal/service/question_common"
+	"github.com/apache/answer/internal/base/reason"
+	"github.com/apache/answer/internal/schema"
+	answercommon "github.com/apache/answer/internal/service/answer_common"
+	questioncommon "github.com/apache/answer/internal/service/question_common"
 	"github.com/segmentfault/pacman/errors"
 )
 
@@ -62,6 +64,7 @@ type VoteService struct {
 	commentCommonRepo comment_common.CommentCommonRepo
 	objectService     *object_info.ObjService
 	activityRepo      activity_common.ActivityRepo
+	eventQueueService event_queue.EventQueueService
 }
 
 func NewVoteService(
@@ -71,6 +74,7 @@ func NewVoteService(
 	answerRepo answercommon.AnswerRepo,
 	commentCommonRepo comment_common.CommentCommonRepo,
 	objectService *object_info.ObjService,
+	eventQueueService event_queue.EventQueueService,
 ) *VoteService {
 	return &VoteService{
 		voteRepo:          voteRepo,
@@ -79,6 +83,7 @@ func NewVoteService(
 		answerRepo:        answerRepo,
 		commentCommonRepo: commentCommonRepo,
 		objectService:     objectService,
+		eventQueueService: eventQueueService,
 	}
 }
 
@@ -112,6 +117,9 @@ func (vs *VoteService) VoteUp(ctx context.Context, req *schema.VoteReq) (resp *s
 			return nil, err
 		}
 		err = vs.voteRepo.Vote(ctx, voteUpOperationInfo)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if err != nil {
 		return nil, err
@@ -125,6 +133,7 @@ func (vs *VoteService) VoteUp(ctx context.Context, req *schema.VoteReq) (resp *s
 	resp.Votes = resp.UpVotes - resp.DownVotes
 	if !req.IsCancel {
 		resp.VoteStatus = constant.ActVoteUp
+		vs.sendEvent(ctx, req, objectInfo, resp)
 	}
 	return resp, nil
 }
@@ -173,6 +182,7 @@ func (vs *VoteService) VoteDown(ctx context.Context, req *schema.VoteReq) (resp 
 	resp.Votes = resp.UpVotes - resp.DownVotes
 	if !req.IsCancel {
 		resp.VoteStatus = constant.ActVoteDown
+		vs.sendEvent(ctx, req, objectInfo, resp)
 	}
 	return resp, nil
 }
@@ -288,4 +298,25 @@ func (vs *VoteService) getActivities(ctx context.Context, op *schema.VoteOperati
 		activities = append(activities, t)
 	}
 	return activities
+}
+
+func (vs *VoteService) sendEvent(ctx context.Context,
+	req *schema.VoteReq, objectInfo *schema.SimpleObjectInfo, resp *schema.VoteResp) {
+	var event *schema.EventMsg
+	switch objectInfo.ObjectType {
+	case constant.QuestionObjectType:
+		event = schema.NewEvent(constant.EventQuestionVote, req.UserID).TID(objectInfo.QuestionID).
+			QID(objectInfo.QuestionID, objectInfo.ObjectCreatorUserID)
+	case constant.AnswerObjectType:
+		event = schema.NewEvent(constant.EventAnswerVote, req.UserID).TID(objectInfo.AnswerID).
+			AID(objectInfo.AnswerID, objectInfo.ObjectCreatorUserID)
+	case constant.CommentObjectType:
+		event = schema.NewEvent(constant.EventCommentVote, req.UserID).TID(objectInfo.CommentID).
+			CID(objectInfo.CommentID, objectInfo.ObjectCreatorUserID)
+	default:
+		return
+	}
+	event.AddExtra("vote_up_amount", fmt.Sprintf("%d", resp.UpVotes))
+	event.AddExtra("vote_down_amount", fmt.Sprintf("%d", resp.DownVotes))
+	vs.eventQueueService.Send(ctx, event)
 }

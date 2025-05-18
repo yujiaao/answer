@@ -37,6 +37,7 @@ const HealthStatus: FC<IProps> = ({ data }) => {
   const { siteInfo } = siteInfoStore();
   let isLatest = false;
   let hasNewerVersion = false;
+  const downloadUrl = `https://answer.apache.org/download?from_version=${version}`;
   if (version && remote_version) {
     isLatest = gte(version, remote_version);
     hasNewerVersion = gt(remote_version, version);
@@ -53,7 +54,7 @@ const HealthStatus: FC<IProps> = ({ data }) => {
               <a
                 className="ms-1 badge rounded-pill text-bg-success"
                 target="_blank"
-                href="https://github.com/apache/incubator-answer/releases"
+                href={downloadUrl}
                 rel="noreferrer">
                 {t('latest')}
               </a>
@@ -62,7 +63,7 @@ const HealthStatus: FC<IProps> = ({ data }) => {
               <a
                 className="ms-1 badge rounded-pill text-bg-warning"
                 target="_blank"
-                href="https://github.com/apache/incubator-answer/releases"
+                href={downloadUrl}
                 rel="noreferrer">
                 {t('update_to')} {remote_version}
               </a>
@@ -71,7 +72,7 @@ const HealthStatus: FC<IProps> = ({ data }) => {
               <a
                 className="ms-1 badge rounded-pill text-bg-danger"
                 target="_blank"
-                href="https://github.com/apache/incubator-answer/releases"
+                href={downloadUrl}
                 rel="noreferrer">
                 {t('check_failed')}
               </a>
@@ -94,7 +95,10 @@ const HealthStatus: FC<IProps> = ({ data }) => {
           <Col xs={6}>
             <span className="text-secondary me-1">{t('timezone')}</span>
             <strong>
-              {data.time_zone.split('/')?.[1]?.replaceAll('_', ' ')}
+              {(data.time_zone.split('/')?.[1] ?? data.time_zone).replaceAll(
+                '_',
+                ' ',
+              )}
             </strong>
           </Col>
           <Col xs={6}>

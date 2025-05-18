@@ -21,11 +21,11 @@ package schema
 
 import (
 	"context"
-	"github.com/apache/incubator-answer/internal/base/constant"
-	"github.com/apache/incubator-answer/internal/base/handler"
-	"github.com/apache/incubator-answer/internal/base/reason"
-	"github.com/apache/incubator-answer/internal/base/translator"
-	"github.com/apache/incubator-answer/internal/base/validator"
+	"github.com/apache/answer/internal/base/constant"
+	"github.com/apache/answer/internal/base/handler"
+	"github.com/apache/answer/internal/base/reason"
+	"github.com/apache/answer/internal/base/translator"
+	"github.com/apache/answer/internal/base/validator"
 	"github.com/segmentfault/pacman/errors"
 	"strings"
 )
@@ -120,7 +120,7 @@ type EditUserProfileReq struct {
 
 // AddUserReq add user request
 type AddUserReq struct {
-	DisplayName string `validate:"required,gte=4,lte=30" json:"display_name"`
+	DisplayName string `validate:"required,gte=2,lte=30" json:"display_name"`
 	Email       string `validate:"required,email,gt=0,lte=500" json:"email"`
 	Password    string `validate:"required,gte=8,lte=32" json:"password"`
 	LoginUserID string `json:"-"`
@@ -131,6 +131,11 @@ type AddUsersReq struct {
 	// users info line by line
 	UsersStr string        `json:"users"`
 	Users    []*AddUserReq `json:"-"`
+}
+
+// DeletePermanentlyReq delete permanently request
+type DeletePermanentlyReq struct {
+	Type string `validate:"required,oneof=users questions answers" json:"type"`
 }
 
 type AddUsersErrorData struct {

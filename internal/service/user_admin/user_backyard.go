@@ -22,30 +22,35 @@ package user_admin
 import (
 	"context"
 	"fmt"
-	"github.com/apache/incubator-answer/internal/base/constant"
-	"github.com/apache/incubator-answer/internal/base/handler"
-	"github.com/apache/incubator-answer/internal/base/translator"
-	"github.com/apache/incubator-answer/internal/base/validator"
-	answercommon "github.com/apache/incubator-answer/internal/service/answer_common"
-	"github.com/apache/incubator-answer/internal/service/comment_common"
-	"github.com/apache/incubator-answer/internal/service/export"
-	questioncommon "github.com/apache/incubator-answer/internal/service/question_common"
-	"github.com/google/uuid"
 	"net/mail"
 	"strings"
 	"time"
 	"unicode"
 
-	"github.com/apache/incubator-answer/internal/base/pager"
-	"github.com/apache/incubator-answer/internal/base/reason"
-	"github.com/apache/incubator-answer/internal/entity"
-	"github.com/apache/incubator-answer/internal/schema"
-	"github.com/apache/incubator-answer/internal/service/activity"
-	"github.com/apache/incubator-answer/internal/service/auth"
-	"github.com/apache/incubator-answer/internal/service/role"
-	"github.com/apache/incubator-answer/internal/service/siteinfo_common"
-	usercommon "github.com/apache/incubator-answer/internal/service/user_common"
-	"github.com/apache/incubator-answer/pkg/checker"
+	"github.com/apache/answer/internal/base/constant"
+	"github.com/apache/answer/internal/base/handler"
+	"github.com/apache/answer/internal/base/translator"
+	"github.com/apache/answer/internal/base/validator"
+	answercommon "github.com/apache/answer/internal/service/answer_common"
+	"github.com/apache/answer/internal/service/badge"
+	"github.com/apache/answer/internal/service/comment_common"
+	"github.com/apache/answer/internal/service/export"
+	notificationcommon "github.com/apache/answer/internal/service/notification_common"
+	"github.com/apache/answer/internal/service/plugin_common"
+	questioncommon "github.com/apache/answer/internal/service/question_common"
+	"github.com/apache/answer/pkg/token"
+
+	"github.com/apache/answer/internal/base/pager"
+	"github.com/apache/answer/internal/base/reason"
+	"github.com/apache/answer/internal/entity"
+	"github.com/apache/answer/internal/schema"
+	"github.com/apache/answer/internal/service/activity"
+	"github.com/apache/answer/internal/service/auth"
+	"github.com/apache/answer/internal/service/role"
+	"github.com/apache/answer/internal/service/siteinfo_common"
+	usercommon "github.com/apache/answer/internal/service/user_common"
+	"github.com/apache/answer/internal/service/user_external_login"
+	"github.com/apache/answer/pkg/checker"
 	"github.com/jinzhu/copier"
 	"github.com/segmentfault/pacman/errors"
 	"github.com/segmentfault/pacman/log"
@@ -62,6 +67,7 @@ type UserAdminRepo interface {
 	AddUser(ctx context.Context, user *entity.User) (err error)
 	AddUsers(ctx context.Context, users []*entity.User) (err error)
 	UpdateUserPassword(ctx context.Context, userID string, password string) (err error)
+	DeletePermanentlyUsers(ctx context.Context) (err error)
 }
 
 // UserAdminService user service
@@ -76,6 +82,10 @@ type UserAdminService struct {
 	questionCommonRepo    questioncommon.QuestionRepo
 	answerCommonRepo      answercommon.AnswerRepo
 	commentCommonRepo     comment_common.CommentCommonRepo
+	userExternalLoginRepo user_external_login.UserExternalLoginRepo
+	notificationRepo      notificationcommon.NotificationRepo
+	pluginUserConfigRepo  plugin_common.PluginUserConfigRepo
+	badgeAwardRepo        badge.BadgeAwardRepo
 }
 
 // NewUserAdminService new user admin service
@@ -90,6 +100,10 @@ func NewUserAdminService(
 	questionCommonRepo questioncommon.QuestionRepo,
 	answerCommonRepo answercommon.AnswerRepo,
 	commentCommonRepo comment_common.CommentCommonRepo,
+	userExternalLoginRepo user_external_login.UserExternalLoginRepo,
+	notificationRepo notificationcommon.NotificationRepo,
+	pluginUserConfigRepo plugin_common.PluginUserConfigRepo,
+	badgeAwardRepo badge.BadgeAwardRepo,
 ) *UserAdminService {
 	return &UserAdminService{
 		userRepo:              userRepo,
@@ -102,6 +116,10 @@ func NewUserAdminService(
 		questionCommonRepo:    questionCommonRepo,
 		answerCommonRepo:      answerCommonRepo,
 		commentCommonRepo:     commentCommonRepo,
+		userExternalLoginRepo: userExternalLoginRepo,
+		notificationRepo:      notificationRepo,
+		pluginUserConfigRepo:  pluginUserConfigRepo,
+		badgeAwardRepo:        badgeAwardRepo,
 	}
 }
 
@@ -148,11 +166,39 @@ func (us *UserAdminService) UpdateUserStatus(ctx context.Context, req *schema.Up
 		us.removeAllUserCreatedContent(ctx, userInfo.ID)
 	}
 
+	if req.IsDeleted() {
+		us.removeAllUserConfiguration(ctx, userInfo.ID)
+	}
+
 	// if user reputation is zero means this user is inactive, so try to activate this user.
 	if req.IsNormal() && userInfo.Rank == 0 {
 		return us.userActivity.UserActive(ctx, userInfo.ID)
 	}
 	return nil
+}
+
+// removeAllUserConfiguration remove all user configuration
+func (us *UserAdminService) removeAllUserConfiguration(ctx context.Context, userID string) {
+	err := us.userExternalLoginRepo.DeleteUserExternalLoginByUserID(ctx, userID)
+	if err != nil {
+		log.Errorf("remove all user external login error: %v", err)
+	}
+	err = us.notificationRepo.DeleteNotification(ctx, userID)
+	if err != nil {
+		log.Errorf("remove all user notification error: %v", err)
+	}
+	err = us.notificationRepo.DeleteUserNotificationConfig(ctx, userID)
+	if err != nil {
+		log.Errorf("remove all user notification config error: %v", err)
+	}
+	err = us.pluginUserConfigRepo.DeleteUserPluginConfig(ctx, userID)
+	if err != nil {
+		log.Errorf("remove all user plugin config error: %v", err)
+	}
+	err = us.badgeAwardRepo.DeleteUserBadgeAward(ctx, userID)
+	if err != nil {
+		log.Errorf("remove all user badge award error: %v", err)
+	}
 }
 
 // removeAllUserCreatedContent remove all user created content
@@ -531,7 +577,7 @@ func (us *UserAdminService) GetUserActivation(ctx context.Context, req *schema.G
 		Email:  userInfo.EMail,
 		UserID: userInfo.ID,
 	}
-	code := uuid.NewString()
+	code := token.GenerateToken()
 	us.emailService.SaveCode(ctx, userInfo.ID, code, data.ToJSONString())
 	resp = &schema.GetUserActivationResp{
 		ActivationURL: fmt.Sprintf("%s/users/account-activation?code=%s", general.SiteUrl, code),
@@ -558,8 +604,7 @@ func (us *UserAdminService) SendUserActivation(ctx context.Context, req *schema.
 		Email:  userInfo.EMail,
 		UserID: userInfo.ID,
 	}
-	code := uuid.NewString()
-
+	code := token.GenerateToken()
 	verifyEmailURL := fmt.Sprintf("%s/users/account-activation?code=%s", general.SiteUrl, code)
 	title, body, err := us.emailService.RegisterTemplate(ctx, verifyEmailURL)
 	if err != nil {
@@ -567,4 +612,16 @@ func (us *UserAdminService) SendUserActivation(ctx context.Context, req *schema.
 	}
 	go us.emailService.SendAndSaveCode(ctx, userInfo.ID, userInfo.EMail, title, body, code, data.ToJSONString())
 	return nil
+}
+
+func (us *UserAdminService) DeletePermanently(ctx context.Context, req *schema.DeletePermanentlyReq) (err error) {
+	if req.Type == constant.DeletePermanentlyUsers {
+		return us.userRepo.DeletePermanentlyUsers(ctx)
+	} else if req.Type == constant.DeletePermanentlyQuestions {
+		return us.questionCommonRepo.DeletePermanentlyQuestions(ctx)
+	} else if req.Type == constant.DeletePermanentlyAnswers {
+		return us.answerCommonRepo.DeletePermanentlyAnswers(ctx)
+	}
+
+	return errors.BadRequest(reason.RequestFormatError)
 }

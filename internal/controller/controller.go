@@ -51,4 +51,6 @@ var ProviderSetController = wire.NewSet(
 	NewCaptchaController,
 	NewMetaController,
 	NewEmbedController,
+	NewBadgeController,
+	NewRenderController,
 )

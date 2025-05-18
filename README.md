@@ -8,10 +8,10 @@ A Q&A platform software for teams at any scales. Whether it’s a community foru
 
 To learn more about the project, visit [answer.apache.org](https://answer.apache.org).
 
-[![LICENSE](https://img.shields.io/github/license/apache/incubator-answer)](https://github.com/apache/incubator-answer/blob/main/LICENSE)
+[![LICENSE](https://img.shields.io/github/license/apache/answer)](https://github.com/apache/answer/blob/main/LICENSE)
 [![Language](https://img.shields.io/badge/language-go-blue.svg)](https://golang.org/)
 [![Language](https://img.shields.io/badge/language-react-blue.svg)](https://reactjs.org/)
-[![Go Report Card](https://goreportcard.com/badge/github.com/apache/incubator-answer)](https://goreportcard.com/report/github.com/apache/incubator-answer)
+[![Go Report Card](https://goreportcard.com/badge/github.com/apache/answer)](https://goreportcard.com/report/github.com/apache/answer)
 [![Discord](https://img.shields.io/badge/discord-chat-5865f2?logo=discord&logoColor=f5f5f5)](https://discord.gg/Jm7Y4cbUej)
 
 ## Screenshots
@@ -23,7 +23,7 @@ To learn more about the project, visit [answer.apache.org](https://answer.apache
 ### Running with docker
 
 ```bash
-docker run -d -p 9080:80 -v answer-data:/data --name answer apache/answer:1.3.6
+docker run -d -p 9080:80 -v answer-data:/data --name answer apache/answer:1.5.0
 ```
 
 For more information, see [Installation](https://answer.apache.org/docs/installation).
@@ -40,20 +40,20 @@ You can also check out the [plugins here](https://answer.apache.org/plugins).
 
 ### Prerequisites
 
-- Golang >= 1.18
-- Node.js >= 16.17
-- pnpm >= 8
-- mockgen >= 1.6.0
-- wire >= 0.5.0
+- Golang >= 1.22
+- Node.js >= 20
+- pnpm >= 9
+- [mockgen](https://github.com/uber-go/mock?tab=readme-ov-file#installation) >= 1.6.0
+- [wire](https://github.com/google/wire/) >= 0.5.0
 
 ### Build
 
 ```bash
-# install wire and mockgen for building
+# Install wire and mockgen for building. You can run `make check` to check if they are installed.
 $ make generate
-# install frontend dependencies and build
+# Install frontend dependencies and build
 $ make ui
-# install backend dependencies and build
+# Install backend dependencies and build
 $ make build
 ```
 
@@ -65,4 +65,4 @@ See [CONTRIBUTING](https://answer.apache.org/community/contributing) for ways to
 
 ## License
 
-[Apache License 2.0](https://github.com/apache/incubator-answer/blob/main/LICENSE)
+[Apache License 2.0](https://github.com/apache/answer/blob/main/LICENSE)

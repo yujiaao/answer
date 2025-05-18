@@ -30,6 +30,8 @@ export const DRAFT_TIMESIGH_STORAGE_KEY = '|_a_t_s_|';
 export const DEFAULT_THEME = 'system';
 export const ADMIN_PRIVILEGE_CUSTOM_LEVEL = 99;
 export const SKELETON_SHOW_TIME = 1000;
+export const LIST_VIEW_STORAGE_KEY = '_a_list_view_';
+export const EXTERNAL_CONTENT_DISPLAY_MODE = '_a_ecd_';
 
 export const USER_AGENT_NAMES = {
   SegmentFault: 'SegmentFault',
@@ -84,17 +86,25 @@ export const ADMIN_LIST_STATUS = {
 export const ADMIN_NAV_MENUS = [
   {
     name: 'dashboard',
+    icon: 'speedometer',
     children: [],
   },
   {
     name: 'contents',
+    icon: 'file-earmark-text-fill',
     children: [{ name: 'questions' }, { name: 'answers' }],
   },
   {
     name: 'users',
+    icon: 'people-fill',
+  },
+  {
+    name: 'badges',
+    icon: 'award-fill',
   },
   {
     name: 'customize',
+    icon: 'palette-fill',
     children: [
       {
         name: 'themes',
@@ -107,6 +117,7 @@ export const ADMIN_NAV_MENUS = [
   },
   {
     name: 'settings',
+    icon: 'gear-fill',
     children: [
       { name: 'general' },
       { name: 'interface' },
@@ -122,6 +133,7 @@ export const ADMIN_NAV_MENUS = [
   },
   {
     name: 'plugins',
+    icon: 'plugin',
     children: [
       {
         name: 'installed_plugins',
@@ -647,3 +659,5 @@ export const SYSTEM_AVATAR_OPTIONS = [
 ];
 
 export const TAG_SLUG_NAME_MAX_LENGTH = 35;
+
+export const DEFAULT_THEME_COLOR = '#0033ff';

@@ -23,19 +23,19 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/apache/incubator-answer/internal/base/handler"
-	"github.com/apache/incubator-answer/internal/base/middleware"
-	"github.com/apache/incubator-answer/internal/base/reason"
-	"github.com/apache/incubator-answer/internal/base/translator"
-	"github.com/apache/incubator-answer/internal/base/validator"
-	"github.com/apache/incubator-answer/internal/entity"
-	"github.com/apache/incubator-answer/internal/schema"
-	"github.com/apache/incubator-answer/internal/service/action"
-	"github.com/apache/incubator-answer/internal/service/content"
-	"github.com/apache/incubator-answer/internal/service/permission"
-	"github.com/apache/incubator-answer/internal/service/rank"
-	"github.com/apache/incubator-answer/internal/service/siteinfo_common"
-	"github.com/apache/incubator-answer/pkg/uid"
+	"github.com/apache/answer/internal/base/handler"
+	"github.com/apache/answer/internal/base/middleware"
+	"github.com/apache/answer/internal/base/reason"
+	"github.com/apache/answer/internal/base/translator"
+	"github.com/apache/answer/internal/base/validator"
+	"github.com/apache/answer/internal/entity"
+	"github.com/apache/answer/internal/schema"
+	"github.com/apache/answer/internal/service/action"
+	"github.com/apache/answer/internal/service/content"
+	"github.com/apache/answer/internal/service/permission"
+	"github.com/apache/answer/internal/service/rank"
+	"github.com/apache/answer/internal/service/siteinfo_common"
+	"github.com/apache/answer/pkg/uid"
 	"github.com/gin-gonic/gin"
 	"github.com/segmentfault/pacman/errors"
 )
@@ -284,10 +284,6 @@ func (ac *AnswerController) Add(ctx *gin.Context) {
 	objectOwner := ac.rankService.CheckOperationObjectOwner(ctx, req.UserID, info.ID)
 	req.CanEdit = canList[0] || objectOwner
 	req.CanDelete = canList[1] || objectOwner
-	if !can {
-		handler.HandleResponse(ctx, errors.Forbidden(reason.RankFailToMeetTheCondition), nil)
-		return
-	}
 	info.MemberActions = permission.GetAnswerPermission(ctx, req.UserID, info.UserID,
 		0, req.CanEdit, req.CanDelete, false)
 	handler.HandleResponse(ctx, nil, gin.H{
@@ -365,7 +361,6 @@ func (ac *AnswerController) Update(ctx *gin.Context) {
 // @Summary AnswerList
 // @Description AnswerList <br> <b>order</b> (default or updated)
 // @Tags api-answer
-// @Security ApiKeyAuth
 // @Accept  json
 // @Produce  json
 // @Param question_id query string true "question_id"

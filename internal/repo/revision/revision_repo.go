@@ -22,15 +22,15 @@ package revision
 import (
 	"context"
 
-	"github.com/apache/incubator-answer/internal/base/constant"
-	"github.com/apache/incubator-answer/internal/base/data"
-	"github.com/apache/incubator-answer/internal/base/pager"
-	"github.com/apache/incubator-answer/internal/base/reason"
-	"github.com/apache/incubator-answer/internal/entity"
-	"github.com/apache/incubator-answer/internal/service/revision"
-	"github.com/apache/incubator-answer/internal/service/unique"
-	"github.com/apache/incubator-answer/pkg/converter"
-	"github.com/apache/incubator-answer/pkg/obj"
+	"github.com/apache/answer/internal/base/constant"
+	"github.com/apache/answer/internal/base/data"
+	"github.com/apache/answer/internal/base/pager"
+	"github.com/apache/answer/internal/base/reason"
+	"github.com/apache/answer/internal/entity"
+	"github.com/apache/answer/internal/service/revision"
+	"github.com/apache/answer/internal/service/unique"
+	"github.com/apache/answer/pkg/converter"
+	"github.com/apache/answer/pkg/obj"
 	"github.com/segmentfault/pacman/errors"
 	"xorm.io/builder"
 	"xorm.io/xorm"
@@ -155,7 +155,17 @@ func (rr *revisionRepo) GetLastRevisionByObjectID(ctx context.Context, objectID 
 	revision *entity.Revision, exist bool, err error,
 ) {
 	revision = &entity.Revision{}
-	exist, err = rr.data.DB.Context(ctx).Where("object_id = ?", objectID).OrderBy("created_at DESC").Get(revision)
+	exist, err = rr.data.DB.Context(ctx).Where("object_id = ?", objectID).Desc("created_at").Get(revision)
+	if err != nil {
+		return nil, false, errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+	return
+}
+
+// GetLastRevisionByFileURL get object's last revision by file url
+func (rr *revisionRepo) GetLastRevisionByFileURL(ctx context.Context, fileURL string) (revision *entity.Revision, exist bool, err error) {
+	revision = &entity.Revision{}
+	exist, err = rr.data.DB.Context(ctx).Where("content LIKE ?", "%"+fileURL+"%").Desc("created_at").Get(revision)
 	if err != nil {
 		return nil, false, errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 	}

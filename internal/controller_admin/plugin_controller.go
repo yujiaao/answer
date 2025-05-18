@@ -22,10 +22,10 @@ package controller_admin
 import (
 	"encoding/json"
 
-	"github.com/apache/incubator-answer/internal/base/handler"
-	"github.com/apache/incubator-answer/internal/schema"
-	"github.com/apache/incubator-answer/internal/service/plugin_common"
-	"github.com/apache/incubator-answer/plugin"
+	"github.com/apache/answer/internal/base/handler"
+	"github.com/apache/answer/internal/schema"
+	"github.com/apache/answer/internal/service/plugin_common"
+	"github.com/apache/answer/plugin"
 	"github.com/gin-gonic/gin"
 )
 
@@ -43,7 +43,6 @@ func NewPluginController(pluginCommonService *plugin_common.PluginCommonService)
 // @Summary get all plugins status
 // @Description get all plugins status
 // @Tags Plugin
-// @Security ApiKeyAuth
 // @Accept  json
 // @Produce  json
 // @Success 200 {object} handler.RespBody{data=[]schema.GetPluginListResp}

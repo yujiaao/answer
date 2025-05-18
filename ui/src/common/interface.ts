@@ -173,7 +173,7 @@ export interface UserInfoRes extends UserInfoBase {
   [prop: string]: any;
 }
 
-export type UploadType = 'post' | 'avatar' | 'branding';
+export type UploadType = 'post' | 'avatar' | 'branding' | 'post_attachment';
 export interface UploadReq {
   file: FormData;
 }
@@ -220,11 +220,19 @@ export interface SetNoticeReq {
   notice_switch: boolean;
 }
 
+export interface NotificationBadgeAward {
+  notification_id: string;
+  badge_id: string;
+  name: string;
+  icon: string;
+  level: number;
+}
 export interface NotificationStatus {
   inbox: number;
   achievement: number;
   revision: number;
   can_revision: boolean;
+  badge_award: NotificationBadgeAward | null;
 }
 
 export interface QuestionDetailRes {
@@ -288,11 +296,13 @@ export interface LangsType {
  * @description interface for Question
  */
 export type QuestionOrderBy =
+  | 'recommend'
   | 'newest'
   | 'active'
   | 'hot'
   | 'score'
-  | 'unanswered';
+  | 'unanswered'
+  | 'frequent';
 
 export interface QueryQuestionsReq extends Paging {
   order: QuestionOrderBy;
@@ -327,6 +337,8 @@ export type UserFilterBy =
   | 'inactive'
   | 'suspended'
   | 'deleted';
+
+export type BadgeFilterBy = 'all' | 'active' | 'inactive';
 
 export type InstalledPluginsFilterBy =
   | 'all'
@@ -407,6 +419,7 @@ export interface SiteSettings {
   site_write: AdminSettingsWrite;
   version: string;
   revision: string;
+  site_legal: AdminSettingsLegal;
 }
 
 export interface AdminSettingBranding {
@@ -417,6 +430,7 @@ export interface AdminSettingBranding {
 }
 
 export interface AdminSettingsLegal {
+  external_content_display: string;
   privacy_policy_original_text?: string;
   privacy_policy_parsed_text?: string;
   terms_of_service_original_text?: string;
@@ -428,6 +442,11 @@ export interface AdminSettingsWrite {
   recommend_tags?: Tag[];
   required_tag?: boolean;
   reserved_tags?: Tag[];
+  max_image_size?: number;
+  max_attachment_size?: number;
+  max_image_megapixel?: number;
+  authorized_image_extensions?: string[];
+  authorized_attachment_extensions?: string[];
 }
 
 export interface AdminSettingsSeo {
@@ -513,6 +532,10 @@ export interface SearchRes extends ListResult<SearchResItem> {
 export interface AdminDashboard {
   info: {
     question_count: number;
+    resolved_count: number;
+    resolved_rate: string;
+    unanswered_count: number;
+    unanswered_rate: string;
     answer_count: number;
     comment_count: number;
     vote_count: number;
@@ -732,4 +755,54 @@ export interface ReactionItem {
   count: number;
   tooltip: string;
   is_active: boolean;
+}
+
+export interface BadgeListItem {
+  id: string;
+  name: string;
+  icon: string;
+  award_count: number;
+  earned: boolean;
+  /** 1: bronze 2: silver 3:gold */
+  level: number;
+  earned_count?: number;
+}
+
+export interface BadgeListGroupItem {
+  badges: BadgeListItem[];
+  group_name: string;
+}
+
+export interface BadgeInfo extends BadgeListItem {
+  description: string;
+  earned_count: number;
+  is_single: boolean;
+}
+
+export interface AdminBadgeListItem extends BadgeListItem {
+  group_name: string;
+  status: string;
+  description: string;
+}
+
+export interface BadgeDetailListReq {
+  page: number;
+  page_size: number;
+  badge_id: string;
+  username?: string | null;
+}
+export interface BadgeDetailListItem {
+  created_at: number;
+  author_user_info: UserInfoBase;
+  object_type: string;
+  object_id: string;
+  url_title: string;
+  question_id: string;
+  answer_id: string;
+  comment_id: string;
+}
+
+export interface BadgeDetailListRes {
+  count: number;
+  list: BadgeDetailListItem[];
 }

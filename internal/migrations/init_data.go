@@ -20,8 +20,8 @@
 package migrations
 
 import (
-	"github.com/apache/incubator-answer/internal/entity"
-	"github.com/apache/incubator-answer/internal/service/permission"
+	"github.com/apache/answer/internal/entity"
+	"github.com/apache/answer/internal/service/permission"
 )
 
 const (
@@ -37,6 +37,7 @@ Disallow: /users/oauth/*
 Disallow: /users/*/*
 Disallow: /answer/api
 Disallow: /*?code*
+Disallow: /swagger/*
 
 Sitemap: `
 )
@@ -52,6 +53,7 @@ var (
 		&entity.Meta{},
 		&entity.Notification{},
 		&entity.Question{},
+		&entity.QuestionLink{},
 		&entity.Report{},
 		&entity.Revision{},
 		&entity.SiteInfo{},
@@ -69,6 +71,9 @@ var (
 		&entity.UserNotificationConfig{},
 		&entity.PluginUserConfig{},
 		&entity.Review{},
+		&entity.Badge{},
+		&entity.BadgeGroup{},
+		&entity.BadgeAward{},
 	}
 
 	roles = []*entity.Role{
@@ -343,5 +348,161 @@ var (
 		{ID: 128, Key: "rank.answer.undeleted", Value: `-1`},
 		{ID: 129, Key: "rank.question.undeleted", Value: `-1`},
 		{ID: 130, Key: "rank.tag.undeleted", Value: `-1`},
+	}
+
+	defaultBadgeGroupTable = []*entity.BadgeGroup{
+		{ID: "1", Name: "badge.default_badge_groups.getting_started.name"},
+		{ID: "2", Name: "badge.default_badge_groups.community.name"},
+		{ID: "3", Name: "badge.default_badge_groups.posting.name"},
+	}
+
+	defaultBadgeTable = []*entity.Badge{
+		{
+			Name:         "badge.default_badges.autobiographer.name",
+			Icon:         "person-badge-fill",
+			Description:  "badge.default_badges.autobiographer.desc",
+			Status:       entity.BadgeStatusActive,
+			BadgeGroupID: 1,
+			Level:        entity.BadgeLevelBronze,
+			Single:       entity.BadgeSingleAward,
+			Handler:      "FirstUpdateUserProfile",
+		},
+		{
+			Name:         "badge.default_badges.editor.name",
+			Icon:         "pencil-fill",
+			Description:  "badge.default_badges.editor.desc",
+			Status:       entity.BadgeStatusActive,
+			BadgeGroupID: 1,
+			Level:        entity.BadgeLevelBronze,
+			Single:       entity.BadgeSingleAward,
+			Handler:      "FirstPostEdit",
+		},
+		{
+			Name:         "badge.default_badges.first_flag.name",
+			Icon:         "flag-fill",
+			Description:  "badge.default_badges.first_flag.desc",
+			Status:       entity.BadgeStatusActive,
+			BadgeGroupID: 1,
+			Level:        entity.BadgeLevelBronze,
+			Single:       entity.BadgeSingleAward,
+			Handler:      "FirstFlaggedPost",
+		},
+		{
+			Name:         "badge.default_badges.first_upvote.name",
+			Icon:         "hand-thumbs-up-fill",
+			Description:  "badge.default_badges.first_upvote.desc",
+			Status:       entity.BadgeStatusActive,
+			BadgeGroupID: 1,
+			Level:        entity.BadgeLevelBronze,
+			Single:       entity.BadgeSingleAward,
+			Handler:      "FirstVotedPost",
+		},
+		{
+			Name:         "badge.default_badges.first_reaction.name",
+			Icon:         "emoji-smile-fill",
+			Description:  "badge.default_badges.first_reaction.desc",
+			Status:       entity.BadgeStatusActive,
+			BadgeGroupID: 1,
+			Level:        entity.BadgeLevelBronze,
+			Single:       entity.BadgeSingleAward,
+			Handler:      "FirstReactedPost",
+		},
+		{
+			Name:         "badge.default_badges.first_share.name",
+			Icon:         "share-fill",
+			Description:  "badge.default_badges.first_share.desc",
+			Status:       entity.BadgeStatusActive,
+			BadgeGroupID: 1,
+			Level:        entity.BadgeLevelBronze,
+			Single:       entity.BadgeSingleAward,
+			Handler:      "FirstSharedPost",
+		},
+		{
+			Name:         "badge.default_badges.scholar.name",
+			Icon:         "check-circle-fill",
+			Description:  "badge.default_badges.scholar.desc",
+			Status:       entity.BadgeStatusActive,
+			BadgeGroupID: 1,
+			Level:        entity.BadgeLevelBronze,
+			Single:       entity.BadgeSingleAward,
+			Handler:      "FirstAcceptAnswer",
+		},
+		{
+			Name:         "badge.default_badges.solved.name",
+			Icon:         "check-square-fill",
+			Description:  "badge.default_badges.solved.desc",
+			Status:       entity.BadgeStatusActive,
+			BadgeGroupID: 2,
+			Level:        entity.BadgeLevelBronze,
+			Single:       entity.BadgeSingleAward,
+			Handler:      "ReachAnswerAcceptedAmount",
+			Param:        `{"amount":"1"}`,
+		},
+		{
+			Name:         "badge.default_badges.nice_answer.name",
+			Icon:         "chat-square-text-fill",
+			Description:  "badge.default_badges.nice_answer.desc",
+			Status:       entity.BadgeStatusActive,
+			BadgeGroupID: 3,
+			Level:        entity.BadgeLevelBronze,
+			Single:       entity.BadgeMultiAward,
+			Handler:      "ReachAnswerVote",
+			Param:        `{"amount":"10"}`,
+		},
+		{
+			Name:         "badge.default_badges.good_answer.name",
+			Icon:         "chat-square-text-fill",
+			Description:  "badge.default_badges.good_answer.desc",
+			Status:       entity.BadgeStatusActive,
+			BadgeGroupID: 3,
+			Level:        entity.BadgeLevelSilver,
+			Single:       entity.BadgeMultiAward,
+			Handler:      "ReachAnswerVote",
+			Param:        `{"amount":"25"}`,
+		},
+		{
+			Name:         "badge.default_badges.great_answer.name",
+			Icon:         "chat-square-text-fill",
+			Description:  "badge.default_badges.great_answer.desc",
+			Status:       entity.BadgeStatusActive,
+			BadgeGroupID: 3,
+			Level:        entity.BadgeLevelGold,
+			Single:       entity.BadgeMultiAward,
+			Handler:      "ReachAnswerVote",
+			Param:        `{"amount":"50"}`,
+		},
+		{
+			Name:         "badge.default_badges.nice_question.name",
+			Icon:         "question-circle-fill",
+			Description:  "badge.default_badges.nice_question.desc",
+			Status:       entity.BadgeStatusActive,
+			BadgeGroupID: 3,
+			Level:        entity.BadgeLevelBronze,
+			Single:       entity.BadgeMultiAward,
+			Handler:      "ReachQuestionVote",
+			Param:        `{"amount":"10"}`,
+		},
+		{
+			Name:         "badge.default_badges.good_question.name",
+			Icon:         "question-circle-fill",
+			Description:  "badge.default_badges.good_question.desc",
+			Status:       entity.BadgeStatusActive,
+			BadgeGroupID: 3,
+			Level:        entity.BadgeLevelSilver,
+			Single:       entity.BadgeMultiAward,
+			Handler:      "ReachQuestionVote",
+			Param:        `{"amount":"25"}`,
+		},
+		{
+			Name:         "badge.default_badges.great_question.name",
+			Icon:         "question-circle-fill",
+			Description:  "badge.default_badges.great_question.desc",
+			Status:       entity.BadgeStatusActive,
+			BadgeGroupID: 3,
+			Level:        entity.BadgeLevelGold,
+			Single:       entity.BadgeMultiAward,
+			Handler:      "ReachQuestionVote",
+			Param:        `{"amount":"50"}`,
+		},
 	}
 )

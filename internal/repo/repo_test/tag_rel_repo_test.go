@@ -25,10 +25,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/apache/incubator-answer/internal/repo/unique"
+	"github.com/apache/answer/internal/repo/unique"
 
-	"github.com/apache/incubator-answer/internal/entity"
-	"github.com/apache/incubator-answer/internal/repo/tag"
+	"github.com/apache/answer/internal/entity"
+	"github.com/apache/answer/internal/repo/tag"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -104,7 +104,7 @@ func Test_tagListRepo_GetObjectTagRelWithoutStatus(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, exist)
 
-	err = tagRelRepo.EnableTagRelByIDs(context.TODO(), ids)
+	err = tagRelRepo.EnableTagRelByIDs(context.TODO(), ids, false)
 	assert.NoError(t, err)
 
 	count, err = tagRelRepo.CountTagRelByTagID(context.TODO(), "10030000000000101")

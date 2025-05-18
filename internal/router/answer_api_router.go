@@ -20,9 +20,9 @@
 package router
 
 import (
-	"github.com/apache/incubator-answer/internal/base/middleware"
-	"github.com/apache/incubator-answer/internal/controller"
-	"github.com/apache/incubator-answer/internal/controller_admin"
+	"github.com/apache/answer/internal/base/middleware"
+	"github.com/apache/answer/internal/controller"
+	"github.com/apache/answer/internal/controller_admin"
 	"github.com/gin-gonic/gin"
 )
 
@@ -55,6 +55,8 @@ type AnswerAPIRouter struct {
 	userPluginController    *controller.UserPluginController
 	reviewController        *controller.ReviewController
 	metaController          *controller.MetaController
+	badgeController         *controller.BadgeController
+	adminBadgeController    *controller_admin.BadgeController
 }
 
 func NewAnswerAPIRouter(
@@ -86,6 +88,8 @@ func NewAnswerAPIRouter(
 	userPluginController *controller.UserPluginController,
 	reviewController *controller.ReviewController,
 	metaController *controller.MetaController,
+	badgeController *controller.BadgeController,
+	adminBadgeController *controller_admin.BadgeController,
 ) *AnswerAPIRouter {
 	return &AnswerAPIRouter{
 		langController:          langController,
@@ -116,6 +120,8 @@ func NewAnswerAPIRouter(
 		userPluginController:    userPluginController,
 		reviewController:        reviewController,
 		metaController:          metaController,
+		badgeController:         badgeController,
+		adminBadgeController:    adminBadgeController,
 	}
 }
 
@@ -159,9 +165,11 @@ func (a *AnswerAPIRouter) RegisterUnAuthAnswerAPIRouter(r *gin.RouterGroup) {
 	r.GET("/question/info", a.questionController.GetQuestion)
 	r.GET("/question/invite", a.questionController.GetQuestionInviteUserInfo)
 	r.GET("/question/page", a.questionController.QuestionPage)
+	r.GET("/question/recommend/page", a.questionController.QuestionRecommendPage)
 	r.GET("/question/similar/tag", a.questionController.SimilarQuestion)
 	r.GET("/personal/qa/top", a.questionController.UserTop)
 	r.GET("/personal/question/page", a.questionController.PersonalQuestionPage)
+	r.GET("/question/link", a.questionController.GetQuestionLink)
 
 	// comment
 	r.GET("/comment/page", a.commentController.GetCommentWithPage)
@@ -187,6 +195,13 @@ func (a *AnswerAPIRouter) RegisterUnAuthAnswerAPIRouter(r *gin.RouterGroup) {
 
 	// reaction
 	r.GET("/meta/reaction", a.metaController.GetReaction)
+
+	// badges
+	r.GET("/badge", a.badgeController.GetBadgeInfo)
+	r.GET("/badge/awards/page", a.badgeController.GetBadgeAwardList)
+	r.GET("/badge/user/awards/recent", a.badgeController.GetRecentBadgeAwardListByUsername)
+	r.GET("/badge/user/awards", a.badgeController.GetAllBadgeAwardListByUsername)
+	r.GET("/badges", a.badgeController.GetBadgeList)
 }
 
 func (a *AnswerAPIRouter) RegisterAuthUserWithAnyStatusAnswerAPIRouter(r *gin.RouterGroup) {
@@ -231,6 +246,7 @@ func (a *AnswerAPIRouter) RegisterAnswerAPIRouter(r *gin.RouterGroup) {
 	r.POST("/tag/recover", a.tagController.RecoverTag)
 	r.DELETE("/tag", a.tagController.RemoveTag)
 	r.PUT("/tag/synonym", a.tagController.UpdateTagSynonym)
+	r.POST("/tag/merge", a.tagController.MergeTag)
 
 	// collection
 	r.POST("/collection/switch", a.collectionController.CollectionSwitch)
@@ -313,6 +329,8 @@ func (a *AnswerAPIRouter) RegisterAnswerAdminAPIRouter(r *gin.RouterGroup) {
 	r.PUT("/user/password", a.adminUserController.UpdateUserPassword)
 	r.PUT("/user/profile", a.adminUserController.EditUserProfile)
 
+	r.DELETE("/delete/permanently", a.adminUserController.DeletePermanently)
+
 	// reason
 	r.GET("/reasons", a.reasonController.Reasons)
 
@@ -359,4 +377,8 @@ func (a *AnswerAPIRouter) RegisterAnswerAdminAPIRouter(r *gin.RouterGroup) {
 	r.PUT("/plugin/status", a.pluginController.UpdatePluginStatus)
 	r.GET("/plugin/config", a.pluginController.GetPluginConfig)
 	r.PUT("/plugin/config", a.pluginController.UpdatePluginConfig)
+
+	// badge
+	r.GET("/badges", a.adminBadgeController.GetBadgeList)
+	r.PUT("/badge/status", a.adminBadgeController.UpdateBadgeStatus)
 }

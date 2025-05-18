@@ -20,10 +20,10 @@
 package router
 
 import (
-	"github.com/apache/incubator-answer/internal/base/middleware"
-	"github.com/apache/incubator-answer/internal/controller"
-	templaterender "github.com/apache/incubator-answer/internal/controller/template_render"
-	"github.com/apache/incubator-answer/internal/controller_admin"
+	"github.com/apache/answer/internal/base/middleware"
+	"github.com/apache/answer/internal/controller"
+	templaterender "github.com/apache/answer/internal/controller/template_render"
+	"github.com/apache/answer/internal/controller_admin"
 	"github.com/gin-gonic/gin"
 )
 
@@ -59,6 +59,8 @@ func (a *TemplateRouter) RegisterTemplateRouter(r *gin.RouterGroup, baseURLPath 
 	seoNoAuth.GET("/custom.css", a.siteInfoController.GetCss)
 
 	seoNoAuth.GET("/404", a.templateController.Page404)
+
+	seoNoAuth.GET("/opensearch.xml", a.templateController.OpenSearch)
 
 	seo := r.Group(baseURLPath)
 	seo.Use(a.authUserMiddleware.CheckPrivateMode())

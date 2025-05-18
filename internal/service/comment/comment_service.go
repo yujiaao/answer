@@ -21,24 +21,25 @@ package comment
 
 import (
 	"context"
+	"github.com/apache/answer/internal/service/event_queue"
 	"time"
 
-	"github.com/apache/incubator-answer/internal/base/constant"
-	"github.com/apache/incubator-answer/internal/base/pager"
-	"github.com/apache/incubator-answer/internal/base/reason"
-	"github.com/apache/incubator-answer/internal/entity"
-	"github.com/apache/incubator-answer/internal/schema"
-	"github.com/apache/incubator-answer/internal/service/activity_common"
-	"github.com/apache/incubator-answer/internal/service/activity_queue"
-	"github.com/apache/incubator-answer/internal/service/comment_common"
-	"github.com/apache/incubator-answer/internal/service/export"
-	"github.com/apache/incubator-answer/internal/service/notice_queue"
-	"github.com/apache/incubator-answer/internal/service/object_info"
-	"github.com/apache/incubator-answer/internal/service/permission"
-	usercommon "github.com/apache/incubator-answer/internal/service/user_common"
-	"github.com/apache/incubator-answer/pkg/htmltext"
-	"github.com/apache/incubator-answer/pkg/token"
-	"github.com/apache/incubator-answer/pkg/uid"
+	"github.com/apache/answer/internal/base/constant"
+	"github.com/apache/answer/internal/base/pager"
+	"github.com/apache/answer/internal/base/reason"
+	"github.com/apache/answer/internal/entity"
+	"github.com/apache/answer/internal/schema"
+	"github.com/apache/answer/internal/service/activity_common"
+	"github.com/apache/answer/internal/service/activity_queue"
+	"github.com/apache/answer/internal/service/comment_common"
+	"github.com/apache/answer/internal/service/export"
+	"github.com/apache/answer/internal/service/notice_queue"
+	"github.com/apache/answer/internal/service/object_info"
+	"github.com/apache/answer/internal/service/permission"
+	usercommon "github.com/apache/answer/internal/service/user_common"
+	"github.com/apache/answer/pkg/htmltext"
+	"github.com/apache/answer/pkg/token"
+	"github.com/apache/answer/pkg/uid"
 	"github.com/jinzhu/copier"
 	"github.com/segmentfault/pacman/errors"
 	"github.com/segmentfault/pacman/log"
@@ -86,6 +87,7 @@ type CommentService struct {
 	notificationQueueService         notice_queue.NotificationQueueService
 	externalNotificationQueueService notice_queue.ExternalNotificationQueueService
 	activityQueueService             activity_queue.ActivityQueueService
+	eventQueueService                event_queue.EventQueueService
 }
 
 // NewCommentService new comment service
@@ -100,6 +102,7 @@ func NewCommentService(
 	notificationQueueService notice_queue.NotificationQueueService,
 	externalNotificationQueueService notice_queue.ExternalNotificationQueueService,
 	activityQueueService activity_queue.ActivityQueueService,
+	eventQueueService event_queue.EventQueueService,
 ) *CommentService {
 	return &CommentService{
 		commentRepo:                      commentRepo,
@@ -112,6 +115,7 @@ func NewCommentService(
 		notificationQueueService:         notificationQueueService,
 		externalNotificationQueueService: externalNotificationQueueService,
 		activityQueueService:             activityQueueService,
+		eventQueueService:                eventQueueService,
 	}
 }
 
@@ -184,13 +188,19 @@ func (cs *CommentService) AddComment(ctx context.Context, req *schema.AddComment
 		OriginalObjectID: req.ObjectID,
 		ActivityTypeKey:  constant.ActQuestionCommented,
 	}
+	var event *schema.EventMsg
 	switch objInfo.ObjectType {
 	case constant.QuestionObjectType:
 		activityMsg.ActivityTypeKey = constant.ActQuestionCommented
+		event = schema.NewEvent(constant.EventCommentCreate, req.UserID).TID(comment.ID).
+			CID(comment.ID, comment.UserID).QID(objInfo.QuestionID, objInfo.ObjectCreatorUserID)
 	case constant.AnswerObjectType:
 		activityMsg.ActivityTypeKey = constant.ActAnswerCommented
+		event = schema.NewEvent(constant.EventCommentCreate, req.UserID).TID(comment.ID).
+			CID(comment.ID, comment.UserID).AID(objInfo.AnswerID, objInfo.ObjectCreatorUserID)
 	}
 	cs.activityQueueService.Send(ctx, activityMsg)
+	cs.eventQueueService.Send(ctx, event)
 	return resp, nil
 }
 
@@ -241,7 +251,13 @@ func (cs *CommentService) addCommentNotification(
 
 // RemoveComment delete comment
 func (cs *CommentService) RemoveComment(ctx context.Context, req *schema.RemoveCommentReq) (err error) {
-	return cs.commentRepo.RemoveComment(ctx, req.CommentID)
+	err = cs.commentRepo.RemoveComment(ctx, req.CommentID)
+	if err != nil {
+		return err
+	}
+	cs.eventQueueService.Send(ctx, schema.NewEvent(constant.EventCommentDelete, req.UserID).
+		TID(req.CommentID).CID(req.CommentID, req.UserID))
+	return nil
 }
 
 // UpdateComment update comment
@@ -273,6 +289,8 @@ func (cs *CommentService) UpdateComment(ctx context.Context, req *schema.UpdateC
 		OriginalText: req.OriginalText,
 		ParsedText:   req.ParsedText,
 	}
+	cs.eventQueueService.Send(ctx, schema.NewEvent(constant.EventCommentUpdate, req.UserID).TID(old.ID).
+		CID(old.ID, old.UserID))
 	return resp, nil
 }
 

@@ -21,15 +21,15 @@ package collection
 
 import (
 	"context"
-	"github.com/apache/incubator-answer/internal/base/constant"
-	"github.com/apache/incubator-answer/internal/base/data"
-	"github.com/apache/incubator-answer/internal/base/handler"
-	"github.com/apache/incubator-answer/internal/base/pager"
-	"github.com/apache/incubator-answer/internal/base/reason"
-	"github.com/apache/incubator-answer/internal/entity"
-	collectioncommon "github.com/apache/incubator-answer/internal/service/collection_common"
-	"github.com/apache/incubator-answer/internal/service/unique"
-	"github.com/apache/incubator-answer/pkg/uid"
+	"github.com/apache/answer/internal/base/constant"
+	"github.com/apache/answer/internal/base/data"
+	"github.com/apache/answer/internal/base/handler"
+	"github.com/apache/answer/internal/base/pager"
+	"github.com/apache/answer/internal/base/reason"
+	"github.com/apache/answer/internal/entity"
+	collectioncommon "github.com/apache/answer/internal/service/collection_common"
+	"github.com/apache/answer/internal/service/unique"
+	"github.com/apache/answer/pkg/uid"
 	"github.com/segmentfault/pacman/errors"
 	"xorm.io/xorm"
 )
@@ -108,7 +108,7 @@ func (cr *collectionRepo) GetCollection(ctx context.Context, id int) (collection
 // GetCollectionList get collection list all
 func (cr *collectionRepo) GetCollectionList(ctx context.Context, collection *entity.Collection) (collectionList []*entity.Collection, err error) {
 	collectionList = make([]*entity.Collection, 0)
-	err = cr.data.DB.Context(ctx).Find(collectionList, collection)
+	err = cr.data.DB.Context(ctx).Find(&collectionList, collection)
 	err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 	return
 }

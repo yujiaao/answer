@@ -22,13 +22,13 @@ package rank
 import (
 	"context"
 
-	"github.com/apache/incubator-answer/internal/base/data"
-	"github.com/apache/incubator-answer/internal/base/pager"
-	"github.com/apache/incubator-answer/internal/base/reason"
-	"github.com/apache/incubator-answer/internal/entity"
-	"github.com/apache/incubator-answer/internal/service/config"
-	"github.com/apache/incubator-answer/internal/service/rank"
-	"github.com/apache/incubator-answer/plugin"
+	"github.com/apache/answer/internal/base/data"
+	"github.com/apache/answer/internal/base/pager"
+	"github.com/apache/answer/internal/base/reason"
+	"github.com/apache/answer/internal/entity"
+	"github.com/apache/answer/internal/service/config"
+	"github.com/apache/answer/internal/service/rank"
+	"github.com/apache/answer/plugin"
 	"github.com/jinzhu/now"
 	"github.com/segmentfault/pacman/errors"
 	"github.com/segmentfault/pacman/log"
@@ -180,7 +180,7 @@ func (ur *UserRankRepo) checkUserTodayRank(ctx context.Context,
 		LessVal: start,
 		MoreVal: end,
 	})
-	earned, err := session.Sum(&entity.Activity{}, "`rank`")
+	earned, err := session.SumInt(&entity.Activity{}, "`rank`")
 	if err != nil {
 		return false, err
 	}

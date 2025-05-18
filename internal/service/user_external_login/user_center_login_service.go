@@ -24,19 +24,19 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/apache/incubator-answer/internal/base/constant"
-	"github.com/apache/incubator-answer/internal/base/handler"
-	"github.com/apache/incubator-answer/internal/base/reason"
-	"github.com/apache/incubator-answer/internal/base/translator"
-	"github.com/apache/incubator-answer/internal/entity"
-	"github.com/apache/incubator-answer/internal/schema"
-	"github.com/apache/incubator-answer/internal/service/activity"
-	"github.com/apache/incubator-answer/internal/service/siteinfo_common"
-	usercommon "github.com/apache/incubator-answer/internal/service/user_common"
-	"github.com/apache/incubator-answer/pkg/checker"
-	"github.com/apache/incubator-answer/pkg/converter"
-	"github.com/apache/incubator-answer/pkg/random"
-	"github.com/apache/incubator-answer/plugin"
+	"github.com/apache/answer/internal/base/constant"
+	"github.com/apache/answer/internal/base/handler"
+	"github.com/apache/answer/internal/base/reason"
+	"github.com/apache/answer/internal/base/translator"
+	"github.com/apache/answer/internal/entity"
+	"github.com/apache/answer/internal/schema"
+	"github.com/apache/answer/internal/service/activity"
+	"github.com/apache/answer/internal/service/siteinfo_common"
+	usercommon "github.com/apache/answer/internal/service/user_common"
+	"github.com/apache/answer/pkg/checker"
+	"github.com/apache/answer/pkg/converter"
+	"github.com/apache/answer/pkg/random"
+	"github.com/apache/answer/plugin"
 	"github.com/segmentfault/pacman/log"
 )
 
@@ -129,7 +129,9 @@ func (us *UserCenterLoginService) ExternalLogin(
 		return nil, err
 	}
 
-	us.activeUser(ctx, oldUserInfo)
+	if err := us.activeUser(ctx, oldUserInfo); err != nil {
+		return nil, err
+	}
 
 	accessToken, _, err := us.userCommonService.CacheLoginUserInfo(
 		ctx, oldUserInfo.ID, oldUserInfo.MailStatus, oldUserInfo.Status, oldExternalLoginUserInfo.ExternalID)
@@ -181,10 +183,12 @@ func (us *UserCenterLoginService) registerNewUser(ctx context.Context, provider 
 	return userInfo, nil
 }
 
-func (us *UserCenterLoginService) activeUser(ctx context.Context, oldUserInfo *entity.User) {
+func (us *UserCenterLoginService) activeUser(ctx context.Context, oldUserInfo *entity.User) error {
 	if err := us.userActivity.UserActive(ctx, oldUserInfo.ID); err != nil {
 		log.Error(err)
+		return err
 	}
+	return nil
 }
 
 func (us *UserCenterLoginService) UserCenterUserSettings(ctx context.Context, userID string) (

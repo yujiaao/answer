@@ -21,13 +21,13 @@ package plugin_config
 
 import (
 	"context"
-	"github.com/apache/incubator-answer/internal/base/pager"
+	"github.com/apache/answer/internal/base/pager"
 	"xorm.io/xorm"
 
-	"github.com/apache/incubator-answer/internal/base/data"
-	"github.com/apache/incubator-answer/internal/base/reason"
-	"github.com/apache/incubator-answer/internal/entity"
-	"github.com/apache/incubator-answer/internal/service/plugin_common"
+	"github.com/apache/answer/internal/base/data"
+	"github.com/apache/answer/internal/base/reason"
+	"github.com/apache/answer/internal/entity"
+	"github.com/apache/answer/internal/service/plugin_common"
 	"github.com/segmentfault/pacman/errors"
 )
 
@@ -92,6 +92,14 @@ func (ur *pluginUserConfigRepo) GetPluginUserConfigPage(ctx context.Context, pag
 	pluginUserConfigs []*entity.PluginUserConfig, total int64, err error) {
 	pluginUserConfigs = make([]*entity.PluginUserConfig, 0)
 	total, err = pager.Help(page, pageSize, &pluginUserConfigs, &entity.PluginUserConfig{}, ur.data.DB.Context(ctx))
+	if err != nil {
+		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
+	}
+	return
+}
+
+func (ur *pluginUserConfigRepo) DeleteUserPluginConfig(ctx context.Context, userID string) (err error) {
+	_, err = ur.data.DB.Context(ctx).Where("user_id = ?", userID).Delete(&entity.PluginUserConfig{})
 	if err != nil {
 		err = errors.InternalServer(reason.DatabaseError).WithError(err).WithStack()
 	}

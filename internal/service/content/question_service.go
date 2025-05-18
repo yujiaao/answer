@@ -22,39 +22,44 @@ package content
 import (
 	"encoding/json"
 	"fmt"
-	answercommon "github.com/apache/incubator-answer/internal/service/answer_common"
 	"strings"
 	"time"
 
-	"github.com/apache/incubator-answer/internal/base/constant"
-	"github.com/apache/incubator-answer/internal/base/handler"
-	"github.com/apache/incubator-answer/internal/base/pager"
-	"github.com/apache/incubator-answer/internal/base/reason"
-	"github.com/apache/incubator-answer/internal/base/translator"
-	"github.com/apache/incubator-answer/internal/base/validator"
-	"github.com/apache/incubator-answer/internal/entity"
-	"github.com/apache/incubator-answer/internal/schema"
-	"github.com/apache/incubator-answer/internal/service/activity"
-	"github.com/apache/incubator-answer/internal/service/activity_queue"
-	collectioncommon "github.com/apache/incubator-answer/internal/service/collection_common"
-	"github.com/apache/incubator-answer/internal/service/config"
-	"github.com/apache/incubator-answer/internal/service/export"
-	"github.com/apache/incubator-answer/internal/service/meta_common"
-	"github.com/apache/incubator-answer/internal/service/notice_queue"
-	"github.com/apache/incubator-answer/internal/service/notification"
-	"github.com/apache/incubator-answer/internal/service/permission"
-	questioncommon "github.com/apache/incubator-answer/internal/service/question_common"
-	"github.com/apache/incubator-answer/internal/service/review"
-	"github.com/apache/incubator-answer/internal/service/revision_common"
-	"github.com/apache/incubator-answer/internal/service/role"
-	"github.com/apache/incubator-answer/internal/service/siteinfo_common"
-	tagcommon "github.com/apache/incubator-answer/internal/service/tag_common"
-	usercommon "github.com/apache/incubator-answer/internal/service/user_common"
-	"github.com/apache/incubator-answer/pkg/checker"
-	"github.com/apache/incubator-answer/pkg/converter"
-	"github.com/apache/incubator-answer/pkg/htmltext"
-	"github.com/apache/incubator-answer/pkg/token"
-	"github.com/apache/incubator-answer/pkg/uid"
+	"github.com/apache/answer/internal/service/event_queue"
+	"github.com/apache/answer/plugin"
+
+	"github.com/apache/answer/internal/base/constant"
+	"github.com/apache/answer/internal/base/handler"
+	"github.com/apache/answer/internal/base/pager"
+	"github.com/apache/answer/internal/base/reason"
+	"github.com/apache/answer/internal/base/translator"
+	"github.com/apache/answer/internal/base/validator"
+	"github.com/apache/answer/internal/entity"
+	"github.com/apache/answer/internal/schema"
+	"github.com/apache/answer/internal/service/activity"
+	"github.com/apache/answer/internal/service/activity_common"
+	"github.com/apache/answer/internal/service/activity_queue"
+	answercommon "github.com/apache/answer/internal/service/answer_common"
+	collectioncommon "github.com/apache/answer/internal/service/collection_common"
+	"github.com/apache/answer/internal/service/config"
+	"github.com/apache/answer/internal/service/export"
+	metacommon "github.com/apache/answer/internal/service/meta_common"
+	"github.com/apache/answer/internal/service/notice_queue"
+	"github.com/apache/answer/internal/service/notification"
+	"github.com/apache/answer/internal/service/permission"
+	questioncommon "github.com/apache/answer/internal/service/question_common"
+	"github.com/apache/answer/internal/service/review"
+	"github.com/apache/answer/internal/service/revision_common"
+	"github.com/apache/answer/internal/service/role"
+	"github.com/apache/answer/internal/service/siteinfo_common"
+	"github.com/apache/answer/internal/service/tag"
+	tagcommon "github.com/apache/answer/internal/service/tag_common"
+	usercommon "github.com/apache/answer/internal/service/user_common"
+	"github.com/apache/answer/pkg/checker"
+	"github.com/apache/answer/pkg/converter"
+	"github.com/apache/answer/pkg/htmltext"
+	"github.com/apache/answer/pkg/token"
+	"github.com/apache/answer/pkg/uid"
 	"github.com/jinzhu/copier"
 	"github.com/segmentfault/pacman/errors"
 	"github.com/segmentfault/pacman/log"
@@ -65,9 +70,11 @@ import (
 
 // QuestionService user service
 type QuestionService struct {
+	activityRepo                     activity_common.ActivityRepo
 	questionRepo                     questioncommon.QuestionRepo
 	answerRepo                       answercommon.AnswerRepo
 	tagCommon                        *tagcommon.TagCommonService
+	tagService                       *tag.TagService
 	questioncommon                   *questioncommon.QuestionCommon
 	userCommon                       *usercommon.UserCommon
 	userRepo                         usercommon.UserRepo
@@ -84,12 +91,16 @@ type QuestionService struct {
 	newQuestionNotificationService   *notification.ExternalNotificationService
 	reviewService                    *review.ReviewService
 	configService                    *config.ConfigService
+	eventQueueService                event_queue.EventQueueService
+	reviewRepo                       review.ReviewRepo
 }
 
 func NewQuestionService(
+	activityRepo activity_common.ActivityRepo,
 	questionRepo questioncommon.QuestionRepo,
 	answerRepo answercommon.AnswerRepo,
 	tagCommon *tagcommon.TagCommonService,
+	tagService *tag.TagService,
 	questioncommon *questioncommon.QuestionCommon,
 	userCommon *usercommon.UserCommon,
 	userRepo usercommon.UserRepo,
@@ -106,11 +117,15 @@ func NewQuestionService(
 	newQuestionNotificationService *notification.ExternalNotificationService,
 	reviewService *review.ReviewService,
 	configService *config.ConfigService,
+	eventQueueService event_queue.EventQueueService,
+	reviewRepo review.ReviewRepo,
 ) *QuestionService {
 	return &QuestionService{
+		activityRepo:                     activityRepo,
 		questionRepo:                     questionRepo,
 		answerRepo:                       answerRepo,
 		tagCommon:                        tagCommon,
+		tagService:                       tagService,
 		questioncommon:                   questioncommon,
 		userCommon:                       userCommon,
 		userRepo:                         userRepo,
@@ -127,6 +142,8 @@ func NewQuestionService(
 		newQuestionNotificationService:   newQuestionNotificationService,
 		reviewService:                    reviewService,
 		configService:                    configService,
+		eventQueueService:                eventQueueService,
+		reviewRepo:                       reviewRepo,
 	}
 }
 
@@ -161,6 +178,9 @@ func (qs *QuestionService) CloseQuestion(ctx context.Context, req *schema.CloseQ
 	if err != nil {
 		return err
 	}
+	if cf.Key == constant.ReasonADuplicate {
+		qs.questioncommon.AddQuestionLinkForCloseReason(ctx, questionInfo, req.CloseMsg)
+	}
 
 	qs.activityQueueService.Send(ctx, &schema.ActivityMsg{
 		UserID:           req.UserID,
@@ -186,6 +206,7 @@ func (qs *QuestionService) ReopenQuestion(ctx context.Context, req *schema.Reope
 	if err != nil {
 		return err
 	}
+	qs.questioncommon.RemoveQuestionLinkForReopen(ctx, questionInfo)
 	qs.activityQueueService.Send(ctx, &schema.ActivityMsg{
 		UserID:           req.UserID,
 		ObjectID:         questionInfo.ID,
@@ -335,6 +356,16 @@ func (qs *QuestionService) AddQuestion(ctx context.Context, req *schema.Question
 	if err := qs.questionRepo.UpdateQuestionStatus(ctx, question.ID, question.Status); err != nil {
 		return nil, err
 	}
+	if question.Status == entity.QuestionStatusAvailable {
+		question.ParsedText, err = qs.questioncommon.UpdateQuestionLink(ctx, question.ID, "", question.ParsedText, question.OriginalText)
+		if err != nil {
+			return nil, err
+		}
+		err = qs.questionRepo.UpdateQuestion(ctx, question, []string{"parsed_text"})
+		if err != nil {
+			return nil, err
+		}
+	}
 	objectTagData := schema.TagChange{}
 	objectTagData.ObjectID = question.ID
 	objectTagData.Tags = req.Tags
@@ -385,6 +416,8 @@ func (qs *QuestionService) AddQuestion(ctx context.Context, req *schema.Question
 		qs.externalNotificationQueueService.Send(ctx,
 			schema.CreateNewQuestionNotificationMsg(question.ID, question.Title, question.UserID, tags))
 	}
+	qs.eventQueueService.Send(ctx, schema.NewEvent(constant.EventQuestionCreate, req.UserID).TID(question.ID).
+		QID(question.ID, question.UserID))
 
 	questionInfo, err = qs.GetQuestion(ctx, question.ID, question.UserID, req.QuestionPermission)
 	return
@@ -411,6 +444,14 @@ func (qs *QuestionService) OperationQuestion(ctx context.Context, req *schema.Op
 	switch req.Operation {
 	case schema.QuestionOperationHide:
 		questionInfo.Show = entity.QuestionHide
+		err = qs.questionRepo.RemoveQuestionLink(ctx, &entity.QuestionLink{
+			FromQuestionID: questionInfo.ID,
+		}, &entity.QuestionLink{
+			ToQuestionID: questionInfo.ID,
+		})
+		if err != nil {
+			return
+		}
 		err = qs.tagCommon.HideTagRelListByObjectID(ctx, req.ID)
 		if err != nil {
 			return err
@@ -421,6 +462,14 @@ func (qs *QuestionService) OperationQuestion(ctx context.Context, req *schema.Op
 		}
 	case schema.QuestionOperationShow:
 		questionInfo.Show = entity.QuestionShow
+		err = qs.questionRepo.RecoverQuestionLink(ctx, &entity.QuestionLink{
+			FromQuestionID: questionInfo.ID,
+		}, &entity.QuestionLink{
+			ToQuestionID: questionInfo.ID,
+		})
+		if err != nil {
+			return
+		}
 		err = qs.tagCommon.ShowTagRelListByObjectID(ctx, req.ID)
 		if err != nil {
 			return err
@@ -514,6 +563,15 @@ func (qs *QuestionService) RemoveQuestion(ctx context.Context, req *schema.Remov
 		}
 	}
 
+	// If this question has been reviewed, then delete the review.
+	reviewInfo, exist, err := qs.reviewRepo.GetReviewByObject(ctx, questionInfo.ID)
+	if exist && err == nil {
+		err = qs.reviewRepo.UpdateReviewStatus(ctx, reviewInfo.ID, req.UserID, entity.ReviewStatusRejected)
+		if err != nil {
+			return errors.InternalServer(reason.DatabaseError)
+		}
+	}
+
 	//tag count
 	tagIDs := make([]string, 0)
 	Tags, tagerr := qs.tagCommon.GetObjectEntityTag(ctx, req.ID)
@@ -539,6 +597,14 @@ func (qs *QuestionService) RemoveQuestion(ctx context.Context, req *schema.Remov
 	// if err != nil {
 	// 	 log.Errorf("user DeleteQuestion rank rollback error %s", err.Error())
 	// }
+	err = qs.questionRepo.RemoveQuestionLink(ctx, &entity.QuestionLink{
+		FromQuestionID: questionInfo.ID,
+	}, &entity.QuestionLink{
+		ToQuestionID: questionInfo.ID,
+	})
+	if err != nil {
+		return
+	}
 	qs.activityQueueService.Send(ctx, &schema.ActivityMsg{
 		UserID:           questionInfo.UserID,
 		TriggerUserID:    converter.StringToInt64(req.UserID),
@@ -546,6 +612,8 @@ func (qs *QuestionService) RemoveQuestion(ctx context.Context, req *schema.Remov
 		OriginalObjectID: questionInfo.ID,
 		ActivityTypeKey:  constant.ActQuestionDeleted,
 	})
+	qs.eventQueueService.Send(ctx, schema.NewEvent(constant.EventQuestionDelete, req.UserID).TID(questionInfo.ID).
+		QID(questionInfo.ID, questionInfo.UserID))
 	return nil
 }
 
@@ -660,6 +728,14 @@ func (qs *QuestionService) RecoverQuestion(ctx context.Context, req *schema.Ques
 		if err = qs.tagCommon.RefreshTagQuestionCount(ctx, tagIDs); err != nil {
 			log.Errorf("update tag's question count failed, %v", err)
 		}
+	}
+	err = qs.questionRepo.RecoverQuestionLink(ctx, &entity.QuestionLink{
+		FromQuestionID: questionInfo.ID,
+	}, &entity.QuestionLink{
+		ToQuestionID: questionInfo.ID,
+	})
+	if err != nil {
+		return
 	}
 
 	qs.activityQueueService.Send(ctx, &schema.ActivityMsg{
@@ -905,6 +981,10 @@ func (qs *QuestionService) UpdateQuestion(ctx context.Context, req *schema.Quest
 		//Direct modification
 		revisionDTO.Status = entity.RevisionReviewPassStatus
 		//update question to db
+		question.ParsedText, err = qs.questioncommon.UpdateQuestionLink(ctx, question.ID, "", question.ParsedText, question.OriginalText)
+		if err != nil {
+			return questionInfo, err
+		}
 		saveerr := qs.questionRepo.UpdateQuestion(ctx, question, []string{"title", "original_text", "parsed_text", "updated_at", "post_update_time", "last_edit_user_id"})
 		if saveerr != nil {
 			return questionInfo, saveerr
@@ -914,7 +994,7 @@ func (qs *QuestionService) UpdateQuestion(ctx context.Context, req *schema.Quest
 		objectTagData.Tags = req.Tags
 		objectTagData.UserID = req.UserID
 		tagerr := qs.ChangeTag(ctx, &objectTagData)
-		if err != nil {
+		if tagerr != nil {
 			return questionInfo, tagerr
 		}
 	}
@@ -937,6 +1017,8 @@ func (qs *QuestionService) UpdateQuestion(ctx context.Context, req *schema.Quest
 			RevisionID:       revisionID,
 			OriginalObjectID: question.ID,
 		})
+		qs.eventQueueService.Send(ctx, schema.NewEvent(constant.EventQuestionUpdate, req.UserID).TID(question.ID).
+			QID(question.ID, question.UserID))
 	}
 
 	questionInfo, err = qs.GetQuestion(ctx, question.ID, question.UserID, req.QuestionPermission)
@@ -1232,7 +1314,35 @@ func (qs *QuestionService) GetQuestionsByTitle(ctx context.Context, title string
 	if len(title) == 0 {
 		return resp, nil
 	}
-	questions, err := qs.questionRepo.GetQuestionsByTitle(ctx, title, 10)
+	// check search plugin
+	var finder plugin.Search
+	_ = plugin.CallSearch(func(search plugin.Search) error {
+		finder = search
+		return nil
+	})
+
+	var questions []*entity.Question
+	if finder != nil {
+		// call search plugin if available
+		words := []string{title}
+		res, _, err := finder.SearchQuestions(ctx, &plugin.SearchBasicCond{
+			Words:    words,
+			Page:     1,
+			PageSize: 10,
+		})
+		if err != nil {
+			return resp, err
+		}
+		// get question ids from res
+		questionIDs := make([]string, 0)
+		for _, question := range res {
+			questionIDs = append(questionIDs, question.ID)
+		}
+		questions, err = qs.questionRepo.FindByID(ctx, questionIDs)
+	} else {
+		questions, err = qs.questionRepo.GetQuestionsByTitle(ctx, title, 10)
+	}
+
 	if err != nil {
 		return resp, err
 	}
@@ -1317,6 +1427,8 @@ func (qs *QuestionService) GetQuestionPage(ctx context.Context, req *schema.Ques
 				return nil, 0, err
 			}
 			tagIDs = append(synTagIds, tagInfo.ID)
+		} else {
+			return questions, 0, nil
 		}
 	}
 
@@ -1345,6 +1457,47 @@ func (qs *QuestionService) GetQuestionPage(ctx context.Context, req *schema.Ques
 	if err != nil {
 		return nil, 0, err
 	}
+	return questions, total, nil
+}
+
+// GetRecommendQuestionPage retrieves recommended question page based on following tags and questions.
+func (qs *QuestionService) GetRecommendQuestionPage(ctx context.Context, req *schema.QuestionPageReq) (
+	questions []*schema.QuestionPageResp, total int64, err error) {
+	followingTagsResp, err := qs.tagService.GetFollowingTags(ctx, req.LoginUserID)
+	if err != nil {
+		return nil, 0, err
+	}
+	tagIDs := make([]string, 0, len(followingTagsResp))
+	for _, tag := range followingTagsResp {
+		tagIDs = append(tagIDs, tag.TagID)
+	}
+
+	activityType, err := qs.activityRepo.GetActivityTypeByObjectType(ctx, constant.QuestionObjectType, "follow")
+	if err != nil {
+		return nil, 0, err
+	}
+	activities, err := qs.activityRepo.GetUserActivitiesByActivityType(ctx, req.LoginUserID, activityType)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	followedQuestionIDs := make([]string, 0, len(activities))
+	for _, activity := range activities {
+		if activity.Cancelled == entity.ActivityCancelled {
+			continue
+		}
+		followedQuestionIDs = append(followedQuestionIDs, activity.ObjectID)
+	}
+	questionList, total, err := qs.questionRepo.GetRecommendQuestionPageByTags(ctx, req.LoginUserID, tagIDs, followedQuestionIDs, req.Page, req.PageSize)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	questions, err = qs.questioncommon.FormatQuestionsPage(ctx, questionList, req.LoginUserID, schema.QuestionOrderCondFrequent)
+	if err != nil {
+		return nil, 0, err
+	}
+
 	return questions, total, nil
 }
 
@@ -1513,4 +1666,22 @@ func (qs *QuestionService) SitemapCron(ctx context.Context) {
 	}
 	ctx = context.WithValue(ctx, constant.ShortIDFlag, siteSeo.IsShortLink())
 	qs.questioncommon.SitemapCron(ctx)
+}
+
+func (qs *QuestionService) GetQuestionLink(ctx context.Context, req *schema.GetQuestionLinkReq) (
+	questions []*schema.QuestionPageResp, total int64, err error) {
+	if req.OrderCond == schema.QuestionOrderCondHot {
+		req.InDays = schema.HotInDays
+	}
+
+	questionList, total, err := qs.questionRepo.GetQuestionLink(ctx, req.Page, req.PageSize, req.QuestionID, req.OrderCond, req.InDays)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	questions, err = qs.questioncommon.FormatQuestionsPage(ctx, questionList, req.LoginUserID, req.OrderCond)
+	if err != nil {
+		return nil, 0, err
+	}
+	return questions, total, nil
 }

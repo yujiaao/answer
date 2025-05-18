@@ -23,10 +23,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/apache/incubator-answer/internal/base/validator"
-	"github.com/apache/incubator-answer/internal/entity"
-	"github.com/apache/incubator-answer/pkg/converter"
-	"github.com/apache/incubator-answer/pkg/uid"
+	"github.com/apache/answer/internal/base/reason"
+	"github.com/segmentfault/pacman/errors"
+
+	"github.com/apache/answer/internal/base/validator"
+	"github.com/apache/answer/internal/entity"
+	"github.com/apache/answer/pkg/converter"
+	"github.com/apache/answer/pkg/uid"
 )
 
 const (
@@ -97,6 +100,12 @@ func (req *QuestionAdd) Check() (errFields []*validator.FormErrorField, err erro
 			tag.ParsedText = converter.Markdown2HTML(tag.OriginalText)
 		}
 	}
+	if req.HTML == "" {
+		return append(errFields, &validator.FormErrorField{
+			ErrorField: "content",
+			ErrorMsg:   reason.QuestionContentCannotEmpty,
+		}), errors.BadRequest(reason.QuestionContentCannotEmpty)
+	}
 	return nil, nil
 }
 
@@ -128,6 +137,21 @@ func (req *QuestionAddByAnswer) Check() (errFields []*validator.FormErrorField, 
 		if len(tag.OriginalText) > 0 {
 			tag.ParsedText = converter.Markdown2HTML(tag.OriginalText)
 		}
+	}
+	if req.HTML == "" {
+		errFields = append(errFields, &validator.FormErrorField{
+			ErrorField: "content",
+			ErrorMsg:   reason.QuestionContentCannotEmpty,
+		})
+	}
+	if req.AnswerHTML == "" {
+		errFields = append(errFields, &validator.FormErrorField{
+			ErrorField: "answer_content",
+			ErrorMsg:   reason.AnswerContentCannotEmpty,
+		})
+	}
+	if req.HTML == "" || req.AnswerHTML == "" {
+		return errFields, errors.BadRequest(reason.QuestionContentCannotEmpty)
 	}
 	return nil, nil
 }
@@ -203,6 +227,12 @@ type QuestionUpdateInviteUser struct {
 
 func (req *QuestionUpdate) Check() (errFields []*validator.FormErrorField, err error) {
 	req.HTML = converter.Markdown2HTML(req.Content)
+	if req.HTML == "" {
+		return append(errFields, &validator.FormErrorField{
+			ErrorField: "content",
+			ErrorMsg:   reason.QuestionContentCannotEmpty,
+		}), errors.BadRequest(reason.QuestionContentCannotEmpty)
+	}
 	return nil, nil
 }
 
@@ -346,6 +376,8 @@ const (
 	QuestionOrderCondHot        = "hot"
 	QuestionOrderCondScore      = "score"
 	QuestionOrderCondUnanswered = "unanswered"
+	QuestionOrderCondRecommend  = "recommend"
+	QuestionOrderCondFrequent   = "frequent"
 
 	// HotInDays limit max days of the hottest question
 	HotInDays = 90
@@ -355,7 +387,7 @@ const (
 type QuestionPageReq struct {
 	Page      int    `validate:"omitempty,min=1" form:"page"`
 	PageSize  int    `validate:"omitempty,min=1" form:"page_size"`
-	OrderCond string `validate:"omitempty,oneof=newest active hot score unanswered" form:"order"`
+	OrderCond string `validate:"omitempty,oneof=newest active hot score unanswered recommend frequent" form:"order"`
 	Tag       string `validate:"omitempty,gt=0,lte=100" form:"tag"`
 	Username  string `validate:"omitempty,gt=0,lte=100" form:"username"`
 	InDays    int    `validate:"omitempty,min=1" form:"in_days"`
@@ -409,6 +441,7 @@ type QuestionPageRespOperator struct {
 	Rank        int    `json:"rank"`
 	DisplayName string `json:"display_name"`
 	Status      string `json:"status"`
+	Avatar      string `json:"avatar"`
 }
 
 type AdminQuestionPageReq struct {
@@ -497,4 +530,18 @@ type PersonalCollectionPageReq struct {
 	Page     int    `validate:"omitempty,min=1" form:"page"`
 	PageSize int    `validate:"omitempty,min=1" form:"page_size"`
 	UserID   string `json:"-"`
+}
+
+type GetQuestionLinkReq struct {
+	Page       int    `validate:"omitempty,min=1" form:"page"`
+	PageSize   int    `validate:"omitempty,min=1,max=100" form:"page_size"`
+	QuestionID string `validate:"required" form:"question_id"`
+	OrderCond  string `validate:"omitempty,oneof=newest active hot score unanswered recommend frequent" form:"order"`
+	InDays     int    `validate:"omitempty,min=1" form:"in_days"`
+
+	LoginUserID string `json:"-"`
+}
+
+type GetQuestionLinkResp struct {
+	QuestionPageResp
 }

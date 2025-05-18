@@ -17,7 +17,7 @@
  * under the License.
  */
 
-import create from 'zustand';
+import { create } from 'zustand';
 
 import { AdminSettingsWrite } from '@/common/interface';
 
@@ -32,6 +32,11 @@ const Index = create<IProps>((set) => ({
     recommend_tags: [],
     required_tag: false,
     reserved_tags: [],
+    max_image_size: 4,
+    max_attachment_size: 8,
+    max_image_megapixel: 40,
+    authorized_image_extensions: [],
+    authorized_attachment_extensions: [],
   },
   update: (params) =>
     set((state) => {

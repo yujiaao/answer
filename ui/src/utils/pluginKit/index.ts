@@ -25,6 +25,7 @@ import type * as Type from '@/common/interface';
 import { LOGGED_TOKEN_STORAGE_KEY } from '@/common/constants';
 import { getPluginsStatus } from '@/services';
 import Storage from '@/utils/storage';
+import request from '@/utils/request';
 
 import { initI18nResource } from './utils';
 import { Plugin, PluginInfo, PluginType } from './interface';
@@ -46,14 +47,24 @@ class Plugins {
 
   registeredPlugins: Type.ActivatedPlugin[] = [];
 
-  constructor() {
-    this.registerBuiltin();
-    this.registerPlugins();
+  initialization: Promise<void>;
 
-    getPluginsStatus().then((plugins) => {
-      this.registeredPlugins = plugins;
-      this.activatePlugins(plugins);
-    });
+  constructor() {
+    this.initialization = this.init();
+  }
+
+  async init() {
+    this.registerBuiltin();
+
+    // Note: The /install stage does not allow access to the getPluginsStatus api, so an initial value needs to be given
+    const plugins = (await getPluginsStatus().catch(() => [])) || [];
+    this.registeredPlugins = plugins.filter((p) => p.enabled);
+    await this.registerPlugins();
+  }
+
+  refresh() {
+    this.plugins = [];
+    this.init();
   }
 
   validate(plugin: Plugin) {
@@ -85,9 +96,16 @@ class Plugins {
   }
 
   registerPlugins() {
-    Object.keys(allPlugins).forEach((key) => {
-      const plugin = allPlugins[key];
-      this.register(plugin);
+    const plugins = this.registeredPlugins
+      .map((p) => {
+        const func = allPlugins[p.slug_name];
+
+        return func;
+      })
+      .filter((p) => p);
+    return Promise.all(plugins.map((p) => p())).then((resolvedPlugins) => {
+      resolvedPlugins.forEach((plugin) => this.register(plugin));
+      return true;
     });
   }
 
@@ -99,26 +117,8 @@ class Plugins {
     if (plugin.i18nConfig) {
       initI18nResource(plugin.i18nConfig);
     }
+    plugin.activated = true;
     this.plugins.push(plugin);
-  }
-
-  activatePlugins(activatedPlugins: Type.ActivatedPlugin[]) {
-    this.plugins.forEach((plugin: any) => {
-      const { slug_name } = plugin.info;
-      const activatedPlugin: any = activatedPlugins?.find(
-        (p) => p.slug_name === slug_name,
-      );
-      if (activatedPlugin) {
-        plugin.activated = activatedPlugin?.enabled;
-      }
-    });
-  }
-
-  changePluginActiveStatus(slug_name: string, active: boolean) {
-    const plugin = this.getPlugin(slug_name);
-    if (plugin) {
-      plugin.activated = active;
-    }
   }
 
   getPlugin(slug_name: string) {
@@ -137,7 +137,8 @@ class Plugins {
 
 const plugins = new Plugins();
 
-const getRoutePlugins = () => {
+const getRoutePlugins = async () => {
+  await plugins.initialization;
   return plugins
     .getPlugins()
     .filter((plugin) => plugin.info.type === PluginType.Route);
@@ -167,8 +168,8 @@ const validateRoutePlugin = async (slugName) => {
   return Boolean(registeredPlugin?.enabled);
 };
 
-const mergeRoutePlugins = (routes) => {
-  const routePlugins = getRoutePlugins();
+const mergeRoutePlugins = async (routes) => {
+  const routePlugins = await getRoutePlugins();
   if (routePlugins.length === 0) {
     return routes;
   }
@@ -221,12 +222,33 @@ const useRenderHtmlPlugin = (
       return (
         plugin.activated &&
         plugin.hooks?.useRender &&
-        plugin.info.type === PluginType.Editor
+        (plugin.info.type === PluginType.Editor ||
+          plugin.info.type === PluginType.Render)
       );
     })
     .forEach((plugin) => {
       plugin.hooks?.useRender?.forEach((hook) => {
-        hook(element);
+        hook(element, request);
+      });
+    });
+};
+
+// Only for render type plugins
+const useRenderPlugin = (
+  element: HTMLElement | RefObject<HTMLElement> | null,
+) => {
+  return plugins
+    .getPlugins()
+    .filter((plugin) => {
+      return (
+        plugin.activated &&
+        plugin.hooks?.useRender &&
+        plugin.info.type === PluginType.Render
+      );
+    })
+    .forEach((plugin) => {
+      plugin.hooks?.useRender?.forEach((hook) => {
+        hook(element, request);
       });
     });
 };
@@ -247,5 +269,11 @@ const useCaptchaPlugin = (key: Type.CaptchaKey) => {
 
 export type { Plugin, PluginInfo };
 
-export { useRenderHtmlPlugin, mergeRoutePlugins, useCaptchaPlugin, PluginType };
+export {
+  useRenderHtmlPlugin,
+  mergeRoutePlugins,
+  useCaptchaPlugin,
+  useRenderPlugin,
+  PluginType,
+};
 export default plugins;

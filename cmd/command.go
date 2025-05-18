@@ -24,11 +24,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/apache/incubator-answer/internal/base/conf"
-	"github.com/apache/incubator-answer/internal/cli"
-	"github.com/apache/incubator-answer/internal/install"
-	"github.com/apache/incubator-answer/internal/migrations"
-	"github.com/apache/incubator-answer/plugin"
+	"github.com/apache/answer/internal/base/conf"
+	"github.com/apache/answer/internal/cli"
+	"github.com/apache/answer/internal/install"
+	"github.com/apache/answer/internal/migrations"
+	"github.com/apache/answer/plugin"
 	"github.com/segmentfault/pacman/log"
 	"github.com/spf13/cobra"
 )
@@ -72,7 +72,7 @@ func init() {
 
 	configCmd.Flags().StringSliceVarP(&configFields, "with", "w", []string{}, "the fields that need to be set to the default value, eg: -w allow_password_login")
 
-	i18nCmd.Flags().StringVarP(&i18nSourcePath, "source", "s", "", "i18n source path, eg: -f ./i18n/source")
+	i18nCmd.Flags().StringVarP(&i18nSourcePath, "source", "s", "", "i18n source path, eg: -s ./i18n/source")
 
 	i18nCmd.Flags().StringVarP(&i18nTargetPath, "target", "t", "", "i18n target path, eg: -t ./i18n/target")
 
@@ -227,10 +227,11 @@ To run answer, use:
 				Time:     Time,
 			})
 			if err != nil {
-				fmt.Printf("build failed %v", err)
-			} else {
-				fmt.Printf("build new answer successfully %s\n", buildOutput)
+				fmt.Printf("build failed %v\n", err)
+				os.Exit(1)
 			}
+
+			fmt.Printf("build new answer successfully %s\n", buildOutput)
 		},
 	}
 
@@ -263,12 +264,17 @@ To run answer, use:
 			}
 
 			field := &cli.ConfigField{}
-			for _, f := range configFields {
-				switch f {
+			fmt.Println(configFields)
+			if len(configFields) > 0 {
+				switch configFields[0] {
 				case "allow_password_login":
 					field.AllowPasswordLogin = true
+				case "deactivate_plugin":
+					if len(configFields) > 1 {
+						field.DeactivatePluginSlugName = configFields[1]
+					}
 				default:
-					fmt.Printf("field %s not support\n", f)
+					fmt.Printf("field %s not support\n", configFields[0])
 				}
 			}
 			err = cli.SetDefaultConfig(c.Data.Database, c.Data.Cache, field)
@@ -287,7 +293,7 @@ To run answer, use:
 		Long:  `Merge i18n files from plugins to original i18n files. It will overwrite the original i18n files`,
 		Run: func(_ *cobra.Command, _ []string) {
 			if err := cli.ReplaceI18nFilesLocal(i18nTargetPath); err != nil {
-				fmt.Printf("replace i18n files failed %v", err)
+				fmt.Printf("replace i18n files failed %v\n", err)
 			} else {
 				fmt.Printf("replace i18n files successfully\n")
 			}
@@ -295,7 +301,7 @@ To run answer, use:
 			fmt.Printf("try to merge i18n files from %q to %q\n", i18nSourcePath, i18nTargetPath)
 
 			if err := cli.MergeI18nFilesLocal(i18nTargetPath, i18nSourcePath); err != nil {
-				fmt.Printf("merge i18n files failed %v", err)
+				fmt.Printf("merge i18n files failed %v\n", err)
 			} else {
 				fmt.Printf("merge i18n files successfully\n")
 			}

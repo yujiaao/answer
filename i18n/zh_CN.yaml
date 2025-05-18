@@ -57,6 +57,8 @@ backend:
       other: 编辑
     undelete:
       other: 撤消删除
+    merge:
+      other: 合并
   role:
     name:
       user:
@@ -137,6 +139,8 @@ backend:
     other: 密码
   pass:
     other: 密码
+  old_pass:
+    other: 当前密码
   original_text:
     other: 本帖
   email_or_password_wrong_error:
@@ -145,6 +149,8 @@ backend:
     common:
       invalid_url:
         other: 无效的 URL。
+      status_invalid:
+        other: 无效状态。
     password:
       space_invalid:
         other: 密码不得含有空格。
@@ -166,6 +172,8 @@ backend:
         other: 没有更新权限。
       question_closed_cannot_add:
         other: 问题已关闭，无法添加。
+      content_cannot_empty:
+        other: 回答内容不能为空。
     comment:
       edit_without_permission:
         other: 不允许编辑评论。
@@ -173,6 +181,8 @@ backend:
         other: 评论未找到。
       cannot_edit_after_deadline:
         other: 评论时间太久，无法修改。
+      content_cannot_empty:
+        other: 评论内容不能为空。
     email:
       duplicate:
         other: 邮箱已存在。
@@ -222,6 +232,8 @@ backend:
         other: 没有关闭权限。
       cannot_update:
         other: 没有更新权限。
+      content_cannot_empty:
+        other: 内容不能为空。
     rank:
       fail_to_meet_the_condition:
         other: 声望值未达到要求。
@@ -311,6 +323,9 @@ backend:
     site_info:
       config_not_found:
         other: 未找到网站的该配置信息。
+    badge:
+      object_not_found:
+        other: 没有找到徽章对象
   reason:
     spam:
       name:
@@ -321,9 +336,7 @@ backend:
       name:
         other: 粗鲁或辱骂的
       desc:
-        other:
-          - 一个有理智的人都会认为这种内容不适合进行尊重性的讨论。
-          - 论坛
+        other: "一个有理智的人都会认为这种内容不适合进行尊重性的讨论。"
     a_duplicate:
       name:
         other: 重复内容
@@ -335,10 +348,7 @@ backend:
       name:
         other: 不是答案
       desc:
-        other:
-          - 这张贴作为答案，但它不会试图回答
-          - 这可能是一个编辑、一个评论、另一个问题。
-          - 或全部删除。
+        other: "该帖是作为答案发布的，但它并没有试图回答这个问题。总之，它可能应该是个编辑、评论、另一个问题或者需要被删除。"
     no_longer_needed:
       name:
         other: 不再需要
@@ -397,9 +407,7 @@ backend:
         name:
           other: 需要细节或澄清
         desc:
-          other:
-            - 该问题目前涵盖多个问题。它应该侧重在一个问题上。
-            - 只关注一个问题。
+          other: 该问题目前涵盖多个问题。它应该只集中在一个问题上。
       other:
         name:
           other: 其他原因
@@ -415,12 +423,12 @@ backend:
     deleted_title:
       other: 删除的问题
     questions_title:
-      other: Questions
+      other: 问题
   tag:
     tags_title:
-      other: Tags
+      other: 标签
     no_description:
-      other: The tag has no description.
+      other: 此标签没有描述。
   notification:
     action:
       update_question:
@@ -459,47 +467,49 @@ backend:
         other: 点赞评论
       invited_you_to_answer:
         other: 邀请你回答
+      earned_badge:
+        other: 你获得 "{{.BadgeName}}" 徽章
   email_tpl:
     change_email:
       title:
         other: "[{{.SiteName}}] 确认你的新邮箱地址"
       body:
-        other: "请点击以下链接确认你在 {{.SiteName}} 上的新邮箱地址：<br>\n<a href='{{.ChangeEmailUrl}}' target='_blank'>{{.ChangeEmailUrl}}</a><br><br>\n\n如果你没有请求此更改，请忽略此邮件。\n"
+        other: "请点击以下链接确认你在 {{.SiteName}} 上的新邮箱地址：<br>\n<a href='{{.ChangeEmailUrl}}' target='_blank'>{{.ChangeEmailUrl}}</a><br><br>\n\n如果你没有请求此更改，请忽略此邮件。\n\n--<br>\n这是系统自动发送的电子邮件，请勿回复，因为您的回复将不会被看到<br><br>"
     new_answer:
       title:
         other: "[{{.SiteName}}] {{.DisplayName}} 回答了你的问题"
       body:
-        other: "<a href='{{.AnswerUrl}}'>{{.QuestionTitle}}</a><br><br>\n\n{{.DisplayName}}：<br>\n<blockquote>{{.AnswerSummary}}</blockquote><br>\n<a href='{{.AnswerUrl}}'>在 {{.SiteName}} 上查看</a><br><br>\n\n--<br>\n<small><a href='{{.UnsubscribeUrl}}'>取消订阅</a></small>"
+        other: "<a href='{{.AnswerUrl}}'>{{.QuestionTitle}}</a><br><br>\n\n{{.DisplayName}}：<br>\n<blockquote>{{.AnswerSummary}}</blockquote><br>\n<a href='{{.AnswerUrl}}'>在 {{.SiteName}} 上查看</a><br><br>\n\n--<br>\n这是系统自动发送的电子邮件，请勿回复，因为您的回复将不会被看到<br><br>\n\n<small><a href='{{.UnsubscribeUrl}}'>取消订阅</a></small>"
     invited_you_to_answer:
       title:
         other: "[{{.SiteName}}] {{.DisplayName}} 邀请您回答问题"
       body:
-        other: "<a href='{{.InviteUrl}}'>{{.QuestionTitle}}</a><br><br>\n\n{{.DisplayName}}：<br>\n<blockquote>我想你可能知道答案。</blockquote><br>\n<a href='{{.InviteUrl}}'>在 {{.SiteName}} 上查看</a><br><br>\n\n--<br>\n<small><a href='{{.UnsubscribeUrl}}'>取消订阅</a></small>"
+        other: "<a href='{{.InviteUrl}}'>{{.QuestionTitle}}</a><br><br>\n\n{{.DisplayName}}：<br>\n<blockquote>我想你可能知道答案。</blockquote><br>\n<a href='{{.InviteUrl}}'>在 {{.SiteName}} 上查看</a><br><br>\n\n--<br>\n这是系统自动发送的电子邮件，请勿回复，因为您的回复将不会被看到<br><br>\n\n<small><a href='{{.UnsubscribeUrl}}'>取消订阅</a></small>"
     new_comment:
       title:
         other: "[{{.SiteName}}] {{.DisplayName}} 评论了你的帖子"
       body:
-        other: "<a href='{{.CommentUrl}}'>{{.QuestionTitle}}</a><br><br>\n\n{{.DisplayName}}：<br>\n<blockquote>{{.CommentSummary}}</blockquote><br>\n<a href='{{.CommentUrl}}'>在 {{.SiteName}} 上查看</a><br><br>\n\n--<br>\n<small><a href='{{.UnsubscribeUrl}}'>取消订阅</a></small>"
+        other: "<a href='{{.CommentUrl}}'>{{.QuestionTitle}}</a><br><br>\n\n{{.DisplayName}}：<br>\n<blockquote>{{.CommentSummary}}</blockquote><br>\n<a href='{{.CommentUrl}}'>在 {{.SiteName}} 上查看</a><br><br>\n\n--<br>\n这是系统自动发送的电子邮件，请勿回复，因为您的回复将不会被看到<br><br>\n\n<small><a href='{{.UnsubscribeUrl}}'>取消订阅</a></small>"
     new_question:
       title:
         other: "[{{.SiteName}}] 新问题: {{.QuestionTitle}}"
       body:
-        other: "<a href='{{.QuestionUrl}}'>{{.QuestionTitle}}</a><br>\n<small>{{.Tags}}</small><br><br>\n\n--<br>\n<small><a href='{{.UnsubscribeUrl}}'>取消订阅</a></small>"
+        other: "<a href='{{.QuestionUrl}}'>{{.QuestionTitle}}</a><br><br>\n<small>{{.Tags}}</small><br><br>\n\n--<br>\n这是系统自动发送的电子邮件，请勿回复，因为您的回复将不会被看到 <br><br>\n\n<small><a href='{{.UnsubscribeUrl}}'>取消订阅</a></small>"
     pass_reset:
       title:
         other: "[{{.SiteName }}] 重置密码"
       body:
-        other: "有人要求在 [{{.SiteName}}] 上重置你的密码。<br><br>\n\n如果这不是你的操作，请安心忽略此电子邮件。<br><br>\n\n请点击以下链接设置一个新密码：<br>\n<a href='{{.PassResetUrl}}' target='_blank'>{{.PassResetUrl}}</a>\n"
+        other: "有人要求在 [{{.SiteName}}] 上重置你的密码。<br><br>\n\n如果这不是你的操作，请安心忽略此电子邮件。<br><br>\n\n请点击以下链接设置一个新密码：<br>\n<a href='{{.PassResetUrl}}' target='_blank'>{{.PassResetUrl}}</a>\n\n如果你没有请求此更改，请忽略此邮件。\n"
     register:
       title:
         other: "[{{.SiteName}}] 确认你的新账户"
       body:
-        other: "欢迎加入 {{.SiteName}}！<br><br>\n\n请点击以下链接确认并激活你的新账户：<br>\n<a href='{{.RegisterUrl}}' target='_blank'>{{.RegisterUrl}}</a><br><br>\n\n如果上面的链接不能点击，请将其复制并粘贴到你的浏览器地址栏中。\n"
+        other: "欢迎加入 {{.SiteName}}！<br><br>\n\n请点击以下链接确认并激活你的新账户：<br>\n<a href='{{.RegisterUrl}}' target='_blank'>{{.RegisterUrl}}</a><br><br>\n\n如果上面的链接不能点击，请将其复制并粘贴到你的浏览器地址栏中。\n<br><br>\n\n--<br>\n这是系统自动发送的电子邮件，请勿回复，因为您的回复将不会被看到"
     test:
       title:
         other: "[{{.SiteName}}] 测试邮件"
       body:
-        other: "这是一封测试邮件。"
+        other: "这是测试电子邮件。\n<br><br>\n\n-<br>\n注意：这是一个自动的系统电子邮件， 请不要回复此消息，因为您的回复将不会被看到。"
   action_activity_type:
     upvote:
       other: 点赞
@@ -525,12 +535,269 @@ backend:
   reaction:
     tooltip:
       other: "{{ .Names }} 以及另外 {{ .Count }} 个..."
+  badge:
+    default_badges:
+      autobiographer:
+        name:
+          other: 自传作者
+        desc:
+          other: 填写了 <a href="{{ .ProfileURL }}" target="_blank">个人资料</a> 信息。
+      certified:
+        name:
+          other: 已认证
+        desc:
+          other: 完成了我们的新用户教程。
+      editor:
+        name:
+          other: 编辑者
+        desc:
+          other: 首次帖子编辑。
+      first_flag:
+        name:
+          other: 第一次举报
+        desc:
+          other: 第一次举报一个帖子
+      first_upvote:
+        name:
+          other: 第一次投票
+        desc:
+          other: 第一次投票了一个帖子。
+      first_link:
+        name:
+          other: 第一个链接
+        desc:
+          other: 第一次添加了一个链接到另一个帖子。
+      first_reaction:
+        name:
+          other: 第一个响应
+        desc:
+          other: 第一次表情回应帖子
+      first_share:
+        name:
+          other: 首次分享
+        desc:
+          other: 首次分享了一个帖子。
+      scholar:
+        name:
+          other: 学者
+        desc:
+          other: 问了一个问题并接受了一个答案。
+      commentator:
+        name:
+          other: 评论员
+        desc:
+          other: 留下5条评论。
+      new_user_of_the_month:
+        name:
+          other: 月度用户
+        desc:
+          other: 本月杰出用户
+      read_guidelines:
+        name:
+          other: 阅读指南
+        desc:
+          other: 阅读[社区准则]。
+      reader:
+        name:
+          other: 读者
+        desc:
+          other: 用10个以上的答案在主题中阅读每个答案。
+      welcome:
+        name:
+          other: 欢迎
+        desc:
+          other: 获得一个点赞投票
+      nice_share:
+        name:
+          other: 好分享
+        desc:
+          other: 分享了一个拥有25个唯一访客的帖子。
+      good_share:
+        name:
+          other: 好分享
+        desc:
+          other: 分享了一个拥有300个唯一访客的帖子。
+      great_share:
+        name:
+          other: 优秀的分享
+        desc:
+          other: 分享了一个拥有1000个唯一访客的帖子。
+      out_of_love:
+        name:
+          other: 失去爱好
+        desc:
+          other: 一天内使用了 50 个赞。
+      higher_love:
+        name:
+          other: 更高的爱好
+        desc:
+          other: 一天内使用了 50 个赞 5 次。
+      crazy_in_love:
+        name:
+          other: 爱情疯狂的
+        desc:
+          other: 一天内使用了 50 个赞 20 次。
+      promoter:
+        name:
+          other: 推荐人
+        desc:
+          other: 邀请用户。
+      campaigner:
+        name:
+          other: 宣传者
+        desc:
+          other: 邀请了3个基本用户。
+      champion:
+        name:
+          other: 冠军
+        desc:
+          other: 邀请了5个成员。
+      thank_you:
+        name:
+          other: 谢谢
+        desc:
+          other: 有 20 个赞成票的帖子，并投了 10 个赞成票。
+      gives_back:
+        name:
+          other: 返回
+        desc:
+          other: 拥有100个投票赞成的职位并放弃了100个投票。
+      empathetic:
+        name:
+          other: 情随境迁
+        desc:
+          other: 拥有500个投票赞成的职位并放弃了1000个投票。
+      enthusiast:
+        name:
+          other: 狂热
+        desc:
+          other: 连续访问10天。
+      aficionado:
+        name:
+          other: Aficionado
+        desc:
+          other: 连续访问100天。
+      devotee:
+        name:
+          other: Devotee
+        desc:
+          other: 连续访问365天。
+      anniversary:
+        name:
+          other: 周年纪念日
+        desc:
+          other: 活跃成员一年至少发布一次。
+      appreciated:
+        name:
+          other: 欣赏
+        desc:
+          other: 在 20 个帖子中获得 1个投票
+      respected:
+        name:
+          other: 尊敬
+        desc:
+          other: 100个员额获得2次补票。
+      admired:
+        name:
+          other: 仰慕
+        desc:
+          other: 300个员额获得5次补票。
+      solved:
+        name:
+          other: 已解决
+        desc:
+          other: 接受答案。
+      guidance_counsellor:
+        name:
+          other: 指导顾问
+        desc:
+          other: 接受答案。
+      know_it_all:
+        name:
+          other: 万事通
+        desc:
+          other: 接受50个答案。
+      solution_institution:
+        name:
+          other: 解决方案机构
+        desc:
+          other: 有150个答案被接受。
+      nice_answer:
+        name:
+          other: 好答案
+        desc:
+          other: 回答得分为10或以上。
+      good_answer:
+        name:
+          other: 好答案
+        desc:
+          other: 回答得分为25或更多。
+      great_answer:
+        name:
+          other: 优秀答案
+        desc:
+          other: 回答得分为50或以上。
+      nice_question:
+        name:
+          other: 好问题
+        desc:
+          other: 问题得分为10或以上。
+      good_question:
+        name:
+          other: 好问题
+        desc:
+          other: 问题得分为25或更多。
+      great_question:
+        name:
+          other: 很棒的问题
+        desc:
+          other: 问题得分为50或更多。
+      popular_question:
+        name:
+          other: 热门问题
+        desc:
+          other: 问题有 500 个浏览量。
+      notable_question:
+        name:
+          other: 值得关注问题
+        desc:
+          other: 问题有 1,000 个浏览量。
+      famous_question:
+        name:
+          other: 著名的问题
+        desc:
+          other: 问题有 5,000 个浏览量。
+      popular_link:
+        name:
+          other: 热门链接
+        desc:
+          other: 发布了一个带有50个点击的外部链接。
+      hot_link:
+        name:
+          other: 热门链接
+        desc:
+          other: 发布了一个带有300个点击的外部链接。
+      famous_link:
+        name:
+          other: 著名链接
+        desc:
+          other: 发布了一个带有100个点击的外部链接。
+    default_badge_groups:
+      getting_started:
+        name:
+          other: 完成初始化
+      community:
+        name:
+          other: Community 专题
+      posting:
+        name:
+          other: 发帖
 # The following fields are used for interface presentation(Front-end)
 ui:
   how_to_format:
     title: 如何排版
     desc: >-
-      <ul class="mb-0"><li><p class="mb-2">添加链接</p><pre class="mb-2"><code>&lt;https://url.com&gt;<br/><br/>[标题](https://url.com)</code></pre></li><li><p class="mb-2">段落之间使用空行分隔</p></li><li><p class="mb-2"><em>_斜体_</em> 或者 **<strong>粗体</strong>**</p></li><li><p class="mb-2">使用 4 个空格缩进代码</p></li><li><p class="mb-2">在行首添加 <code>&gt;</code> 表示引用</p></li><li><p class="mb-2">反引号进行转义 <code>`像 _这样_`</code></p></li><li><p class="mb-2">使用 <code>```</code> 创建代码块</p><pre class="mb-0"><code>```<br/>这是代码块<br/>```</code></pre></li></ul>
+      <ul class="mb-0"><li><p class="mb-2">引用问题或答案: <code>#4</code></p></li><li><p class="mb-2">添加链接</p><pre class="mb-2"><code>&lt;https://url.com&gt;<br/><br/>[标题](https://url.com)</code></pre></li><li><p class="mb-2">段落之间使用空行分隔</p></li><li><p class="mb-2"><em>_斜体_</em> 或者 **<strong>粗体</strong>**</p></li><li><p class="mb-2">使用  个空格缩进代码</p></li><li><p class="mb-2">在行首添加 <code>&gt;</code> 表示引用</p></li><li><p class="mb-2">反引号进行转义 <code>`像 _这样_`</code></p></li><li><p class="mb-2">使用 <code>```</code> 创建代码块</p><pre class="mb-0"><code>```<br/>这是代码块<br/>```</code></pre></li></ul>
   pagination:
     prev: 上一页
     next: 下一页
@@ -579,6 +846,9 @@ ui:
       posts: 帖子
       invites: 邀请
       votes: 投票
+    answer: 回答
+    question: 问题
+    badge_award: 徽章
   suspended:
     title: 你的账号账号已被封禁
     until_time: "你的账号被封禁直到 {{ time }}。"
@@ -644,7 +914,7 @@ ui:
             msg:
               empty: 请选择图片文件。
               only_image: 只能上传图片文件。
-              max_size: 文件大小不能超过 4 MB。
+              max_size: 文件大小不能超过 {{size}} MB。
           desc:
             label: 描述
       tab_url: 图片地址
@@ -686,6 +956,10 @@ ui:
       text: 表格
       heading: 表头
       cell: 单元格
+    file:
+      text: 附件
+      not_supported: "不支持的文件类型。请尝试上传其他类型的文件如： {{file_type}}。"
+      max_size: "上传文件超过 {{size}} MB。"
   close_modal:
     title: 关闭原因是...
     btn_cancel: 取消
@@ -750,11 +1024,20 @@ ui:
     delete:
       title: 删除标签
       tip_with_posts: >-
-        <p>We do not allow <strong>deleting tag with posts</strong>.</p> <p>Please remove this tag from the posts first.</p>
+        <p>我们不允许 <strong>删除带有帖子的标签</strong>。</p> <p>请先从帖子中移除此标签。</p>
       tip_with_synonyms: >-
-        <p>We do not allow <strong>deleting tag with synonyms</strong>.</p> <p>Please remove the synonyms from this tag first.</p>
+        <p>我们不允许 <strong>删除带有同义词的标签</strong>。</p> <p>请先从此标签中删除同义词。</p>
       tip: 确定要删除吗？
       close: 关闭
+    merge:
+      title: 合并标签
+      source_tag_title: 源标签
+      source_tag_description: 源标签及其相关数据将重新映射到目标标签。
+      target_tag_title: 目标标签
+      target_tag_description: 合并后将在这两个标签之间将创建一个同义词。
+      no_results: 没有匹配的标签
+      btn_submit: 提交
+      btn_close: 关闭
   edit_tag:
     title: 编辑标签
     default_reason: 编辑标签
@@ -826,6 +1109,7 @@ ui:
     search_placeholder: 通过标签名称过滤
     no_desc: 此标签无描述。
     more: 更多
+    wiki: 维基
   ask:
     title: 新增问题
     edit_title: 编辑问题
@@ -874,6 +1158,7 @@ ui:
       question: 问题
       tag: 标签
       user: 用户
+      badges: 徽章
       profile: 用户主页
       setting: 账号设置
       logout: 退出
@@ -917,7 +1202,7 @@ ui:
       label: 名字
       msg:
         empty: 名字不能为空
-        range: 名字应该在 4 到 30 个字符之间
+        range: 名称长度必须在 2 至 30 个字符之间。
         character: '只能由 "a-z"、"A-Z"、"0-9"、" - . _" 组成'
     email:
       label: 邮箱
@@ -1073,6 +1358,10 @@ ui:
   related_question:
     title: 相关问题
     answers: 个回答
+  linked_question:
+    title: 关联的问题
+    description: 问题关联到
+    no_linked_question: 这个问题没有相关联的问题。
   invite_to_answer:
     title: 受邀人
     desc: 邀请你认为可能知道答案的人。
@@ -1163,7 +1452,7 @@ ui:
     signup: 注册
     logout: 退出
     verify: 验证
-    add_question: 我要提问
+    create: 创建
     approve: 批准
     reject: 拒绝
     skip: 跳过
@@ -1195,8 +1484,16 @@ ui:
     normal: 正常
     closed: 已关闭
     deleted: 已删除
+    deleted_permanently: 永久删除
     pending: 等待处理
     more: 更多
+    view: 浏览量
+    card: 卡片
+    compact: 紧凑
+    display_below: 在下方显示
+    always_display: 总是显示
+    or: 或者
+    back_sites: 返回网站
   search:
     title: 搜索结果
     keywords: 关键词
@@ -1226,15 +1523,18 @@ ui:
     via: 分享到...
     copied: 已复制
     facebook: 分享到 Facebook
-    twitter: 分享到 Twitter
+    twitter: 分享到 X
   cannot_vote_for_self: 你不能给自己的帖子投票。
   modal_confirm:
     title: 发生错误...
+  delete_permanently:
+    title: 永久删除
+    content: 您确定要永久删除吗？
   account_result:
     success: 你的账号已通过验证，即将返回首页。
     link: 返回首页
-    oops: Oops!
-    invalid: The link you used no longer works.
+    oops: 糟糕！
+    invalid: 您使用的链接不再有效。
     confirm_new_email: 你的电子邮箱已更新
     confirm_new_email_invalid: >-
       抱歉，此验证链接已失效。也许是你的邮箱已经成功更改了？
@@ -1256,7 +1556,9 @@ ui:
     answers: 回答
     newest: 最新
     active: 活跃
-    hot: 热度
+    hot: 热门
+    frequent: 频繁的
+    recommend: 推荐
     score: 评分
     unanswered: 未回答
     modified: 更新于
@@ -1275,12 +1577,14 @@ ui:
     reputation: 声望
     comments: 评论
     votes: 得票
+    badges: 徽章
     newest: 最新
     score: 评分
     edit_profile: 编辑资料
     visited_x_days: "已访问 {{ count }} 天"
     viewed: 浏览次数
     joined: 加入于
+    comma: "，"
     last_login: 上次登录
     about_me: 关于我
     about_me_empty: "// Hello, World!"
@@ -1288,6 +1592,7 @@ ui:
     top_questions: 高分问题
     stats: 状态
     list_empty: 没有找到相关的内容。<br />试试看其他选项卡？
+    content_empty: 未找到帖子。
     accepted: 已采纳
     answered: 回答于
     asked: 提问于
@@ -1298,6 +1603,7 @@ ui:
     x_votes: 得票
     x_answers: 个回答
     x_questions: 个问题
+    recent_badges: 最近的徽章
   install:
     title: 安装
     next: 下一步
@@ -1327,6 +1633,23 @@ ui:
       label: 数据库文件
       placeholder: /data/answer.db
       msg: 数据库文件不能为空。
+    ssl_enabled:
+      label: 启用 SSL
+    ssl_enabled_on:
+      label: 开
+    ssl_enabled_off:
+      label: 关
+    ssl_mode:
+      label: SSL 模式
+    ssl_root_cert:
+      placeholder: sslrootcert文件路径
+      msg: sslrootcert 文件的路径不能为空
+    ssl_cert:
+      placeholder: sslcert文件路径
+      msg: sslcert 文件的路径不能为空
+    ssl_key:
+      placeholder: sslkey 文件路径
+      msg: sslcert 文件的路径不能为空
     config_yaml:
       title: 创建 config.yaml
       label: 已创建 config.yaml 文件。
@@ -1359,8 +1682,8 @@ ui:
     admin_name:
       label: 名字
       msg: 名字不能为空。
-      character: '只能由 "a-z", "0-9", " - . _" 组成'
-      msg_max_length: 名字长度不能超过 30 个字符。
+      character: '只能由 "a-z"、"A-Z"、"0-9"、" - . _" 组成'
+      msg_max_length: 名称长度必须在 2 至 30 个字符之间。
     admin_password:
       label: 密码
       text: >-
@@ -1368,6 +1691,10 @@ ui:
       msg: 密码不能为空。
       msg_min_length: 密码必须至少 8 个字符长。
       msg_max_length: 密码长度不能超过 32 个字符。
+    admin_confirm_password:
+      label: "确认密码"
+      text: "请重新输入您的密码以确认。"
+      msg: "确认密码不一致。"
     admin_email:
       label: 邮箱
       text: 您需要此电子邮件才能登录。
@@ -1407,6 +1734,7 @@ ui:
     questions: 问题
     answers: 回答
     users: 用户管理
+    badges: 徽章
     flags: 举报管理
     settings: 站点设置
     general: 一般
@@ -1430,6 +1758,18 @@ ui:
     login: 登录
     qrcode_login_tip: 请使用 {{ agentName }} 扫描二维码并登录。
     login_failed_email_tip: 登录失败，请允许此应用访问您的邮箱信息，然后重试。
+  badges:
+    modal:
+      title: 恭喜
+      content: 你赢得了一个新徽章。
+      close: 关闭
+      confirm: 查看徽章
+    title: 徽章
+    awarded: 授予
+    earned_×: 以获得 ×{{ number }}
+    ×_awarded: "{{ number }} 得到"
+    can_earn_multiple: 你可以多次获得
+    earned: 获得
   admin:
     admin_header:
       title: 后台管理
@@ -1438,6 +1778,8 @@ ui:
       welcome: 欢迎来到管理后台！
       site_statistics: 站点统计
       questions: "问题:"
+      resolved: "已解决:"
+      unanswered: "未回答:"
       answers: "回答:"
       comments: "评论:"
       votes: "投票:"
@@ -1509,8 +1851,8 @@ ui:
       form:
         fields:
           display_name:
-            label: Display name
-            msg_range: Display name up to 30 characters.
+            label: 显示名称
+            msg_range: 显示名称不能超过 30 个字符。
           username:
             label: 用户名
             msg_range: 用户名不能超过 30 个字符。
@@ -1531,7 +1873,7 @@ ui:
             msg: "请输入用户的邮箱，每行一个。"
           display_name:
             label: 显示名称
-            msg: 显示名称长度必须为 4-30 个字符
+            msg: 显示名称长度必须为 2-30 个字符
           email:
             label: 邮箱
             msg: 邮箱无效。
@@ -1707,24 +2049,44 @@ ui:
       privacy_policy:
         label: 隐私政策
         text: "您可以在此添加隐私政策内容。如果您已经在别处托管了文档，请在这里提供完整的URL。"
+      external_content_display:
+        label: 外部内容
+        text: "内容包括从外部网站嵌入的图像、视频和媒体。"
+        always_display: 总是显示外部内容
+        ask_before_display: 在显示外部内容之前询问
     write:
       page_title: 编辑
       restrict_answer:
-        title: Answer write
+        title: 回答编辑
         label: 每个用户对于每个问题只能有一个回答
-        text: "Turn off to allow users to write multiple answers to the same question, which may cause answers to be unfocused."
+        text: "用户可以使用编辑按钮优化已有的回答"
       recommend_tags:
         label: 推荐标签
-        text: "Recommend tags will show in the dropdown list by default."
+        text: "推荐标签将默认显示在下拉列表中。"
         msg:
-          contain_reserved: "recommended tags cannot contain reserved tags"
+          contain_reserved: "推荐标签不能包含保留标签"
       required_tag:
-        title: Set required tags
-        label: Set “Recommend tags” as required tags
+        title: 设置必填标签
+        label: 设置“推荐标签”为必需的标签
         text: "每个新问题必须至少有一个推荐标签。"
       reserved_tags:
         label: 保留标签
-        text: "Reserved tags can only be used by moderator."
+        text: "只有版主才能使用保留的标签。"
+      image_size:
+        label: 最大图像大小 (MB)
+        text: "最大图像上传大小."
+      attachment_size:
+        label: 最大附件大小 (MB)
+        text: "最大附件文件上传大小。"
+      image_megapixels:
+        label: 最大图像兆像素
+        text: "允许图像的最大兆位数。"
+      image_extensions:
+        label: 允许的图像后缀
+        text: "允许图像显示的文件扩展名的列表，用英文逗号分隔。"
+      attachment_extensions:
+        label: 允许的附件后缀
+        text: "允许上传的文件扩展名列表与英文逗号分开。警告：允许上传可能会导致安全问题。"
     seo:
       page_title: 搜索引擎优化
       permalink:
@@ -1761,7 +2123,7 @@ ui:
 
       footer:
         label: 页脚
-        text: 这将在 </body> 之前插入.
+        text: 这将在 &lt;/body> 之前插入。
       sidebar:
         label: 侧边栏
         text: 这将插入侧边栏中。
@@ -1834,6 +2196,21 @@ ui:
       msg:
         should_be_number: 输入必须是数字
         number_larger_1: 数字应该大于等于 1
+    badges:
+      action: 操作
+      active: 活跃的
+      activate: 启用
+      all: 全部
+      awards: 奖项
+      deactivate: 取消激活
+      filter:
+        placeholder: 按名称筛选，或使用 badge:id
+      group: 组
+      inactive: 未启用
+      name: 名字
+      show_logs: 显示日志
+      status: 状态
+      title: 徽章
   form:
     optional: (选填)
     empty: 不能为空
@@ -1913,6 +2290,7 @@ ui:
     discard_confirm: 您确定要丢弃您的草稿吗？
   messages:
     post_deleted: 该帖子已被删除。
+    post_cancel_deleted: 此帖子已被删除
     post_pin: 该帖子已被置顶。
     post_unpin: 该帖子已被取消置顶。
     post_hide_list: 此帖子已经从列表中隐藏。
@@ -1921,3 +2299,21 @@ ui:
     post_list: 这个帖子已经被显示
     post_unlist: 这个帖子已经被隐藏
     post_pending: 您的帖子正在等待审核。它将在它获得批准后可见。
+    post_closed: 此帖已关闭。
+    answer_deleted: 该回答已被删除.
+    answer_cancel_deleted: 此答案已取消删除。
+    change_user_role: 此用户的角色已被更改。
+    user_inactive: 此用户已经处于未激活状态。
+    user_normal: 此用户已经是正常的。
+    user_suspended: 此用户已被封禁。
+    user_deleted: 此用户已被删除
+    badge_activated: 此徽章已被激活。
+    badge_inactivated: 此徽章已被禁用。
+    users_deleted: 这些用户已被删除。
+    posts_deleted: 这些问题已被删除。
+    answers_deleted: 这些答案已被删除。
+    copy: 复制到剪贴板
+    copied: 已复制
+    external_content_warning: 外部图像/媒体未显示。
+
+

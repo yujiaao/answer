@@ -57,6 +57,8 @@ backend:
       other: ویرایش
     undelete:
       other: بازگردانی حذف
+    merge:
+      other: Merge
   role:
     name:
       user:
@@ -137,6 +139,8 @@ backend:
     other: رمز
   pass:
     other: رمز
+  old_pass:
+    other: Current password
   original_text:
     other: پست جاری
   email_or_password_wrong_error:
@@ -145,6 +149,8 @@ backend:
     common:
       invalid_url:
         other: Invalid URL.
+      status_invalid:
+        other: Invalid status.
     password:
       space_invalid:
         other: رمز عبور نمی تواند شامل فضای خالی باشد.
@@ -166,6 +172,8 @@ backend:
         other: اجازه بروزرسانی ندارید.
       question_closed_cannot_add:
         other: سوالات بسته شده اند و نمیتوان سوالی اضافه کرد.
+      content_cannot_empty:
+        other: Answer content cannot be empty.
     comment:
       edit_without_permission:
         other: نظرات قابل ویرایش نیستند.
@@ -173,6 +181,8 @@ backend:
         other: نظر پیدا نشد.
       cannot_edit_after_deadline:
         other: زمان زیادی برای ویرایش نظر گذشته است.
+      content_cannot_empty:
+        other: Comment content cannot be empty.
     email:
       duplicate:
         other: ایمیل تکراری.
@@ -222,6 +232,8 @@ backend:
         other: اجاره بستن ندارید.
       cannot_update:
         other: اجازه بروزرسانی ندارید.
+      content_cannot_empty:
+        other: Content cannot be empty.
     rank:
       fail_to_meet_the_condition:
         other: شهرت ناکافی.
@@ -311,6 +323,9 @@ backend:
     site_info:
       config_not_found:
         other: پیکربندی سایت پیدا نشد.
+    badge:
+      object_not_found:
+        other: Badge object not found
   reason:
     spam:
       name:
@@ -321,9 +336,7 @@ backend:
       name:
         other: بی ادب یا توهین آمیز
       desc:
-        other:
-          - A reasonable person would find this content inappropriate for respectful
-          - discourse.
+        other: "A reasonable person would find this content inappropriate for respectful discourse."
     a_duplicate:
       name:
         other: تکراری
@@ -335,10 +348,7 @@ backend:
       name:
         other: این یک پاسخ نیست
       desc:
-        other:
-          - This was posted as an answer, but it does not attempt to answer the
-          - question. It should possibly be an edit, a comment, another question,
-          - or deleted altogether.
+        other: "This was posted as an answer, but it does not attempt to answer the question. It should possibly be an edit, a comment, another question,or deleted altogether."
     no_longer_needed:
       name:
         other: دیگر نیازی نیست
@@ -397,9 +407,7 @@ backend:
         name:
           other: نیاز به جزئیات یا واضح کردن دارد
         desc:
-          other:
-            - This question currently includes multiple questions in one. It should
-            - focus on one problem only.
+          other: This question currently includes multiple questions in one. It should focus on one problem only.
       other:
         name:
           other: یک مورد دیگر
@@ -459,47 +467,49 @@ backend:
         other: نظر بدون رای
       invited_you_to_answer:
         other: برای جواب دادن دعوت شده اید
+      earned_badge:
+        other: You've earned the "{{.BadgeName}}" badge
   email_tpl:
     change_email:
       title:
         other: "آدرس ایمیل جدید خود را تایید کنید{{.SiteName}}"
       body:
-        other: "آدرس ایمیل جدید خود را برای {{.SiteName}} با کلیک بر روی پیوند زیر تأیید کنید:\n<br>\n<a href='{{.ChangeEmailUrl}}' target='_blank'>{{.ChangeEmailUrl}}</a><br><br>\n\nاگر این تغییر را درخواست نکرده‌اید، لطفاً این ایمیل را نادیده بگیرید.\n"
+        other: "Confirm your new email address for {{.SiteName}} by clicking on the following link:<br>\n<a href='{{.ChangeEmailUrl}}' target='_blank'>{{.ChangeEmailUrl}}</a><br><br>\n\nIf you did not request this change, please ignore this email.<br><br>\n\n--<br>\nNote: This is an automatic system email, please do not reply to this message as your response will not be seen."
     new_answer:
       title:
         other: "[{{.SiteName}}] {{.DisplayName}} به سؤال شما پاسخ داد"
       body:
-        other: "<a href='{{.AnswerUrl}}'>{{.QuestionTitle}}</a><br><br>\n\n{{.DisplayName}}:<br>\n<blockquote>{{.AnswerSummary}}</blockquote><br>\n<a href='{{.AnswerUrl}}'>مشاهده آن در {{.SiteName}}</a><br><br>\n\n--<br>\n<small><a href='{{.UnsubscribeUrl}}'>لغو اشتراک</a></small>"
+        other: "<a href='{{.AnswerUrl}}'>{{.QuestionTitle}}</a><br><br>\n\n{{.DisplayName}}:<br>\n<blockquote>{{.AnswerSummary}}</blockquote><br>\n<a href='{{.AnswerUrl}}'>View it on {{.SiteName}}</a><br><br>\n\n--<br>\nNote: This is an automatic system email, please do not reply to this message as your response will not be seen.<br><br>\n\n<small><a href='{{.UnsubscribeUrl}}'>Unsubscribe</a></small>"
     invited_you_to_answer:
       title:
         other: "[{{.SiteName}}] {{.DisplayName}} شما را به پاسخ دعوت کرد"
       body:
-        other: "<a href='{{.InviteUrl}}'>{{.QuestionTitle}}</a><br><br>\n\n{{.DisplayName}}:<br>\n<blockquote>من فکر می کنم شما ممکن است پاسخ را بدانید.</blockquote><br>\n<a href='{{.InviteUrl}}'>مشاهده آن در {{.SiteName}}</a><br><br>\n\n--<br>\n<small><a href='{{.UnsubscribeUrl}}'>لغو اشتراک</a></small>"
+        other: "<a href='{{.InviteUrl}}'>{{.QuestionTitle}}</a><br><br>\n\n{{.DisplayName}}:<br>\n<blockquote>I think you may know the answer.</blockquote><br>\n<a href='{{.InviteUrl}}'>View it on {{.SiteName}}</a><br><br>\n\n--<br>\nNote: This is an automatic system email, please do not reply to this message as your response will not be seen.<br><br>\n\n<small><a href='{{.UnsubscribeUrl}}'>Unsubscribe</a></small>"
     new_comment:
       title:
         other: "[{{.SiteName}}] {{.DisplayName}} روی پست شما نظر داد"
       body:
-        other: "<a href='{{.CommentUrl}}'>{{.QuestionTitle}}</a><br><br>\n\n{{.DisplayName}}:<br>\n<blockquote>{{.CommentSummary}}</blockquote><br>\n<a href='{{.CommentUrl}}'>مشاهده آن در {{.SiteName}}</a><br><br>\n\n--<br>\n<small><a href='{{.UnsubscribeUrl}}'>لغو اشتراک</a></small>"
+        other: "<a href='{{.CommentUrl}}'>{{.QuestionTitle}}</a><br><br>\n\n{{.DisplayName}}:<br>\n<blockquote>{{.CommentSummary}}</blockquote><br>\n<a href='{{.CommentUrl}}'>View it on {{.SiteName}}</a><br><br>\n\n--<br>\nNote: This is an automatic system email, please do not reply to this message as your response will not be seen.<br><br>\n\n<small><a href='{{.UnsubscribeUrl}}'>Unsubscribe</a></small>"
     new_question:
       title:
         other: "[{{.SiteName}}] سؤال جدید: {{.QuestionTitle}}"
       body:
-        other: "<a href='{{.QuestionUrl}}'>{{.QuestionTitle}}</a><br>\n<small>{{.Tags}}</small><br><br>\n\n--<br>\n<small><a href='{{.UnsubscribeUrl}}'>لغو اشتراک</a></small>"
+        other: "<a href='{{.QuestionUrl}}'>{{.QuestionTitle}}</a><br>\n<small>{{.Tags}}</small><br><br>\n\n--<br>\nNote: This is an automatic system email, please do not reply to this message as your response will not be seen.<br><br>\n\n<small><a href='{{.UnsubscribeUrl}}'>Unsubscribe</a></small>"
     pass_reset:
       title:
         other: "[{{.SiteName }}] گذرواژه بازنشانی شد"
       body:
-        other: "شخصی بازنشانی رمز عبور شما در {{.SiteName}} می‌باشد.<br><br>\n\nاگر این شخص شما نبوده اید، می‌توانید با خیال راحت این ایمیل را نادیده بگیرید.<br><br>\n\nبرای انتخاب رمز عبور جدید روی پیوند زیر کلیک کنید:<br>\n<a href='{{.PassResetUrl}}' target='_blank'>{{.PassResetUrl}}</a>\n"
+        other: "Somebody asked to reset your password on {{.SiteName}}.<br><br>\n\nIf it was not you, you can safely ignore this email.<br><br>\n\nClick the following link to choose a new password:<br>\n<a href='{{.PassResetUrl}}' target='_blank'>{{.PassResetUrl}}</a>\n<br><br>\n\n--<br>\nNote: This is an automatic system email, please do not reply to this message as your response will not be seen."
     register:
       title:
         other: "[{{.SiteName}}] حساب کاربری جدید خود را تأیید کنید"
       body:
-        other: "به {{.SiteName}} خوش آمدید!<br><br>\n\nبرای تأیید و فعال سازی حساب کاربری جدید خود روی پیوند زیر کلیک کنید:<br>\n<a href='{{.RegisterUrl}}' target='_blank'>{{.RegisterUrl}}</a><br><br>\n\nاگر پیوند بالا قابل بازشدن نیست، آن را کپی کرده و در نوار آدرس مرورگر وب خود قرار دهید.\n"
+        other: "Welcome to {{.SiteName}}!<br><br>\n\nClick the following link to confirm and activate your new account:<br>\n<a href='{{.RegisterUrl}}' target='_blank'>{{.RegisterUrl}}</a><br><br>\n\nIf the above link is not clickable, try copying and pasting it into the address bar of your web browser.\n<br><br>\n\n--<br>\nNote: This is an automatic system email, please do not reply to this message as your response will not be seen."
     test:
       title:
         other: "[{{.SiteName}}] ایمیل آزمایشی"
       body:
-        other: "این یک ایمیل تست است."
+        other: "This is a test email.\n<br><br>\n\n--<br>\nNote: This is an automatic system email, please do not reply to this message as your response will not be seen."
   action_activity_type:
     upvote:
       other: رأی مثبت
@@ -525,12 +535,269 @@ backend:
   reaction:
     tooltip:
       other: "{{ .Names }} and {{ .Count }} more..."
+  badge:
+    default_badges:
+      autobiographer:
+        name:
+          other: Autobiographer
+        desc:
+          other: Filled out <a href="{{ .ProfileURL }}" target="_blank">profile</a> information.
+      certified:
+        name:
+          other: Certified
+        desc:
+          other: Completed our new user tutorial.
+      editor:
+        name:
+          other: Editor
+        desc:
+          other: First post edit.
+      first_flag:
+        name:
+          other: First Flag
+        desc:
+          other: First flagged a post.
+      first_upvote:
+        name:
+          other: First Upvote
+        desc:
+          other: First up voted a post.
+      first_link:
+        name:
+          other: First Link
+        desc:
+          other: First added a link to another post.
+      first_reaction:
+        name:
+          other: First Reaction
+        desc:
+          other: First reacted to the post.
+      first_share:
+        name:
+          other: First Share
+        desc:
+          other: First shared a post.
+      scholar:
+        name:
+          other: Scholar
+        desc:
+          other: Asked a question and accepted an answer.
+      commentator:
+        name:
+          other: Commentator
+        desc:
+          other: Leave 5 comments.
+      new_user_of_the_month:
+        name:
+          other: New User of the Month
+        desc:
+          other: Outstanding contributions in their first month.
+      read_guidelines:
+        name:
+          other: Read Guidelines
+        desc:
+          other: Read the [community guidelines].
+      reader:
+        name:
+          other: Reader
+        desc:
+          other: Read every answers in a topic with more than 10 answers.
+      welcome:
+        name:
+          other: Welcome
+        desc:
+          other: Received a up vote.
+      nice_share:
+        name:
+          other: Nice Share
+        desc:
+          other: Shared a post with 25 unique visitors.
+      good_share:
+        name:
+          other: Good Share
+        desc:
+          other: Shared a post with 300 unique visitors.
+      great_share:
+        name:
+          other: Great Share
+        desc:
+          other: Shared a post with 1000 unique visitors.
+      out_of_love:
+        name:
+          other: Out of Love
+        desc:
+          other: Used 50 up votes in a day.
+      higher_love:
+        name:
+          other: Higher Love
+        desc:
+          other: Used 50 up votes in a day 5 times.
+      crazy_in_love:
+        name:
+          other: Crazy in Love
+        desc:
+          other: Used 50 up votes in a day 20 times.
+      promoter:
+        name:
+          other: Promoter
+        desc:
+          other: Invited a user.
+      campaigner:
+        name:
+          other: Campaigner
+        desc:
+          other: Invited 3 basic users.
+      champion:
+        name:
+          other: Champion
+        desc:
+          other: Invited 5 members.
+      thank_you:
+        name:
+          other: Thank You
+        desc:
+          other: Has 20 up voted posts and gave 10 up votes.
+      gives_back:
+        name:
+          other: Gives Back
+        desc:
+          other: Has 100 up voted posts and gave 100 up votes.
+      empathetic:
+        name:
+          other: Empathetic
+        desc:
+          other: Has 500 up voted posts and gave 1000 up votes.
+      enthusiast:
+        name:
+          other: Enthusiast
+        desc:
+          other: Visited 10 consecutive days.
+      aficionado:
+        name:
+          other: Aficionado
+        desc:
+          other: Visited 100 consecutive days.
+      devotee:
+        name:
+          other: Devotee
+        desc:
+          other: Visited 365 consecutive days.
+      anniversary:
+        name:
+          other: Anniversary
+        desc:
+          other: Active member for a year, posted at least once.
+      appreciated:
+        name:
+          other: Appreciated
+        desc:
+          other: Received 1 up vote on 20 posts.
+      respected:
+        name:
+          other: Respected
+        desc:
+          other: Received 2 up votes on 100 posts.
+      admired:
+        name:
+          other: Admired
+        desc:
+          other: Received 5 up votes on 300 posts.
+      solved:
+        name:
+          other: Solved
+        desc:
+          other: Have an answer be accepted.
+      guidance_counsellor:
+        name:
+          other: Guidance Counsellor
+        desc:
+          other: Have 10 answers be accepted.
+      know_it_all:
+        name:
+          other: Know-it-All
+        desc:
+          other: Have 50 answers be accepted.
+      solution_institution:
+        name:
+          other: Solution Institution
+        desc:
+          other: Have 150 answers be accepted.
+      nice_answer:
+        name:
+          other: Nice Answer
+        desc:
+          other: Answer score of 10 or more.
+      good_answer:
+        name:
+          other: Good Answer
+        desc:
+          other: Answer score of 25 or more.
+      great_answer:
+        name:
+          other: Great Answer
+        desc:
+          other: Answer score of 50 or more.
+      nice_question:
+        name:
+          other: Nice Question
+        desc:
+          other: Question score of 10 or more.
+      good_question:
+        name:
+          other: Good Question
+        desc:
+          other: Question score of 25 or more.
+      great_question:
+        name:
+          other: Great Question
+        desc:
+          other: Question score of 50 or more.
+      popular_question:
+        name:
+          other: Popular Question
+        desc:
+          other: Question with 500 views.
+      notable_question:
+        name:
+          other: Notable Question
+        desc:
+          other: Question with 1,000 views.
+      famous_question:
+        name:
+          other: Famous Question
+        desc:
+          other: Question with 5,000 views.
+      popular_link:
+        name:
+          other: Popular Link
+        desc:
+          other: Posted an external link with 50 clicks.
+      hot_link:
+        name:
+          other: Hot Link
+        desc:
+          other: Posted an external link with 300 clicks.
+      famous_link:
+        name:
+          other: Famous Link
+        desc:
+          other: Posted an external link with 100 clicks.
+    default_badge_groups:
+      getting_started:
+        name:
+          other: Getting Started
+      community:
+        name:
+          other: Community
+      posting:
+        name:
+          other: Posting
 # The following fields are used for interface presentation(Front-end)
 ui:
   how_to_format:
     title: نحوه فرمت کردن
     desc: >-
-      <ul class="mb-0"><li><p class="mb-2">برای ایجاد پیوند</p><pre class="mb-2"><code>&lt;https://url.com&gt;<br/><br/>[Title](https://url.com)</code></pre></li><li><p class="mb-2">بین پاراگراف ها اینتر قرار بدهید</p></li><li><p class="mb-2"><em>_italic_</em> یا **<strong>پررنگ</strong>**</p></ li><li><p class="mb-2">کد تورفتگی با 4 فاصله</p></li><li><p class="mb-2">نقل قول با قرار دادن <code>&gt;< /code> در ابتدای خط</p></li><li><p class="mb-2">بکتیک فرار می کند <code>`مانند _this_`</code></p></li>< li><p class="mb-2">حصارهای کد با بکتیک ایجاد کنید <code>`</code></p><pre class="mb-0"><code>```<br/>کد اینجا<br/>```</code></pre></li></ul>
+      <ul class="mb-0"><li><p class="mb-2">mention a post: <code>#post_id</code></p></li> <li><p class="mb-2">to make links</p><pre class="mb-2"><code>&lt;https://url.com&gt;<br/><br/>[Title](https://url.com)</code></pre></li><li><p class="mb-2">put returns between paragraphs</p></li><li><p class="mb-2"><em>_italic_</em> or **<strong>bold</strong>**</p></li><li><p class="mb-2">indent code by 4 spaces</p></li><li><p class="mb-2">quote by placing <code>&gt;</code> at start of line</p></li><li><p class="mb-2">backtick escapes <code>`like _this_`</code></p></li><li><p class="mb-2">create code fences with backticks <code>`</code></p><pre class="mb-0"><code>```<br/>code here<br/>```</code></pre></li></ul>
   pagination:
     prev: قبلی
     next: بعدی
@@ -579,6 +846,9 @@ ui:
       posts: پست ها
       invites: دعوت ها
       votes: آراء
+    answer: Answer
+    question: Question
+    badge_award: Badge
   suspended:
     title: حساب شما معلق شده است
     until_time: "حساب شما تا تاریخ {{ time }} به حالت تعلیق درآمده است."
@@ -644,7 +914,7 @@ ui:
             msg:
               empty: فایل نمی تواند خالی باشد.
               only_image: فقط فایل های تصویری مجاز هستند.
-              max_size: حجم فایل نباید بیشتر از 4 مگابایت باشد.
+              max_size: File size cannot exceed {{size}} MB.
           desc:
             label: توضیحات
       tab_url: لینک عکس
@@ -686,6 +956,10 @@ ui:
       text: جدول
       heading: سرفصل
       cell: تلفن همراه
+    file:
+      text: Attach files
+      not_supported: "Don’t support that file type. Try again with {{file_type}}."
+      max_size: "Attach files size cannot exceed {{size}} MB."
   close_modal:
     title: این پست را می بندم بدلیل...
     btn_cancel: لغو
@@ -755,6 +1029,15 @@ ui:
         <p>We do not allow <strong>deleting tag with synonyms</strong>.</p> <p>Please remove the synonyms from this tag first.</p>
       tip: مطمئنید که میخواهید حذف شود?
       close: بستن
+    merge:
+      title: Merge tag
+      source_tag_title: Source tag
+      source_tag_description: The source tag and its associated data will be remapped to the target tag.
+      target_tag_title: Target tag
+      target_tag_description: A synonym between these two tags will be created after merging.
+      no_results: No tags matched
+      btn_submit: Submit
+      btn_close: Close
   edit_tag:
     title: ویرایش تگ‌
     default_reason: ویرایش تگ‌
@@ -826,6 +1109,7 @@ ui:
     search_placeholder: فیلتر بر اساس اسم برچسب
     no_desc: برچسب هیچ توضیحی ندارد.
     more: بیشتر
+    wiki: Wiki
   ask:
     title: سوالی اضافه کنید
     edit_title: سوال را ویرایش کنید
@@ -874,6 +1158,7 @@ ui:
       question: سوالات
       tag: تگ‌ها
       user: کاربران
+      badges: Badges
       profile: پروفایل
       setting: تنظیمات
       logout: خروج
@@ -917,7 +1202,7 @@ ui:
       label: نام
       msg:
         empty: نام نمی‌تواند خالی باشد.
-        range: Length of name should between 4 to 30 characters.
+        range: Name must be between 2 to 30 characters in length.
         character: 'Must use the character set "a-z", "A-Z", "0-9", " - . _"'
     email:
       label: ایمیل
@@ -1073,6 +1358,10 @@ ui:
   related_question:
     title: سوالات مرتبط
     answers: جواب ها
+  linked_question:
+    title: Linked Questions
+    description: Questions linked to
+    no_linked_question: No questions linked from this question.
   invite_to_answer:
     title: مردم پرسیدند
     desc: افرادی را دعوت کنید که فکر می کنید ممکن است پاسخ را بدانند.
@@ -1163,7 +1452,7 @@ ui:
     signup: عضويت
     logout: خروج
     verify: تایید
-    add_question: اضافه کردن سوال
+    create: Create
     approve: تایید
     reject: رد کردن
     skip: بعدی
@@ -1195,8 +1484,16 @@ ui:
     normal: Normal
     closed: Closed
     deleted: Deleted
+    deleted_permanently: Deleted permanently
     pending: Pending
     more: More
+    view: View
+    card: Card
+    compact: Compact
+    display_below: Display below
+    always_display: Always display
+    or: or
+    back_sites: Back to sites
   search:
     title: نتایج جستجو
     keywords: کلیدواژه ها
@@ -1226,10 +1523,13 @@ ui:
     via: اشتراک گذاری پست با...
     copied: کپی انجام شد
     facebook: اشتراک گذاری در فیس بوک
-    twitter: اشتراک گذاری در Twitter
+    twitter: Share to X
   cannot_vote_for_self: شما نمی توانید به پست خودتان رای دهید.
   modal_confirm:
     title: خطا...
+  delete_permanently:
+    title: Delete permanently
+    content: Are you sure you want to delete permanently?
   account_result:
     success: اکانت جدید شما تایید شده است، به صفحه خانه منتقل خواهید شد.
     link: ادامه بدهید تا به صفحه خانه برسید
@@ -1257,6 +1557,8 @@ ui:
     newest: جدیدترین
     active: فعال
     hot: Hot
+    frequent: Frequent
+    recommend: Recommend
     score: امتیاز
     unanswered: بدون پاسخ
     modified: تغییر یافته
@@ -1275,12 +1577,14 @@ ui:
     reputation: محبوبیت
     comments: نظرات
     votes: آراء
+    badges: Badges
     newest: جدیدترین
     score: امتیاز
     edit_profile: ویرایش پروفایل
     visited_x_days: "Visited {{ count }} days"
     viewed: مشاهده شده
     joined: عضو شد
+    comma: ","
     last_login: مشاهده شده
     about_me: درباره من
     about_me_empty: "// Hello, World !"
@@ -1288,6 +1592,7 @@ ui:
     top_questions: سوالات برتر
     stats: آمار
     list_empty: No posts found.<br />Perhaps you'd like to select a different tab?
+    content_empty: No posts found.
     accepted: پذیرفته شده
     answered: جواب داده
     asked: پرسیده شده
@@ -1298,6 +1603,7 @@ ui:
     x_votes: آرای دریافت شد
     x_answers: جواب ها
     x_questions: سوالات
+    recent_badges: Recent Badges
   install:
     title: Installation
     next: بعدی
@@ -1327,6 +1633,23 @@ ui:
       label: فایل پایگاه داده
       placeholder: /data/answer.db
       msg: فایل پایگاه داده نمیتواند خالی باشد.
+    ssl_enabled:
+      label: Enable SSL
+    ssl_enabled_on:
+      label: On
+    ssl_enabled_off:
+      label: Off
+    ssl_mode:
+      label: SSL Mode
+    ssl_root_cert:
+      placeholder: sslrootcert file path
+      msg: Path to sslrootcert file cannot be empty
+    ssl_cert:
+      placeholder: sslcert file path
+      msg: Path to sslcert file cannot be empty
+    ssl_key:
+      placeholder: sslkey file path
+      msg: Path to sslkey file cannot be empty
     config_yaml:
       title: Config.yaml را بسازید
       label: فایل config.yaml ساخته شد.
@@ -1359,8 +1682,8 @@ ui:
     admin_name:
       label: نام
       msg: نام نمی‌تواند خالی باشد.
-      character: 'باید از حروف "a-z", "0-9", " - . _" استفاده شود'
-      msg_max_length: Name must be at maximum 30 characters in length.
+      character: 'Must use the character set "a-z", "A-Z", "0-9", " - . _"'
+      msg_max_length: Name must be between 2 to 30 characters in length.
     admin_password:
       label: رمز عبور
       text: >-
@@ -1368,6 +1691,10 @@ ui:
       msg: رمز عبور نمی تواند خالی باشد.
       msg_min_length: Password must be at least 8 characters in length.
       msg_max_length: Password must be at maximum 32 characters in length.
+    admin_confirm_password:
+      label: "Confirm Password"
+      text: "Please re-enter your password to confirm."
+      msg: "Confirm password does not match."
     admin_email:
       label: ایمیل
       text: شما به این ایمیل برای ورود نیاز خواهید داشت.
@@ -1407,6 +1734,7 @@ ui:
     questions: سوالات
     answers: پاسخ ها
     users: کاربران
+    badges: Badges
     flags: پرچم
     settings: تنظیمات
     general: عمومی
@@ -1430,6 +1758,18 @@ ui:
     login: ورود
     qrcode_login_tip: لطفاً از {{ agentName }} برای اسکن کد QR و ورود به سیستم استفاده کنید.
     login_failed_email_tip: ورود ناموفق بود، لطفاً قبل از امتحان مجدد به این برنامه اجازه دهید به اطلاعات ایمیل شما دسترسی داشته باشد.
+  badges:
+    modal:
+      title: Congratulations
+      content: You've earned a new badge.
+      close: Close
+      confirm: View badges
+    title: Badges
+    awarded: Awarded
+    earned_×: Earned ×{{ number }}
+    ×_awarded: "{{ number }} awarded"
+    can_earn_multiple: You can earn this multiple times.
+    earned: Earned
   admin:
     admin_header:
       title: ادمین
@@ -1438,6 +1778,8 @@ ui:
       welcome: Welcome to Admin!
       site_statistics: Site statistics
       questions: "سوالات:"
+      resolved: "Resolved:"
+      unanswered: "Unanswered:"
       answers: "جواب ها:"
       comments: "نظرات:"
       votes: "آرا:"
@@ -1531,7 +1873,7 @@ ui:
             msg: "لطفا ایمیل کاربر را در هر خط یکی وارد کنید."
           display_name:
             label: نمایش نام
-            msg: نام نمایشی باید 4 تا 30 کاراکتر باشد.
+            msg: Display name must be 2-30 characters in length.
           email:
             label: ایمیل
             msg: ایمیل معتبر نمی‌باشد
@@ -1707,6 +2049,11 @@ ui:
       privacy_policy:
         label: حریم خصوصی
         text: "You can add privacy policy content here. If you already have a document hosted elsewhere, provide the full URL here."
+      external_content_display:
+        label: External content
+        text: "Content includes images, videos, and media embedded from external websites."
+        always_display: Always display external content
+        ask_before_display: Ask before displaying external content
     write:
       page_title: نوشتن
       restrict_answer:
@@ -1725,6 +2072,21 @@ ui:
       reserved_tags:
         label: Reserved tags
         text: "Reserved tags can only be used by moderator."
+      image_size:
+        label: Max image size (MB)
+        text: "The maximum image upload size."
+      attachment_size:
+        label: Max attachment size (MB)
+        text: "The maximum attachment files upload size."
+      image_megapixels:
+        label: Max image megapixels
+        text: "Maximum number of megapixels allowed for an image."
+      image_extensions:
+        label: Authorized image extensions
+        text: "A list of file extensions allowed for image display, separate with commas."
+      attachment_extensions:
+        label: Authorized attachment extensions
+        text: "A list of file extensions allowed for upload, separate with commas. WARNING: Allowing uploads may cause security issues."
     seo:
       page_title: بهینه‌سازی عملیات موتورهای جستجو
       permalink:
@@ -1834,6 +2196,21 @@ ui:
       msg:
         should_be_number: the input should be number
         number_larger_1: number should be equal or larger than 1
+    badges:
+      action: Action
+      active: Active
+      activate: Activate
+      all: All
+      awards: Awards
+      deactivate: Deactivate
+      filter:
+        placeholder: Filter by name, badge:id
+      group: Group
+      inactive: Inactive
+      name: Name
+      show_logs: Show logs
+      status: Status
+      title: Badges
   form:
     optional: (optional)
     empty: cannot be empty
@@ -1913,6 +2290,7 @@ ui:
     discard_confirm: Are you sure you want to discard your draft?
   messages:
     post_deleted: This post has been deleted.
+    post_cancel_deleted: This post has been undeleted.
     post_pin: This post has been pinned.
     post_unpin: This post has been unpinned.
     post_hide_list: This post has been hidden from list.
@@ -1921,3 +2299,21 @@ ui:
     post_list: This post has been listed.
     post_unlist: This post has been unlisted.
     post_pending: Your post is awaiting review. This is a preview, it will be visible after it has been approved.
+    post_closed: This post has been closed.
+    answer_deleted: This answer has been deleted.
+    answer_cancel_deleted: This answer has been undeleted.
+    change_user_role: This user's role has been changed.
+    user_inactive: This user is already inactive.
+    user_normal: This user is already normal.
+    user_suspended: This user has been suspended.
+    user_deleted: This user has been deleted.
+    badge_activated: This badge has been activated.
+    badge_inactivated: This badge has been inactivated.
+    users_deleted: These users have been deleted.
+    posts_deleted: These questions have been deleted.
+    answers_deleted: These answers have been deleted.
+    copy: Copy to clipboard
+    copied: Copied
+    external_content_warning: External images/media are not displayed.
+
+

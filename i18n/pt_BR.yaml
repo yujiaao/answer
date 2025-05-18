@@ -824,7 +824,7 @@ ui:
     via: Compartilhar postagem via...
     copied: Copiado
     facebook: Compartilhar no Facebook
-    twitter: Compartilhar no Twitter
+    twitter: Compartilhar no X
   cannot_vote_for_self: Você não pode votar na sua própria postagem
   modal_confirm:
     title: Erro...
@@ -1133,7 +1133,7 @@ ui:
           fields:
             display_name:
               label: Nome de exibição
-              msg: Nome de exibição deve ser 4-30 caracteres em comprimento.
+              msg: Nome de exibição deve ser 2-30 caracteres em comprimento.
             email:
               label: Email
               msg: Email não é válido.
@@ -1379,5 +1379,3 @@ ui:
     staffs: Our community staff
     reputation: reputation
     Votos: Votos
-
-
