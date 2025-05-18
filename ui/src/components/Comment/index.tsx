@@ -416,29 +416,65 @@ const Comment = ({ objectId, mode, commentId }) => {
                 </div>
               )}
 
-<<<<<<< HEAD
-      <div className="mt-2">
-        <Button
-          variant="link"
-          className="p-0 btn-no-border"
-          size="sm"
-          onClick={() => {
-            if (tryNormalLogged(true)) {
-              setVisibleComment(!visibleComment);
-            }
-          }}>
-          {t('btn_add_comment')}
-        </Button>
-        {data && (pageIndex || 1) < Math.ceil((data?.count || 0) / pageSize) && ( <Button
+              {currentReplyId === item.comment_id ? (
+                <Reply
+                  userName={item.user_display_name}
+                  mode={mode}
+                  onSendReply={(value) =>
+                    handleSendReply({ ...item, value, type: 'reply' })
+                  }
+                  onCancel={() => handleCancel(item.comment_id)}
+                />
+              ) : null}
+              {item.showEdit || currentReplyId === item.comment_id ? null : (
+                <ActionBar
+                  nickName={item.user_display_name}
+                  username={item.username}
+                  createdAt={item.created_at}
+                  voteCount={item.vote_count}
+                  isVote={item.is_vote}
+                  memberActions={item.member_actions}
+                  userStatus={item.user_status}
+                  onReply={() => {
+                    handleReply(item.comment_id);
+                  }}
+                  onAction={(action) => handleAction(action, item)}
+                  onVote={(e) => {
+                    e.preventDefault();
+                    handleVote(item.comment_id, item.is_vote);
+                  }}
+                />
+              )}
+            </div>
+          );
+        })}
+
+        <div className={classNames(comments.length > 0 && 'py-2')}>
+          {comments.length > 0 && (
+            <Button
               variant="link"
-              className="p-0 fs-14 ms-3 btn-no-border"
-              onClick={() => {
-                setPageIndex(pageIndex + 1);
-              }}>
-              {t('show_more')}
+              className="p-0 btn-no-border"
+              size="sm"
+              onClick={handleAddComment}>
+              {t('btn_add_comment')}
             </Button>
           )}
-     </div>
+          {data &&
+            (pageIndex || 1) < Math.ceil((data?.count || 0) / pageSize) && (
+              <Button
+                variant="link"
+                size="sm"
+                className="p-0 ms-3 btn-no-border"
+                onClick={() => {
+                  setPageIndex(pageIndex + 1);
+                }}>
+                {t('show_more', {
+                  count:
+                    data.count - (pageIndex === 0 ? 3 : pageIndex * pageSize),
+                })}
+              </Button>
+            )}
+        </div>
 
         {visibleComment && (
           <Form
